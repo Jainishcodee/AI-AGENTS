@@ -1,0 +1,1 @@
+A dev built a geospatial tracking system with live planes, satellite traffic cams, and panoptic detection. This is literally a CIA tool. I guess this is what happens when AI gets too good. Comment code to see how you can do the same.

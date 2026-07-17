@@ -1,0 +1,4 @@
+.env
+edge_profile/
+__pycache__/
+*.pyc

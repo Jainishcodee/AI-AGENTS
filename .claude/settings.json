@@ -1,0 +1,18 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python -m py_compile mingo.py voice.py search_terms.py rewards_bot.py reminder.py config.py)",
+      "Bash(pip install *)",
+      "Bash(python -m py_compile jarvis.py voice.py nlu.py orchestrator.py ui_ctk.py config.py agents/base.py agents/mingo.py agents/weather.py agents/system_info.py agents/notes.py agents/search.py)",
+      "Bash(python -m py_compile jarvis.py voice.py)",
+      "WebFetch(domain:openclaw.ai)",
+      "Bash(python -m py_compile jarvis.py voice.py ui_hud.py agents/weather.py config.py)",
+      "PowerShell(C:\\\\flutter\\\\bin\\\\flutter create --project-name jarvis --org com.larossatech --platforms android \"g:\\\\AI AGENTS\\\\Jarvis\" 2>&1)",
+      "Bash(ls -la *.json)",
+      "Bash(python -c \"import pandas, openpyxl; print\\('pandas', pandas.__version__, 'openpyxl', openpyxl.__version__\\)\")",
+      "Bash(python -c \"import pandas; print\\('pandas', pandas.__version__\\)\")",
+      "Read(//c/Users/Jainish/**)",
+      "Bash(python insta_report.py)"
+    ]
+  }
+}
