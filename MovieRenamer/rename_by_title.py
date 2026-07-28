@@ -38,6 +38,7 @@ VIDEO_EXTENSIONS = {
     ".m4v", ".mpg", ".mpeg", ".webm", ".ts", ".m2ts",
 }
 
+
 # Characters that are illegal in Windows file names -> replace with a space.
 ILLEGAL_CHARS = r'[<>:"/\\|?*]'
 

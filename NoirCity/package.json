@@ -1,0 +1,45 @@
+{
+  "name": "noircity",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "eslint",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit",
+    "gen:city": "tsx scripts/generate-city.ts",
+    "preview:city": "tsx scripts/preview-city.ts",
+    "lint:case": "tsx scripts/lint-case.ts",
+    "lint:cases": "tsx scripts/lint-case.ts cases/case-00-the-quiet-room && tsx scripts/lint-case.ts cases/case-01-harbor-lights",
+    "check": "npm run typecheck && npm run test && npm run lint:cases"
+  },
+  "dependencies": {
+    "@supabase/ssr": "^0.12.3",
+    "@supabase/supabase-js": "^2.110.9",
+    "leaflet": "^1.9.4",
+    "next": "16.2.12",
+    "react": "19.2.4",
+    "react-dom": "19.2.4",
+    "react-leaflet": "^5.0.0",
+    "server-only": "^0.0.1",
+    "zod": "^4.4.3",
+    "zustand": "^5.0.14"
+  },
+  "devDependencies": {
+    "@tailwindcss/postcss": "^4",
+    "@types/leaflet": "^1.9.21",
+    "@types/node": "^20",
+    "@types/react": "^19",
+    "@types/react-dom": "^19",
+    "eslint": "^9",
+    "eslint-config-next": "16.2.12",
+    "playwright": "^1.62.0",
+    "sharp": "^0.35.3",
+    "tailwindcss": "^4",
+    "tsx": "^4.23.1",
+    "typescript": "^5",
+    "vitest": "^4.1.10"
+  }
+}

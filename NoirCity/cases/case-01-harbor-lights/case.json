@@ -1,0 +1,415 @@
+{
+  "id": "harbor-lights",
+  "title": "Harbor Lights",
+  "cityId": "backlund",
+  "brief": "They pulled Tommy Vance out of No. 4 Dry Dock on Tuesday morning, and the dock has been drained since the middle of last month. The police wrote it up as a fall and closed it in a day. His sister does not believe them, and she has scraped together forty pounds to say so. You have until Friday.",
+  "timeBudget": 48,
+  "startLocationId": "loc_lm_blackthorn_security_company",
+
+  "suspects": [
+    {
+      "id": "s_pell",
+      "name": "Arthur Pell",
+      "occupation": "Shipping agent, Pell & Co.",
+      "summary": "Sits on two charitable boards and never raises his voice. Handles consignments for half the estuary and has never once been audited.",
+      "alibi": "At the Exchange until seven, then home to Hillston. His clerk will confirm it, and his clerk needs the job."
+    },
+    {
+      "id": "s_rourke",
+      "name": "Declan Rourke",
+      "occupation": "Secretary, Dockers' Union",
+      "summary": "Decides who eats on this waterfront. Twice charged with affray, twice acquitted when witnesses lost their memories.",
+      "alibi": "In the union hall running a meeting. Forty men saw him, and forty men owe him."
+    },
+    {
+      "id": "s_marlene",
+      "name": "Marlene Voss",
+      "occupation": "Proprietor, The Golden Marlin",
+      "summary": "Came up from nothing on the strip and does not intend to go back. Was seeing Vance until it ended badly in the spring.",
+      "alibi": "Working her own room until three in the morning. The band remembers her. The band is paid to remember."
+    },
+    {
+      "id": "s_nell",
+      "name": "Nell Cavanagh",
+      "occupation": "Laundress; the victim's sister",
+      "summary": "The one who hired you. Lives four to a room in the Rookery and stands to collect on a policy she says she never knew about.",
+      "alibi": "At home with her children. Nobody who would be believed can confirm it."
+    },
+    {
+      "id": "s_kessler",
+      "name": "Sgt. Bram Kessler",
+      "occupation": "Coldbath division, Backlund Police",
+      "summary": "Wrote the report that closed the case in a single afternoon. Has a house nobody on a sergeant's pay could carry.",
+      "alibi": "On shift. The duty book says so, and he keeps the duty book."
+    }
+  ],
+
+  "motives": [
+    {
+      "id": "m_manifest",
+      "label": "To bury a manifest",
+      "description": "Vance counted cargo for a living. Somebody's paperwork could not survive an honest count."
+    },
+    {
+      "id": "m_union",
+      "label": "The hiring list",
+      "description": "Vance was going to talk to the Assize Courts about how men get picked for work on this waterfront."
+    },
+    {
+      "id": "m_blackmail",
+      "label": "Blackmail",
+      "description": "Vance had been spending more than he earned since the spring, and had not worked a double shift to do it."
+    },
+    {
+      "id": "m_family",
+      "label": "Family money",
+      "description": "A life policy on a dockworker is worth more than the dockworker ever was."
+    }
+  ],
+
+  "clues": [
+    {
+      "id": "c_body",
+      "type": "physical",
+      "title": "Where they found him",
+      "body": "Forty feet down, on the floor of a dock that has been dry since the fourteenth of last month. Face down, arms under him, coat still buttoned to the throat. A man who fell would have put his hands out. This one never did.",
+      "implicates": null
+    },
+    {
+      "id": "c_wet_lungs",
+      "type": "forensic",
+      "title": "Coroner's finding",
+      "body": "Salt water in the lungs, and a good deal of it. Whatever else happened to Tommy Vance, he drowned — and there has not been a drop of water in No. 4 Dry Dock in three weeks. He died somewhere else and was carried here."
+    },
+    {
+      "id": "c_paint_flake",
+      "type": "physical",
+      "title": "Flake under a fingernail",
+      "body": "Something green and hard, wedged deep under the nail of the right index finger. He clawed at whatever he went into the water beside.",
+      "requires": ["c_wet_lungs"],
+      "labResult": "c_lab_paint"
+    },
+    {
+      "id": "c_lab_paint",
+      "type": "forensic",
+      "title": "Laboratory report on the paint",
+      "body": "Admiralty green, lead-based, of a formulation used on hull plating below the waterline. Three vessels in the estuary carry it this month. All three are consigned to Pell & Co.",
+      "implicates": "s_pell"
+    },
+    {
+      "id": "c_tally_book",
+      "type": "document",
+      "title": "Vance's tally book",
+      "body": "A checker's book, thumbed soft, every crate on this waterfront logged in a small careful hand. The pages for the fourteenth have been torn out — not neatly. Somebody was in a hurry, and somebody knew which pages mattered."
+    },
+    {
+      "id": "c_carbon",
+      "type": "document",
+      "title": "Carbon of manifest 44-B",
+      "body": "The Exchange keeps carbons of everything. Manifest 44-B, the fourteenth: eleven containers off the Merrow, weights totalling ninety-one tons. Vance's book, for the same berth on the same day, has fourteen containers and a hundred and six tons.",
+      "requires": ["c_tally_book"]
+    },
+    {
+      "id": "c_manifest_copy",
+      "type": "document",
+      "title": "The filed original, 44-B",
+      "body": "The original, under seal, in a hand the clerk identifies without hesitation as Arthur Pell's own. Three containers were struck from the count after the vessel docked and before the paper was filed. They came off the boat. They never existed.",
+      "implicates": "s_pell"
+    },
+    {
+      "id": "c_signet",
+      "type": "physical",
+      "title": "A signet ring in the mud",
+      "body": "Gold, heavy, initials A. P. cut into the face. Trodden into the mud at the foot of the dry dock ladder, about where a man would put his weight coming back up carrying something.",
+      "requires": ["c_carbon"],
+      "implicates": "s_pell"
+    },
+    {
+      "id": "c_last_seen",
+      "type": "statement",
+      "title": "Sal's last sighting",
+      "body": "Vance drank alone on the Monday and left before eleven, sober enough to walk straight. He said he had a man to see about a count. He did not say which man, and Sal did not ask, because down here nobody asks."
+    },
+    {
+      "id": "c_pell_seen",
+      "type": "statement",
+      "title": "The man in the good coat",
+      "body": "There was a gentleman down on the wharf that week, twice, in a coat worth more than the wharf. Sal took him for an inspector until he saw him shake hands with the wrong people.",
+      "implicates": "s_pell"
+    },
+
+    {
+      "id": "c_union_ledger",
+      "type": "document",
+      "title": "The hiring list",
+      "body": "The book that decides who works. Vance's name is struck through three times in eleven weeks. A man kept off the list that long has every reason to talk to the Assize Courts, and Rourke has every reason to mind.",
+      "isRedHerring": true,
+      "implicates": "s_rourke"
+    },
+    {
+      "id": "c_love_letters",
+      "type": "document",
+      "title": "Letters, returned",
+      "body": "Nine of them, tied with a ribbon, the last one opened and read many times. It ends: you will not hear from me again and you will not like the reason. Signed M.V., dated the spring.",
+      "isRedHerring": true,
+      "implicates": "s_marlene"
+    },
+    {
+      "id": "c_policy",
+      "type": "document",
+      "title": "A life policy",
+      "body": "Four hundred pounds on the life of Thomas Vance, taken out fourteen months ago, beneficiary his sister Nell Cavanagh. The premiums were paid in cash, at the door, every month without fail.",
+      "isRedHerring": true,
+      "implicates": "s_nell"
+    },
+    {
+      "id": "c_payoff_envelope",
+      "type": "physical",
+      "title": "An envelope, unsealed",
+      "body": "In a desk drawer that should have been locked. Sixty pounds in used notes and a precinct docket number pencilled on the flap in a hand that matches the incident report.",
+      "isRedHerring": true,
+      "implicates": "s_kessler"
+    },
+    {
+      "id": "c_bloodied_shirt",
+      "type": "physical",
+      "title": "A shirt in pawn",
+      "body": "Pawned Tuesday morning for eight shillings, dockworker's size, with a stain across the cuff the broker did not care to ask about. The ticket is made out in a name that does not exist.",
+      "isRedHerring": true
+    },
+
+    {
+      "id": "c_rourke_alibi",
+      "type": "statement",
+      "title": "Rourke, on the record",
+      "body": "He does not deny keeping Vance off the list, and he does not pretend to be sorry. He says a man who talks to the courts is no use to anyone, and that killing him would have made him a martyr, which is worse than useless.",
+      "implicates": "s_rourke"
+    },
+    {
+      "id": "c_nell_story",
+      "type": "statement",
+      "title": "What his sister says",
+      "body": "Tommy had money from somewhere since the spring, and would not say where. He gave her four pounds a month and told her to stop counting. She thought he was in something. She did not think it would drown him.",
+      "implicates": "s_nell"
+    },
+    {
+      "id": "c_pell_business",
+      "type": "statement",
+      "title": "What Pell & Co. ships",
+      "body": "Bonded spirits, machine parts, and whatever else pays. The clerk mentions, without being asked, that Mr. Pell handles the estuary consignments personally, which is unusual for a man of his position.",
+      "implicates": "s_pell"
+    },
+    {
+      "id": "c_police_report",
+      "type": "document",
+      "title": "The incident report",
+      "body": "Two paragraphs. Death by misadventure, fall from height, no suspicious circumstance. Filed at four in the afternoon of the day the body was found, before the coroner had finished, and signed B. Kessler.",
+      "implicates": "s_kessler"
+    }
+  ],
+
+  "npcs": [
+    {
+      "id": "n_sokolov",
+      "name": "Dr. Anya Sokolov",
+      "role": "Assistant coroner",
+      "locationId": "loc_lm_the_county_morgue",
+      "questions": [
+        {
+          "id": "q_cause",
+          "text": "What actually killed him?",
+          "answer": "\"The report says a fall. The report was written before I opened him.\" She pulls the sheet back without ceremony. \"There is salt water in his lungs, Mr. Investigator. He breathed it in. A man does not drown in an empty dock.\"",
+          "requires": ["c_body"],
+          "grants": ["c_wet_lungs"]
+        },
+        {
+          "id": "q_hands",
+          "text": "Anything on the body itself?",
+          "answer": "\"His hands are the interesting part. No grazing on the palms, which there would be from a fall, and something green under one nail that I am not equipped to identify. Take it and go bother someone with a microscope.\"",
+          "requires": ["c_wet_lungs"],
+          "grants": []
+        }
+      ]
+    },
+    {
+      "id": "n_sal",
+      "name": "Sal Deakin",
+      "role": "Barman, The Paper Room",
+      "locationId": "loc_1105",
+      "questions": [
+        {
+          "id": "q_night",
+          "text": "When did you last see Tommy Vance?",
+          "answer": "\"Monday. Sat where you're sitting, drank two, left before eleven.\" He keeps polishing the same glass. \"Said he had a man to see about a count. That's all he said and that's all I asked.\"",
+          "grants": ["c_last_seen"]
+        },
+        {
+          "id": "q_pell",
+          "text": "Has anyone been down here who doesn't belong?",
+          "answer": "Sal puts the glass down, which he has not done since you came in. \"There was a gentleman. Twice that week. Coat worth more than this room. I had him for an inspector till I saw who he shook hands with.\"",
+          "requires": ["c_carbon"],
+          "grants": ["c_pell_seen"]
+        }
+      ]
+    },
+    {
+      "id": "n_ashe",
+      "name": "Wilbur Ashe",
+      "role": "Filing clerk, the Backlund Exchange",
+      "locationId": "loc_lm_the_backlund_exchange",
+      "questions": [
+        {
+          "id": "q_general",
+          "text": "What does Pell & Co. move through here?",
+          "answer": "\"Spirits under bond, machine parts, whatever the season pays for.\" He straightens a stack that does not need straightening. \"Mr. Pell handles the estuary consignments himself. Which is not usual, for a man at his level. I have never said that to anyone.\"",
+          "grants": ["c_pell_business"]
+        },
+        {
+          "id": "q_manifest",
+          "text": "Whose hand filed 44-B?",
+          "answer": "Ashe looks at the carbon for a long moment, and then at the door. \"That is Mr. Pell's hand. I would know it anywhere; I have copied it for nine years.\" He fetches the original without being asked. \"Three containers struck out after the vessel docked. I filed it. I did not read it. I want that written down somewhere.\"",
+          "requires": ["c_carbon"],
+          "grants": ["c_manifest_copy"]
+        }
+      ]
+    },
+    {
+      "id": "n_rourke",
+      "name": "Declan Rourke",
+      "role": "Union secretary",
+      "locationId": "loc_lm_the_dockers_union_hall",
+      "questions": [
+        {
+          "id": "q_tommy",
+          "text": "What was Vance to you?",
+          "answer": "\"A nuisance.\" He does not get up. \"I kept him off the list eleven weeks and I'd have kept him off eleven more. You want to know did I drown him? Use your head. A man who talks to the courts is no use to me. A man who talks to the courts and then turns up dead is a martyr, and a martyr will close this waterfront for a month.\"",
+          "grants": ["c_rourke_alibi"]
+        }
+      ]
+    },
+    {
+      "id": "n_nell",
+      "name": "Nell Cavanagh",
+      "role": "The client",
+      "locationId": "loc_0881",
+      "questions": [
+        {
+          "id": "q_brother",
+          "text": "Where was Tommy getting his money?",
+          "answer": "\"He wouldn't say. Since the spring there was money, and he'd put four pound on the table and tell me to stop counting.\" She does not look away from you, which most people do. \"I thought he was in something. I didn't think it would drown him.\"",
+          "grants": ["c_nell_story"]
+        }
+      ]
+    },
+    {
+      "id": "n_kessler",
+      "name": "Sgt. Bram Kessler",
+      "role": "Coldbath division",
+      "locationId": "loc_1023",
+      "questions": [
+        {
+          "id": "q_report",
+          "text": "You closed this in an afternoon. Why?",
+          "answer": "\"Because it was a man who fell down a hole.\" He slides the report across without looking at it. \"Forty feet, Mr. Investigator. They fall. They always fall. Now unless the family's paying you to waste my day as well as their own, the door is behind you.\"",
+          "grants": ["c_police_report"]
+        }
+      ]
+    }
+  ],
+
+  "locations": [
+    {
+      "cityLocationId": "loc_lm_blackthorn_security_company",
+      "description": "Two rooms above a tobacconist. A desk, a filing cabinet you have never fully closed, and a window that looks onto an airshaft. The forty pounds is still in the envelope in the drawer.",
+      "searchable": false,
+      "clues": [],
+      "searchCost": 1
+    },
+    {
+      "cityLocationId": "loc_lm_no_4_dry_dock",
+      "description": "Drained, echoing, forty feet deep, with a ladder down one wall and a stain on the floor where they found him. Sound comes back at you a half-second late.",
+      "clues": ["c_body", "c_paint_flake"],
+      "searchCost": 2
+    },
+    {
+      "cityLocationId": "loc_lm_the_county_morgue",
+      "description": "Tile, drains, and a cold that gets into your coat. Dr. Sokolov is the only person in this building who seems glad of the company.",
+      "clues": [],
+      "searchCost": 2
+    },
+    {
+      "cityLocationId": "loc_1102",
+      "description": "Quist Freight & Storage. Pallets to the roof, a checker's cubby by the door with a stool and a shelf, and Vance's name still chalked on the duty board nobody has wiped.",
+      "clues": ["c_tally_book"],
+      "searchCost": 2
+    },
+    {
+      "cityLocationId": "loc_lm_the_backlund_exchange",
+      "description": "A trading floor that empties at three, and a basement of carbons going back forty years. Every consignment in the estuary passes through this room on paper before it passes through the water.",
+      "clues": ["c_carbon"],
+      "searchCost": 2
+    },
+    {
+      "cityLocationId": "loc_1098",
+      "description": "Lucky Lion Wharf. Creosote, gulls, and mud that holds a bootprint for a week. The dry dock ladder comes up thirty feet from where you are standing.",
+      "clues": ["c_signet"],
+      "searchCost": 2
+    },
+    {
+      "cityLocationId": "loc_1105",
+      "description": "The Paper Room. Low ceiling, four tables, and a barman who has heard every lie told on this waterfront and repeated none of them.",
+      "clues": [],
+      "searchCost": 2
+    },
+    {
+      "cityLocationId": "loc_lm_the_dockers_union_hall",
+      "description": "The hiring list is posted at four and read like scripture. Rourke's office is at the back, and the door is open, which is its own kind of message.",
+      "clues": ["c_union_ledger"],
+      "searchCost": 3
+    },
+    {
+      "cityLocationId": "loc_lm_the_golden_marlin",
+      "description": "The strip's oldest room. Velvet gone shiny at the arms, a band nobody is listening to, and Marlene Voss watching the door from a table she never leaves.",
+      "clues": ["c_love_letters"],
+      "searchCost": 2
+    },
+    {
+      "cityLocationId": "loc_0881",
+      "description": "The Ruby Wire Apartments. Six floors, no lift, and the Cavanaghs four to a room on the third. There is a photograph of Tommy on the shelf and nothing else on it.",
+      "clues": ["c_policy"],
+      "searchCost": 2
+    },
+    {
+      "cityLocationId": "loc_1023",
+      "description": "Precinct 17. Fluorescent light, carbon paper, and a bench of people who have been waiting since morning. Kessler's desk is the one with nothing on it.",
+      "clues": ["c_payoff_envelope"],
+      "searchCost": 3
+    },
+    {
+      "cityLocationId": "loc_0888",
+      "description": "Amato Loan & Pawn. Wedding rings under glass, guitars on the wall, and a broker who remembers every face and volunteers none of them.",
+      "clues": ["c_bloodied_shirt"],
+      "searchCost": 2
+    },
+    {
+      "cityLocationId": "loc_lm_the_ferry_steps",
+      "description": "Worn hollow by two centuries of boots. The tide leaves things on the bottom stair, and the men who work the ferry have opinions about most of them.",
+      "clues": [],
+      "searchCost": 2
+    },
+    {
+      "cityLocationId": "loc_lm_the_rookery",
+      "description": "Nine buildings sharing four staircases and no clear ownership. Everybody here knew Tommy Vance and nobody here will say so twice.",
+      "clues": [],
+      "searchCost": 2
+    }
+  ],
+
+  "solution": {
+    "culpritId": "s_pell",
+    "motiveId": "m_manifest",
+    "requiredEvidence": ["c_lab_paint", "c_manifest_copy", "c_signet"],
+    "epilogue": "Pell does not run, and he does not shout. He sits behind his desk with his hands flat on the blotter while the Assize Courts men read the manifest back to him, and the only thing he says is that the containers were a clerical matter. Vance had come to him on the Monday with the tally book, because Vance was an honest man and thought an honest question would settle it. Pell walked him down to the Merrow to check the count, held him under against the hull until he stopped, and had two of his own men carry him to a dock that had been dry for three weeks — because a drowning in an empty dock is absurd, and absurd things get written up as falls. Kessler wrote it up as a fall. He is off the force by the spring and never charged. Rourke keeps the hiring list. Nell Cavanagh does not collect on the policy, because a murder voids it, and she tells you she is glad, and you believe about half of that.",
+    "failureEpilogue": "The name you gave them was not the name on the manifest, and Arthur Pell reads about it over breakfast in Hillston. Three containers came off the Merrow on the fourteenth and never existed, and now they never will — the carbons go into a stove in the Exchange basement within the week, and the clerk who would have identified the hand takes a post in another city and does not leave an address. Somebody serves eleven years. It is not the man who held Tommy Vance under. Nell Cavanagh does not ask for the forty pounds back, which is worse than if she had."
+  }
+}
