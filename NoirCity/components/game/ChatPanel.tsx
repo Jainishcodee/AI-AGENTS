@@ -32,7 +32,7 @@ export function ChatPanel({
           setOpen(true);
           onOpen();
         }}
-        className="absolute bottom-6 right-6 z-[1000] border border-neutral-800 bg-[#0e0f11]/95 px-4 py-2 text-[10px] tracking-[0.2em] text-neutral-400 backdrop-blur transition hover:border-amber-200/40 hover:text-amber-100"
+        className="absolute bottom-3 right-3 z-[1000] border border-neutral-800 bg-[#0e0f11]/95 px-4 py-2.5 text-[10px] tracking-[0.2em] text-neutral-400 backdrop-blur transition hover:border-amber-200/40 hover:text-amber-100 sm:bottom-6 sm:right-6 sm:py-2"
       >
         CHAT
         {unread > 0 && (
@@ -45,7 +45,9 @@ export function ChatPanel({
   }
 
   return (
-    <div className="absolute bottom-6 right-6 z-[1000] flex h-[340px] w-[320px] flex-col border border-neutral-800 bg-[#0e0f11]/97 backdrop-blur">
+    // On a phone the map pane is short, so chat takes the width and only as
+    // much height as it can have without covering the whole city.
+    <div className="absolute inset-x-3 bottom-3 z-[1000] flex h-[min(320px,60%)] flex-col border border-neutral-800 bg-[#0e0f11]/97 backdrop-blur sm:inset-x-auto sm:right-6 sm:bottom-6 sm:h-[340px] sm:w-[320px]">
       <header className="flex items-center justify-between border-b border-neutral-800 px-4 py-2">
         <span className="text-[10px] tracking-[0.25em] text-neutral-500">
           THE FIRM
@@ -59,7 +61,7 @@ export function ChatPanel({
         </button>
       </header>
 
-      <div className="flex-1 space-y-2.5 overflow-y-auto px-4 py-3">
+      <div className="min-h-0 flex-1 space-y-2.5 overflow-y-auto overscroll-contain px-4 py-3">
         {!messages.length && (
           <p className="font-serif text-[13px] italic text-neutral-700">
             Nobody has said anything yet.
@@ -95,7 +97,8 @@ export function ChatPanel({
           onChange={(e) => setDraft(e.target.value)}
           maxLength={500}
           placeholder="Say something"
-          className="w-full bg-transparent px-2 py-1.5 font-serif text-[13px] text-neutral-200 outline-none placeholder:text-neutral-700"
+          // 16px on a phone, or focusing the field zooms the map behind it.
+          className="w-full bg-transparent px-2 py-1.5 font-serif text-[16px] text-neutral-200 outline-none placeholder:text-neutral-700 sm:text-[13px]"
         />
       </form>
     </div>

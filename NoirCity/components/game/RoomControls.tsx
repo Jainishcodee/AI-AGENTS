@@ -82,12 +82,13 @@ export function HostButton({
         onKeyDown={(e) => e.key === "Enter" && name.trim() && host()}
         placeholder="Your name"
         maxLength={24}
-        className="border border-neutral-800 bg-transparent px-3 py-1.5 font-serif text-[13px] text-neutral-200 outline-none placeholder:text-neutral-700 focus:border-amber-200/40"
+        // 16px below `sm`, or iOS zooms the page the moment this takes focus.
+        className="min-w-0 flex-1 border border-neutral-800 bg-transparent px-3 py-2 font-serif text-[16px] text-neutral-200 outline-none placeholder:text-neutral-700 focus:border-amber-200/40 sm:flex-none sm:py-1.5 sm:text-[13px]"
       />
       <button
         disabled={busy || !name.trim()}
         onClick={host}
-        className="border border-neutral-700 px-4 py-1.5 text-[11px] tracking-[0.2em] text-neutral-300 transition hover:border-amber-200/50 hover:text-amber-100 disabled:opacity-30"
+        className="shrink-0 border border-neutral-700 px-4 py-2 text-[11px] tracking-[0.2em] text-neutral-300 transition hover:border-amber-200/50 hover:text-amber-100 disabled:opacity-30 sm:py-1.5"
       >
         {busy ? "OPENING..." : "OPEN A ROOM"}
       </button>
@@ -137,7 +138,9 @@ export function JoinBox({ enabled }: { enabled: boolean }) {
           onKeyDown={(e) => e.key === "Enter" && ready && join()}
           placeholder="CODE"
           maxLength={8}
-          className="w-28 border border-neutral-800 bg-transparent px-3 py-2 text-center font-serif text-lg tracking-[0.3em] text-amber-100 outline-none placeholder:text-neutral-700 focus:border-amber-200/40"
+          autoCapitalize="characters"
+          autoComplete="off"
+          className="w-24 shrink-0 border border-neutral-800 bg-transparent px-3 py-2 text-center font-serif text-lg tracking-[0.2em] text-amber-100 outline-none placeholder:text-neutral-700 focus:border-amber-200/40 sm:w-28 sm:tracking-[0.3em]"
         />
         <input
           value={name}
@@ -145,12 +148,13 @@ export function JoinBox({ enabled }: { enabled: boolean }) {
           onKeyDown={(e) => e.key === "Enter" && ready && join()}
           placeholder="Your name"
           maxLength={24}
-          className="border border-neutral-800 bg-transparent px-3 py-2 font-serif text-[14px] text-neutral-200 outline-none placeholder:text-neutral-700 focus:border-amber-200/40"
+          // 16px below `sm`, or iOS zooms the page the moment this takes focus.
+          className="min-w-0 flex-1 border border-neutral-800 bg-transparent px-3 py-2 font-serif text-[16px] text-neutral-200 outline-none placeholder:text-neutral-700 focus:border-amber-200/40 sm:flex-none sm:text-[14px]"
         />
         <button
           disabled={busy || !ready}
           onClick={join}
-          className="border border-neutral-700 px-5 py-2 text-[11px] tracking-[0.2em] text-neutral-300 transition hover:border-amber-200/50 hover:text-amber-100 disabled:opacity-30"
+          className="shrink-0 border border-neutral-700 px-5 py-2.5 text-[11px] tracking-[0.2em] text-neutral-300 transition hover:border-amber-200/50 hover:text-amber-100 disabled:opacity-30 sm:py-2"
         >
           {busy ? "JOINING..." : "JOIN THE CASE"}
         </button>

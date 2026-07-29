@@ -30,7 +30,7 @@ export function HerePanel({
   const isElsewhere = selected !== null && selected.id !== here.id;
 
   return (
-    <div className="space-y-6 px-6 py-5">
+    <div className="space-y-6 px-5 py-5 sm:px-6">
       {isElsewhere && selected && (
         <section className="border border-neutral-800 p-4">
           <p className="text-[10px] tracking-[0.25em] text-neutral-600">

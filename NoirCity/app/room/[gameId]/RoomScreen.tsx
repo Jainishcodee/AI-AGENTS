@@ -94,22 +94,24 @@ function Lobby({
 
   return (
     <main className="min-h-dvh bg-[#08090b] text-neutral-300">
-      <div className="mx-auto max-w-2xl px-8 py-20">
+      <div className="mx-auto max-w-2xl px-5 py-12 sm:px-8 sm:py-20">
         <p className="text-[10px] tracking-[0.4em] text-neutral-600">
           THE FIRM IS ASSEMBLING
         </p>
-        <h1 className="mt-3 font-serif text-4xl text-neutral-100">
+        <h1 className="mt-3 font-serif text-3xl text-neutral-100 sm:text-4xl">
           {room.view.title}
         </h1>
 
         <button
           onClick={copy}
-          className="mt-10 block w-full border border-neutral-800 py-8 text-center transition hover:border-amber-200/40"
+          className="mt-10 block w-full border border-neutral-800 py-6 text-center transition hover:border-amber-200/40 sm:py-8"
         >
           <span className="block text-[10px] tracking-[0.3em] text-neutral-600">
             {copied ? "COPIED" : "ROOM CODE — CLICK TO COPY"}
           </span>
-          <span className="mt-2 block font-serif text-6xl tracking-[0.3em] text-amber-100">
+          {/* The code is the whole point of this screen, but eight characters
+              at 0.3em tracking will not fit across a phone. */}
+          <span className="mt-2 block font-serif text-4xl tracking-[0.2em] text-amber-100 sm:text-6xl sm:tracking-[0.3em]">
             {room.roomCode}
           </span>
         </button>
@@ -181,7 +183,7 @@ function Lobby({
 /** Who else is on this case, shown under the HUD during play. */
 function Roster({ room, online }: { room: RoomSnapshot; online: Set<string> }) {
   return (
-    <div className="border-b border-neutral-800 px-6 py-3">
+    <div className="shrink-0 border-b border-neutral-800 px-5 py-3 sm:px-6">
       <div className="flex items-center justify-between">
         <p className="text-[10px] tracking-[0.25em] text-neutral-600">
           ROOM {room.roomCode}

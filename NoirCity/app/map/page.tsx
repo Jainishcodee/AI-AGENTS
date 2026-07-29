@@ -52,8 +52,8 @@ export default function MapPage() {
   }
 
   return (
-    <main className="flex h-dvh bg-[#08090b] text-neutral-300">
-      <div className="relative flex-1">
+    <main className="flex h-dvh flex-col bg-[#08090b] text-neutral-300 md:flex-row">
+      <div className="relative min-h-0 flex-1">
         {city && (
           <CityMap
             city={city}
@@ -63,11 +63,13 @@ export default function MapPage() {
             onSelect={setSelected}
           />
         )}
-        <div className="absolute left-6 top-6 z-[1000] select-none">
-          <h1 className="font-serif text-2xl tracking-[0.35em] text-neutral-200">
+        {/* On a phone the city reaches the top edge, so the title needs a plate
+            to sit on. On a desktop there is dark sky to spare and it does not. */}
+        <div className="absolute left-3 top-3 z-[1000] select-none bg-[#08090b]/75 p-3 backdrop-blur-sm sm:left-6 sm:top-6 sm:bg-transparent sm:p-0 sm:backdrop-blur-none">
+          <h1 className="font-serif text-xl tracking-[0.3em] text-neutral-200 sm:text-2xl sm:tracking-[0.35em]">
             BACKLUND
           </h1>
-          <p className="mt-1 text-[11px] tracking-[0.2em] text-neutral-600">
+          <p className="mt-1 text-[10px] tracking-[0.15em] text-neutral-600 sm:text-[11px] sm:tracking-[0.2em]">
             {city ? city.locations.length : "—"} LOCATIONS &middot;{" "}
             {city?.boroughs.length ?? "—"}&nbsp;BOROUGHS &middot; THE TUSSOCK
           </p>
@@ -80,7 +82,9 @@ export default function MapPage() {
         </div>
       </div>
 
-      <aside className="w-[360px] shrink-0 overflow-y-auto border-l border-neutral-800 bg-[#0e0f11] p-7">
+      {/* Half the screen on a phone, a column on a desktop. No tabs to hide
+          behind here, so it stays open and simply takes a fixed share. */}
+      <aside className="h-[45dvh] shrink-0 overflow-y-auto overscroll-contain border-t border-neutral-800 bg-[#0e0f11] p-5 md:h-auto md:w-[360px] md:border-l md:border-t-0 md:p-7">
         {!selected && (
           <p className="font-serif text-[15px] leading-relaxed text-neutral-500">
             Click anywhere on the map. Gold pins are ordinary addresses; red ones

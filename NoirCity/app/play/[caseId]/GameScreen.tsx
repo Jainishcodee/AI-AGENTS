@@ -44,7 +44,9 @@ export function GameScreen({ caseId }: { caseId: string }) {
 
 export function Refusal({ message }: { message: string }) {
   return (
-    <p className="absolute bottom-6 left-1/2 z-[1000] -translate-x-1/2 border border-red-900/50 bg-[#0e0f11]/95 px-5 py-2.5 font-serif text-[13px] text-red-300 backdrop-blur">
+    // Sits under the top buttons on a phone rather than at the bottom, where
+    // the action feed and the chat dock have already claimed the corners.
+    <p className="absolute left-1/2 top-16 z-[1000] w-[calc(100%-1.5rem)] max-w-md -translate-x-1/2 border border-red-900/50 bg-[#0e0f11]/95 px-5 py-2.5 text-center font-serif text-[13px] text-red-300 backdrop-blur sm:top-auto sm:bottom-6 sm:w-auto">
       {message}
     </p>
   );

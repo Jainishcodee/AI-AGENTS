@@ -38,7 +38,7 @@ export function AccusePanel({
   }
 
   return (
-    <div className="space-y-7 px-6 py-5">
+    <div className="space-y-7 px-5 py-5 sm:px-6">
       <p className="border border-red-900/40 bg-red-950/10 px-4 py-3 font-serif text-[13px] leading-relaxed text-neutral-400">
         You get one attempt. Name a person, a reason, and three pieces of
         evidence that prove it. Nobody will tell you when you are ready.

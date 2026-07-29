@@ -11,11 +11,11 @@ export default function Home() {
 
   return (
     <main className="min-h-dvh bg-[#08090b] text-neutral-300">
-      <div className="mx-auto max-w-3xl px-8 py-20">
+      <div className="mx-auto max-w-3xl px-5 py-12 sm:px-8 sm:py-20">
         <p className="text-[10px] tracking-[0.4em] text-neutral-600">
           BACKLUND &middot; 1984
         </p>
-        <h1 className="mt-3 font-serif text-5xl tracking-[0.12em] text-neutral-100">
+        <h1 className="mt-3 font-serif text-4xl tracking-[0.12em] text-neutral-100 sm:text-5xl">
           NOIR CITY
         </h1>
         <p className="mt-5 max-w-xl font-serif text-[15px] leading-relaxed text-neutral-400">
@@ -25,11 +25,13 @@ export default function Home() {
           to go next.
         </p>
 
-        <ul className="mt-14 space-y-4">
+        <ul className="mt-10 space-y-4 sm:mt-14">
           {cases.map((c) => (
-            <li key={c.id} className="border border-neutral-800 p-6">
-              <div className="flex items-baseline justify-between gap-4">
-                <h2 className="font-serif text-2xl text-neutral-100">{c.title}</h2>
+            <li key={c.id} className="border border-neutral-800 p-5 sm:p-6">
+              <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-2">
+                <h2 className="font-serif text-xl text-neutral-100 sm:text-2xl">
+                  {c.title}
+                </h2>
                 {c.isTutorial && (
                   <span className="shrink-0 border border-amber-200/30 px-2 py-0.5 text-[9px] tracking-[0.2em] text-amber-200/70">
                     START HERE

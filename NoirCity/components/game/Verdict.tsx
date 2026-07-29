@@ -21,8 +21,8 @@ export function Verdict({
   const named = view.suspects.find((s) => s.id === result.accusation.culpritId);
 
   return (
-    <div className="absolute inset-0 z-[2000] overflow-y-auto bg-[#08090b]/97 backdrop-blur-sm">
-      <div className="mx-auto max-w-2xl px-8 py-16">
+    <div className="absolute inset-0 z-[2000] overflow-y-auto overscroll-contain bg-[#08090b]/97 backdrop-blur-sm">
+      <div className="mx-auto max-w-2xl px-5 py-10 sm:px-8 sm:py-16">
         <p className="text-[10px] tracking-[0.4em] text-neutral-600">
           {result.solved
             ? "CASE CLOSED"
@@ -32,7 +32,7 @@ export function Verdict({
         </p>
 
         <h1
-          className={`mt-3 font-serif text-3xl leading-tight ${
+          className={`mt-3 font-serif text-2xl leading-tight sm:text-3xl ${
             result.solved ? "text-amber-100" : "text-neutral-300"
           }`}
         >
@@ -49,7 +49,7 @@ export function Verdict({
           />
         </div>
 
-        <div className="mt-8 flex items-baseline gap-8 border-y border-neutral-800 py-5">
+        <div className="mt-8 flex flex-wrap items-baseline gap-x-8 gap-y-4 border-y border-neutral-800 py-5">
           <div>
             <p className="font-serif text-4xl tabular-nums text-neutral-100">
               {result.score}
@@ -92,18 +92,18 @@ export function Verdict({
           ))}
         </div>
 
-        <div className="mt-12 flex gap-3">
+        <div className="mt-12 flex flex-wrap gap-3">
           {onRestart && (
             <button
               onClick={onRestart}
-              className="border border-neutral-700 px-6 py-3 text-[11px] tracking-[0.2em] text-neutral-300 transition hover:border-amber-200/50 hover:text-amber-100"
+              className="border border-neutral-700 px-6 py-3.5 text-[11px] tracking-[0.2em] text-neutral-300 transition hover:border-amber-200/50 hover:text-amber-100 sm:py-3"
             >
               RUN IT AGAIN
             </button>
           )}
           <Link
             href="/"
-            className="border border-neutral-800 px-6 py-3 text-[11px] tracking-[0.2em] text-neutral-500 transition hover:text-neutral-300"
+            className="border border-neutral-800 px-6 py-3.5 text-[11px] tracking-[0.2em] text-neutral-500 transition hover:text-neutral-300 sm:py-3"
           >
             ANOTHER CASE
           </Link>

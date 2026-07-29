@@ -12,7 +12,7 @@ export function TutorialPanel({ progress }: { progress: TutorialProgress }) {
   if (!step) return null;
 
   return (
-    <section className="border-b border-amber-200/15 bg-amber-100/[0.03] px-6 py-5">
+    <section className="shrink-0 border-b border-amber-200/15 bg-amber-100/[0.03] px-5 py-5 sm:px-6">
       <div className="flex items-baseline justify-between">
         <p className="text-[10px] tracking-[0.3em] text-amber-200/70">
           {step.verb}

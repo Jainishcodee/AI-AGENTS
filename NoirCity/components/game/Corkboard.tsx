@@ -115,23 +115,51 @@ export function Corkboard({
     { w: 1200, h: 800 },
   );
 
+  /** Pins a note in the top-left of whatever the board is currently showing. */
+  function addNoteInView() {
+    const scroll = surfaceRef.current;
+    board.addNote((scroll?.scrollLeft ?? 0) + 24, (scroll?.scrollTop ?? 0) + 24);
+  }
+
   return (
-    <div className="absolute inset-0 z-[1900] flex flex-col bg-[#0b0a09]">
-      <header className="flex items-center justify-between border-b border-neutral-800 px-6 py-3">
-        <div>
-          <h2 className="font-serif text-lg text-neutral-100">The Board</h2>
-          <p className="mt-0.5 text-[10px] tracking-[0.2em] text-neutral-600">
-            {linkFrom
-              ? "PICK A SECOND CARD TO RUN STRING — OR THE SAME ONE TO CANCEL"
-              : "DRAG TO ARRANGE · CLICK TWO CARDS TO CONNECT · DOUBLE-CLICK THE CORK FOR A NOTE"}
-          </p>
+    // Beside the map on a desktop, so the evidence list stays readable next to
+    // it; over everything on a phone, where sharing the screen with a 68dvh
+    // sheet would leave the cork about two cards tall.
+    <div className="absolute inset-0 z-[1900] flex flex-col bg-[#0b0a09] max-md:fixed">
+      <header className="flex items-center justify-between gap-3 border-b border-neutral-800 px-4 py-2.5 sm:px-6 sm:py-3">
+        <div className="min-w-0">
+          <h2 className="font-serif text-base text-neutral-100 sm:text-lg">
+            The Board
+          </h2>
+          {/* The linking prompt is live feedback and always shows. The idle
+              instructions are desktop-only - they name a double-click a phone
+              cannot perform, and the buttons beside them say the same thing. */}
+          {linkFrom ? (
+            <p className="mt-0.5 text-[10px] leading-tight tracking-[0.2em] text-neutral-600">
+              PICK A SECOND CARD TO RUN STRING — OR THE SAME ONE TO CANCEL
+            </p>
+          ) : (
+            <p className="mt-0.5 hidden text-[10px] tracking-[0.2em] text-neutral-600 sm:block">
+              DRAG TO ARRANGE · CLICK TWO CARDS TO CONNECT · DOUBLE-CLICK THE CORK
+              FOR A NOTE
+            </p>
+          )}
         </div>
-        <button
-          onClick={onClose}
-          className="border border-neutral-700 px-4 py-1.5 text-[10px] tracking-[0.2em] text-neutral-400 transition hover:border-amber-200/50 hover:text-amber-100"
-        >
-          BACK TO THE CASE
-        </button>
+        <div className="flex shrink-0 items-center gap-2">
+          <button
+            onClick={addNoteInView}
+            className="border border-neutral-700 px-3 py-2 text-[10px] tracking-[0.2em] text-neutral-400 transition hover:border-amber-200/50 hover:text-amber-100 sm:hidden"
+          >
+            + NOTE
+          </button>
+          <button
+            onClick={onClose}
+            className="border border-neutral-700 px-3 py-2 text-[10px] tracking-[0.2em] text-neutral-400 transition hover:border-amber-200/50 hover:text-amber-100 sm:px-4 sm:py-1.5"
+          >
+            <span className="sm:hidden">DONE</span>
+            <span className="hidden sm:inline">BACK TO THE CASE</span>
+          </button>
+        </div>
       </header>
 
       <div
@@ -266,7 +294,7 @@ function StickyNote({
     >
       <button
         onClick={onRemove}
-        className="absolute right-1 top-0.5 text-[13px] leading-none text-neutral-700/60 hover:text-neutral-900"
+        className="absolute right-0 top-0 flex h-7 w-7 items-center justify-center text-[15px] leading-none text-neutral-700/60 hover:text-neutral-900"
         aria-label="Remove note"
       >
         ×
@@ -276,7 +304,9 @@ function StickyNote({
         onChange={(e) => onChange(e.target.value.slice(0, 300))}
         placeholder="..."
         rows={3}
-        className="w-full resize-none bg-transparent pr-3 font-serif text-[12px] leading-snug text-neutral-900 outline-none placeholder:text-neutral-700/50"
+        // 16px on a phone: anything smaller and Safari zooms the whole board in
+        // the moment the note takes focus.
+        className="w-full resize-none bg-transparent pr-3 font-serif text-[16px] leading-snug text-neutral-900 outline-none placeholder:text-neutral-700/50 sm:text-[12px]"
       />
     </div>
   );

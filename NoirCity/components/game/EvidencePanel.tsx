@@ -31,7 +31,7 @@ export function EvidencePanel({
 
   if (!view.clues.length) {
     return (
-      <p className="px-6 py-8 font-serif text-[14px] leading-relaxed text-neutral-600">
+      <p className="px-5 py-8 font-serif text-[14px] leading-relaxed text-neutral-600 sm:px-6">
         Nothing yet. Evidence turns up by searching places and pressing people —
         and both cost hours you will want back later.
       </p>
@@ -50,7 +50,7 @@ export function EvidencePanel({
           <article key={clue.id}>
             <button
               onClick={() => setOpen(isOpen ? null : clue.id)}
-              className="flex w-full items-baseline justify-between px-6 py-3.5 text-left transition hover:bg-neutral-900/40"
+              className="flex w-full items-baseline justify-between px-5 py-3.5 text-left transition hover:bg-neutral-900/40 sm:px-6"
             >
               <span>
                 <span className="block font-serif text-[15px] leading-tight text-neutral-100">
@@ -65,7 +65,7 @@ export function EvidencePanel({
             </button>
 
             {isOpen && (
-              <div className="px-6 pb-5">
+              <div className="px-5 pb-5 sm:px-6">
                 <div
                   className={
                     clue.type === "document" || clue.type === "forensic"
