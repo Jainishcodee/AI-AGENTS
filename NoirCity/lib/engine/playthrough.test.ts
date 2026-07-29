@@ -217,8 +217,68 @@ describe("case 01 - Harbor Lights", () => {
   });
 });
 
+describe("case 02 - The Bell Does Not Lie", () => {
+  const c = loadCase("case-02-the-bell-does-not-lie");
+
+  const script: Action[] = [
+    { type: "travel", locationId: "loc_0398" },
+    { type: "search" },
+    { type: "travel", locationId: "loc_lm_the_county_morgue" },
+    { type: "interview", npcId: "n_coroner", questionId: "q_time" },
+    { type: "travel", locationId: "loc_lm_the_bell_of_order" },
+    { type: "search" },
+    { type: "search" },
+  ];
+
+  it("can be solved within the budget", () => {
+    const { state } = play(c, script);
+    expect(state.timeRemaining).toBeGreaterThan(0);
+
+    const final = applyAction(c, city, state, {
+      type: "accuse",
+      culpritId: "s_vole",
+      motiveId: "m_committee",
+      evidenceIds: ["c_doctor_estimate", "c_bell_jam", "c_maintenance_log"],
+    });
+    expect(final.ok).toBe(true);
+    if (final.ok) expect(final.state.result?.solved).toBe(true);
+  });
+
+  it("gates the bell on the coroner contradicting the club physician", () => {
+    // The whole case turns on noticing the time is wrong. Searching the bell
+    // before the coroner has told you it matters must find nothing.
+    const early: Action[] = [
+      { type: "travel", locationId: "loc_lm_the_bell_of_order" },
+      { type: "search" },
+      { type: "search" },
+    ];
+    const { state } = play(c, early);
+    expect(state.discoveredClues).not.toContain("c_bell_jam");
+    expect(state.discoveredClues).not.toContain("c_maintenance_log");
+  });
+
+  it("misdirects: four suspects each have a motive that goes nowhere", () => {
+    const { state } = play(c, script);
+    for (const wrong of ["s_lyne", "s_teague", "s_marchmont", "s_kell"]) {
+      const attempt = applyAction(c, city, state, {
+        type: "accuse",
+        culpritId: wrong,
+        motiveId: "m_committee",
+        evidenceIds: ["c_doctor_estimate"],
+      });
+      // Only the first accusation lands - the rest are refused as closed, which
+      // is itself the point: you get one attempt.
+      if (attempt.ok) expect(attempt.state.result?.solved).toBe(false);
+    }
+  });
+});
+
 describe("every case ships against the same city", () => {
-  for (const dir of ["case-00-the-quiet-room", "case-01-harbor-lights"]) {
+  for (const dir of [
+    "case-00-the-quiet-room",
+    "case-01-harbor-lights",
+    "case-02-the-bell-does-not-lie",
+  ]) {
     it(`${dir} targets a real start location`, () => {
       const c = loadCase(dir);
       expect(c.file.cityId).toBe(city.city.id);

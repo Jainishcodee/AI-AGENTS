@@ -1,8 +1,16 @@
-import { readFileSync } from "node:fs";
-import { join } from "node:path";
 import "server-only";
 import { indexCase, parseCase, type CaseIndex } from "@/lib/engine/caseSchema";
 import { indexCity, parseCity, type CityIndex } from "@/lib/engine/citySchema";
+import type { CaseSummary } from "@/lib/game/types";
+
+// Static imports, not `fs.readFileSync`. Cloudflare Workers have no filesystem
+// at runtime, so anything the server needs has to be part of the bundle.
+import cityNav from "@/content/city-nav.json";
+import quietRoom from "@/cases/case-00-the-quiet-room/case.json";
+import harborLights from "@/cases/case-01-harbor-lights/case.json";
+import bellDoesNotLie from "@/cases/case-02-the-bell-does-not-lie/case.json";
+
+export type { CaseSummary };
 
 /**
  * Case files are read on the server and never sent to the browser. Everything
@@ -12,26 +20,22 @@ import { indexCity, parseCity, type CityIndex } from "@/lib/engine/citySchema";
  * any client component ever imports this, the build fails.
  */
 
-const CASE_DIRS: Record<string, string> = {
-  "the-quiet-room": "case-00-the-quiet-room",
-  "harbor-lights": "case-01-harbor-lights",
+const CASE_SOURCES: Record<string, unknown> = {
+  "the-quiet-room": quietRoom,
+  "harbor-lights": harborLights,
+  "the-bell-does-not-lie": bellDoesNotLie,
 };
-
-import type { CaseSummary } from "@/lib/game/types";
-
-export type { CaseSummary };
 
 const caseCache = new Map<string, CaseIndex>();
 let cityCache: CityIndex | null = null;
 
+/**
+ * Navigation-only city: locations, boroughs and bridges, with the streets and
+ * blocks stripped. The server never draws anything, and the full geometry is
+ * 556 KB the Worker would carry for nothing.
+ */
 export function loadCity(): CityIndex {
-  if (!cityCache) {
-    cityCache = indexCity(
-      parseCity(
-        JSON.parse(readFileSync(join(process.cwd(), "public", "city.json"), "utf8")),
-      ),
-    );
-  }
+  if (!cityCache) cityCache = indexCity(parseCity(cityNav));
   return cityCache;
 }
 
@@ -39,19 +43,16 @@ export function loadCase(caseId: string): CaseIndex | null {
   const cached = caseCache.get(caseId);
   if (cached) return cached;
 
-  const dir = CASE_DIRS[caseId];
-  if (!dir) return null;
+  const source = CASE_SOURCES[caseId];
+  if (!source) return null;
 
-  const raw = JSON.parse(
-    readFileSync(join(process.cwd(), "cases", dir, "case.json"), "utf8"),
-  );
-  const index = indexCase(parseCase(raw));
+  const index = indexCase(parseCase(source));
   caseCache.set(caseId, index);
   return index;
 }
 
 export function listCases(): CaseSummary[] {
-  return Object.keys(CASE_DIRS)
+  return Object.keys(CASE_SOURCES)
     .map((id) => loadCase(id))
     .filter((c): c is CaseIndex => c !== null)
     .map(({ file }) => ({

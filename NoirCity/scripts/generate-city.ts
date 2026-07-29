@@ -1043,10 +1043,32 @@ function main() {
   const json = JSON.stringify(city);
   writeFileSync(join(dir, "city.json"), json);
 
+  // The server only ever needs to answer "where is this and what does it cost
+  // to get there" - it never draws anything. Shipping the streets and blocks
+  // into a Cloudflare Worker bundle would be half a megabyte of dead weight, so
+  // navigation data gets its own much smaller file.
+  const nav = {
+    id: city.id,
+    name: city.name,
+    size: city.size,
+    river: { ...city.river, points: city.river.points, polygon: [] },
+    bridges: city.bridges,
+    railways: [],
+    boroughs: city.boroughs.map((b) => ({ ...b, polygon: [] })),
+    streets: [],
+    blocks: [],
+    locations: city.locations,
+  };
+  const navJson = JSON.stringify(nav);
+  const contentDir = join(process.cwd(), "content");
+  mkdirSync(contentDir, { recursive: true });
+  writeFileSync(join(contentDir, "city-nav.json"), navJson);
+
   console.log(
     `\n  ${streets.length} streets, ${blocks.length} blocks, ${locations.length} locations`,
   );
-  console.log(`  public/city.json  ${(json.length / 1024).toFixed(0)} KB`);
+  console.log(`  public/city.json       ${(json.length / 1024).toFixed(0)} KB  (browser: full geometry)`);
+  console.log(`  content/city-nav.json  ${(navJson.length / 1024).toFixed(0)} KB  (server: navigation only)`);
 }
 
 /** Andrew's monotone chain. */

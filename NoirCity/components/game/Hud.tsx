@@ -6,7 +6,14 @@ import type { ClientView } from "@/lib/engine/view";
  * The clock. Colour shifts as it runs down, because the shared time budget is
  * the only real pressure in the game and it should be impossible to ignore.
  */
-export function Hud({ view, onRestart }: { view: ClientView; onRestart: () => void }) {
+export function Hud({
+  view,
+  onRestart,
+}: {
+  view: ClientView;
+  /** Absent in a shared room - one player cannot reset everyone's case. */
+  onRestart?: () => void;
+}) {
   const { timeRemaining } = view.state;
   const fraction = timeRemaining / view.timeBudget;
 
@@ -38,12 +45,14 @@ export function Hud({ view, onRestart }: { view: ClientView; onRestart: () => vo
             HOURS LEFT
           </p>
         </div>
-        <button
-          onClick={onRestart}
-          className="text-[10px] tracking-[0.2em] text-neutral-600 transition hover:text-neutral-300"
-        >
-          RESTART
-        </button>
+        {onRestart && (
+          <button
+            onClick={onRestart}
+            className="text-[10px] tracking-[0.2em] text-neutral-600 transition hover:text-neutral-300"
+          >
+            RESTART
+          </button>
+        )}
       </div>
     </header>
   );

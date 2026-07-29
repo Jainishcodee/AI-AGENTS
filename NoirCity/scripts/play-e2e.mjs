@@ -9,7 +9,9 @@
 import { chromium } from "playwright";
 
 const shots = process.argv[2] ?? ".";
-const BASE = "http://localhost:3000";
+// Points at `npm run dev` by default; set BASE_URL to run the same script
+// against the Cloudflare Workers runtime (`npm run cf:preview`).
+const BASE = process.env.BASE_URL ?? "http://localhost:3000";
 
 const browser = await chromium.launch();
 const page = await browser.newPage({ viewport: { width: 1500, height: 900 } });
@@ -17,6 +19,20 @@ const page = await browser.newPage({ viewport: { width: 1500, height: 900 } });
 const errors = [];
 page.on("console", (m) => m.type() === "error" && errors.push(m.text()));
 page.on("pageerror", (e) => errors.push(String(e)));
+
+if (process.env.TRACE_API) {
+  page.on("request", (r) => {
+    if (r.url().includes("/api/")) {
+      console.log(`    -> ${r.method()} ${r.url().replace(BASE, "")} ${r.postData() ?? ""}`);
+    }
+  });
+  page.on("response", async (r) => {
+    if (r.url().includes("/api/")) {
+      const body = await r.text().catch(() => "");
+      console.log(`    <- ${r.status()} ${body.slice(0, 120)}`);
+    }
+  });
+}
 
 const shot = (name) => page.screenshot({ path: `${shots}/${name}.png` });
 const log = (m) => console.log(`  ${m}`);
@@ -50,7 +66,10 @@ await page.goto(BASE, { waitUntil: "networkidle" });
 await shot("01-case-files");
 log("case files listed");
 
-await page.getByRole("link", { name: /The Quiet Room/ }).click();
+await page
+  .locator("li", { hasText: "The Quiet Room" })
+  .getByRole("link", { name: /PLAY ALONE/ })
+  .click();
 await page.waitForSelector("canvas.citymap-canvas", { timeout: 20000 });
 await page.waitForTimeout(1200);
 await shot("02-brief");
@@ -121,7 +140,8 @@ await page.getByRole("button", { name: "GO AHEAD" }).click();
 await page.waitForTimeout(1000);
 await shot("10-verdict");
 
-const verdict = await page.locator("h1").first().textContent();
+// The HUD also carries an h1, so take the last one - the verdict's.
+const verdict = await page.locator("h1").last().textContent();
 const banner = await page.locator("p.tracking-\\[0\\.4em\\]").first().textContent();
 log(`verdict: ${banner?.trim()} — ${verdict?.trim()}`);
 

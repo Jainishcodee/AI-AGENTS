@@ -12,8 +12,13 @@
     "gen:city": "tsx scripts/generate-city.ts",
     "preview:city": "tsx scripts/preview-city.ts",
     "lint:case": "tsx scripts/lint-case.ts",
-    "lint:cases": "tsx scripts/lint-case.ts cases/case-00-the-quiet-room && tsx scripts/lint-case.ts cases/case-01-harbor-lights",
-    "check": "npm run typecheck && npm run test && npm run lint:cases"
+    "lint:cases": "tsx scripts/lint-case.ts cases/case-00-the-quiet-room && tsx scripts/lint-case.ts cases/case-01-harbor-lights && tsx scripts/lint-case.ts cases/case-02-the-bell-does-not-lie",
+    "check": "npm run typecheck && npm run test && npm run lint:cases",
+    "cf:build": "opennextjs-cloudflare build",
+    "cf:preview": "opennextjs-cloudflare build && opennextjs-cloudflare preview",
+    "cf:deploy": "opennextjs-cloudflare build && opennextjs-cloudflare deploy",
+    "test:api": "node scripts/api-e2e.mjs",
+    "test:e2e": "node scripts/play-e2e.mjs && node scripts/board-e2e.mjs"
   },
   "dependencies": {
     "@supabase/ssr": "^0.12.3",
@@ -28,6 +33,7 @@
     "zustand": "^5.0.14"
   },
   "devDependencies": {
+    "@opennextjs/cloudflare": "^1.20.2",
     "@tailwindcss/postcss": "^4",
     "@types/leaflet": "^1.9.21",
     "@types/node": "^20",
@@ -40,6 +46,7 @@
     "tailwindcss": "^4",
     "tsx": "^4.23.1",
     "typescript": "^5",
-    "vitest": "^4.1.10"
+    "vitest": "^4.1.10",
+    "wrangler": "^4.115.0"
   }
 }

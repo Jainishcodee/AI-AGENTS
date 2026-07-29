@@ -1,0 +1,12 @@
+{
+  "/_global-error/page": "/_global-error",
+  "/_not-found/page": "/_not-found",
+  "/api/game/route": "/api/game",
+  "/api/rooms/[gameId]/route": "/api/rooms/[gameId]",
+  "/api/rooms/route": "/api/rooms",
+  "/favicon.ico/route": "/favicon.ico",
+  "/map/page": "/map",
+  "/page": "/",
+  "/play/[caseId]/page": "/play/[caseId]",
+  "/room/[gameId]/page": "/room/[gameId]"
+}

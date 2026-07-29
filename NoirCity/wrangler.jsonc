@@ -1,0 +1,21 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "noircity",
+  "main": ".open-next/worker.js",
+  "compatibility_date": "2025-09-01",
+
+  // `nodejs_compat` is required by the OpenNext adapter, which shims the Node
+  // built-ins Next.js reaches for. Nothing in this app calls `fs` at runtime -
+  // case files and the navigation city are bundled as static imports, because a
+  // Worker has no filesystem to read from.
+  "compatibility_flags": ["nodejs_compat", "global_fetch_strictly_public"],
+
+  "assets": {
+    "directory": ".open-next/assets",
+    "binding": "ASSETS"
+  },
+
+  "observability": {
+    "enabled": true
+  }
+}

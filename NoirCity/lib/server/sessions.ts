@@ -1,122 +1,91 @@
 import "server-only";
-import { randomUUID } from "node:crypto";
-import type { ActionEffect, Action, GameState } from "@/lib/engine/reducer";
-import { applyAction, initialState } from "@/lib/engine/reducer";
+import { applyAction, initialState, type Action, type ActionEffect } from "@/lib/engine/reducer";
 import { buildView } from "@/lib/engine/view";
 import { tutorialProgress } from "@/lib/engine/tutorial";
 import type { FeedEntry, GameSnapshot } from "@/lib/game/types";
 import { loadCase, loadCity } from "./cases";
+import { signSession, verifySession, type SessionPayload } from "./sessionToken";
 
 export type { FeedEntry, GameSnapshot };
 
 /**
- * Single-player sessions, held in memory.
- *
- * This is deliberately the throwaway version. Phase 3 replaces it with the
- * Supabase `games` + `game_events` tables, at which point sessions survive a
- * restart and can be shared by six people. Until then: one process, one map,
- * and a hard cap so a long-running dev server cannot leak forever.
+ * Solo play. The session lives in a signed token the client carries, not in
+ * server memory - see `sessionToken.ts` for why.
  */
 
-interface Session {
-  id: string;
-  caseId: string;
-  state: GameState;
-  feed: FeedEntry[];
-  touchedAt: number;
-}
-
-const sessions = new Map<string, Session>();
-const MAX_SESSIONS = 200;
-const MAX_AGE_MS = 6 * 60 * 60 * 1000;
-
-function evictStale() {
-  const now = Date.now();
-  for (const [id, s] of sessions) {
-    if (now - s.touchedAt > MAX_AGE_MS) sessions.delete(id);
-  }
-  while (sessions.size > MAX_SESSIONS) {
-    // Oldest first; Map preserves insertion order.
-    const oldest = sessions.keys().next().value;
-    if (!oldest) break;
-    sessions.delete(oldest);
-  }
-}
-
-function snapshot(session: Session): GameSnapshot {
-  const caseIndex = loadCase(session.caseId);
-  if (!caseIndex) throw new Error(`unknown case ${session.caseId}`);
+function toFeedEntry(
+  effect: ActionEffect,
+  seq: number,
+  clueTitle: (id: string) => string,
+): FeedEntry {
   return {
-    sessionId: session.id,
-    view: buildView(caseIndex, loadCity(), session.state),
-    feed: session.feed,
-    tutorial: tutorialProgress(caseIndex, session.state),
+    seq,
+    summary: effect.summary,
+    timeSpent: effect.timeSpent,
+    newClues: effect.newClueIds.map((id) => ({ id, title: clueTitle(id) })),
+    ...(effect.answer ? { answer: effect.answer } : {}),
   };
 }
 
-export function startSession(caseId: string): GameSnapshot | null {
+async function snapshot(payload: SessionPayload): Promise<GameSnapshot | null> {
+  const caseIndex = loadCase(payload.caseId);
+  if (!caseIndex) return null;
+  return {
+    sessionId: await signSession(payload),
+    view: buildView(caseIndex, loadCity(), payload.state),
+    feed: payload.feed,
+    tutorial: tutorialProgress(caseIndex, payload.state),
+  };
+}
+
+export async function startSession(caseId: string): Promise<GameSnapshot | null> {
   const caseIndex = loadCase(caseId);
   if (!caseIndex) return null;
-
-  evictStale();
-  const session: Session = {
-    id: randomUUID(),
-    caseId,
-    state: initialState(caseIndex),
-    feed: [],
-    touchedAt: Date.now(),
-  };
-  sessions.set(session.id, session);
-  return snapshot(session);
+  return snapshot({ caseId, state: initialState(caseIndex), feed: [] });
 }
 
-export function getSession(sessionId: string): GameSnapshot | null {
-  const session = sessions.get(sessionId);
-  if (!session) return null;
-  session.touchedAt = Date.now();
-  return snapshot(session);
+export async function getSession(token: string): Promise<GameSnapshot | null> {
+  const payload = await verifySession(token);
+  if (!payload) return null;
+  return snapshot(payload);
 }
 
 export type ActionOutcome =
   | { ok: true; snapshot: GameSnapshot }
   | { ok: false; error: string; status: number };
 
-export function actOnSession(sessionId: string, action: Action): ActionOutcome {
-  const session = sessions.get(sessionId);
-  if (!session) {
+export async function actOnSession(
+  token: string,
+  action: Action,
+): Promise<ActionOutcome> {
+  const payload = await verifySession(token);
+  if (!payload) {
     return { ok: false, error: "That case file is no longer open.", status: 404 };
   }
-  const caseIndex = loadCase(session.caseId);
-  if (!caseIndex) {
-    return { ok: false, error: "Case not found.", status: 500 };
-  }
 
-  const result = applyAction(caseIndex, loadCity(), session.state, action);
+  const caseIndex = loadCase(payload.caseId);
+  if (!caseIndex) return { ok: false, error: "Case not found.", status: 500 };
+
+  const result = applyAction(caseIndex, loadCity(), payload.state, action);
   if (!result.ok) {
     // A rejected action costs nothing and changes nothing.
     return { ok: false, error: result.error, status: 400 };
   }
 
-  session.state = result.state;
-  session.touchedAt = Date.now();
-  session.feed = [...session.feed, toFeedEntry(result.effect, session.feed.length, caseIndex)];
-
-  return { ok: true, snapshot: snapshot(session) };
-}
-
-function toFeedEntry(
-  effect: ActionEffect,
-  seq: number,
-  caseIndex: ReturnType<typeof loadCase>,
-): FeedEntry {
-  return {
-    seq,
-    summary: effect.summary,
-    timeSpent: effect.timeSpent,
-    newClues: effect.newClueIds.map((id) => ({
-      id,
-      title: caseIndex?.clues.get(id)?.title ?? id,
-    })),
-    answer: effect.answer,
+  const next: SessionPayload = {
+    caseId: payload.caseId,
+    state: result.state,
+    feed: [
+      ...payload.feed,
+      toFeedEntry(
+        result.effect,
+        payload.feed.length,
+        (id) => caseIndex.clues.get(id)?.title ?? id,
+      ),
+    ],
   };
+
+  const built = await snapshot(next);
+  if (!built) return { ok: false, error: "Case not found.", status: 500 };
+  return { ok: true, snapshot: built };
 }

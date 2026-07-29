@@ -5,12 +5,13 @@ import type { Action } from "@/lib/engine/reducer";
 import type { GameSnapshot } from "./types";
 
 /**
- * Drives one investigation. Every action round-trips to the server, which owns
- * the case file - so there is no optimistic prediction here and no way for the
- * client to grant itself a clue.
+ * Drives one solo investigation. Every action round-trips to the server, which
+ * owns the case file - so there is no optimistic prediction here and no way for
+ * the client to grant itself a clue.
  *
- * The session id is kept in sessionStorage so a refresh resumes the same case
- * rather than silently starting a new one.
+ * `snapshot.sessionId` is a signed token carrying the whole game. It is opaque
+ * and unforgeable, so keeping it in sessionStorage is safe, and a refresh (or a
+ * server restart, or a different Worker isolate) resumes exactly where you were.
  */
 
 const storageKey = (caseId: string) => `noircity:session:${caseId}`;
@@ -26,6 +27,15 @@ interface UseGame {
   dismissRefusal: () => void;
 }
 
+async function post(body: unknown) {
+  const res = await fetch("/api/game", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  return { ok: res.ok, status: res.status, body: await res.json() };
+}
+
 export function useGame(caseId: string): UseGame {
   const [snapshot, setSnapshot] = useState<GameSnapshot | null>(null);
   const [refusal, setRefusal] = useState<string | null>(null);
@@ -33,40 +43,54 @@ export function useGame(caseId: string): UseGame {
   const [loading, setLoading] = useState(true);
   // Guards against a double-click firing two actions against the same state.
   const busy = useRef(false);
+  // Which case we have already opened a session for. Without this, React's
+  // development double-invoke starts two investigations, and the slower
+  // response overwrites the faster one - silently discarding moves the player
+  // has already made.
+  const booted = useRef<string | null>(null);
+
+  const remember = useCallback(
+    (next: GameSnapshot) => {
+      try {
+        sessionStorage.setItem(storageKey(caseId), next.sessionId);
+      } catch {
+        // Private browsing, or a token past the storage quota. The game still
+        // works; it just will not survive a refresh.
+      }
+      setSnapshot(next);
+    },
+    [caseId],
+  );
 
   const begin = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await fetch("/api/game", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ caseId }),
-      });
-      if (!res.ok) throw new Error((await res.json()).error ?? "Could not open the case.");
-      const next: GameSnapshot = await res.json();
-      sessionStorage.setItem(storageKey(caseId), next.sessionId);
-      setSnapshot(next);
+      const res = await post({ intent: "start", caseId });
+      if (!res.ok) throw new Error(res.body.error ?? "Could not open the case.");
+      remember(res.body);
       setFatal(null);
     } catch (e) {
       setFatal((e as Error).message);
     } finally {
       setLoading(false);
     }
-  }, [caseId]);
+  }, [caseId, remember]);
 
   useEffect(() => {
+    if (booted.current === caseId) return;
+    booted.current = caseId;
     let alive = true;
 
     (async () => {
       const existing = sessionStorage.getItem(storageKey(caseId));
       if (existing) {
-        const res = await fetch(`/api/game/${existing}`);
+        const res = await post({ intent: "resume", token: existing });
         if (res.ok && alive) {
-          setSnapshot(await res.json());
+          remember(res.body);
           setLoading(false);
           return;
         }
-        // Server restarted and lost the in-memory session; start over.
+        // Signed with a different secret, or truncated. Start over.
         sessionStorage.removeItem(storageKey(caseId));
       }
       if (alive) await begin();
@@ -75,36 +99,36 @@ export function useGame(caseId: string): UseGame {
     return () => {
       alive = false;
     };
-  }, [caseId, begin]);
+  }, [caseId, begin, remember]);
 
   const act = useCallback(
     async (action: Action) => {
       if (!snapshot || busy.current) return;
       busy.current = true;
       try {
-        const res = await fetch(`/api/game/${snapshot.sessionId}`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(action),
+        const res = await post({
+          intent: "act",
+          token: snapshot.sessionId,
+          action,
         });
-        const body = await res.json();
         if (!res.ok) {
-          setRefusal(body.error ?? "That will not work.");
+          setRefusal(res.body.error ?? "That will not work.");
           return;
         }
         setRefusal(null);
-        setSnapshot(body);
+        remember(res.body);
       } catch {
         setRefusal("Lost contact with the office.");
       } finally {
         busy.current = false;
       }
     },
-    [snapshot],
+    [snapshot, remember],
   );
 
   const restart = useCallback(async () => {
     sessionStorage.removeItem(storageKey(caseId));
+    booted.current = caseId;
     setSnapshot(null);
     setRefusal(null);
     await begin();

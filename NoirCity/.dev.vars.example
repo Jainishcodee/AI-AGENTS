@@ -1,0 +1,15 @@
+# Wrangler reads .dev.vars for `npm run cf:preview`. Copy this to `.dev.vars`.
+#
+# Unlike `npm run dev`, the Workers runtime reports itself as production, so the
+# development fallback for SESSION_SECRET does not apply and the game refuses to
+# start a session without one. That is deliberate — a signing key that silently
+# defaults in production is worse than a loud failure.
+#
+# Generate one:  node -e "console.log(crypto.randomUUID()+crypto.randomUUID())"
+
+SESSION_SECRET=
+
+# Optional: multiplayer. See docs/multiplayer-setup.md
+NEXT_PUBLIC_SUPABASE_URL=
+NEXT_PUBLIC_SUPABASE_ANON_KEY=
+SUPABASE_SERVICE_ROLE_KEY=

@@ -23,6 +23,35 @@ export interface GameSnapshot {
   tutorial: TutorialProgress;
 }
 
+export interface RoomPlayer {
+  userId: string;
+  displayName: string;
+  isHost: boolean;
+  joinedAt: string;
+}
+
+export type RoomStatus = "lobby" | "active" | "finished";
+
+/** A game snapshot plus everything that only exists when other people are in it. */
+export interface RoomSnapshot extends GameSnapshot {
+  gameId: string;
+  roomCode: string;
+  status: RoomStatus;
+  hostId: string;
+  players: RoomPlayer[];
+  /** The viewer, so the UI can tell "you" from everyone else. */
+  youId: string;
+  maxPlayers: number;
+}
+
+export interface ChatMessage {
+  id: number;
+  userId: string;
+  displayName: string;
+  body: string;
+  createdAt: string;
+}
+
 export interface CaseSummary {
   id: string;
   title: string;

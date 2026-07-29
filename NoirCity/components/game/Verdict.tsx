@@ -12,7 +12,8 @@ export function Verdict({
   onRestart,
 }: {
   view: ClientView;
-  onRestart: () => void;
+  /** Absent in a shared room - the case is closed for everybody. */
+  onRestart?: () => void;
 }) {
   const result = view.result;
   if (!result) return null;
@@ -92,12 +93,14 @@ export function Verdict({
         </div>
 
         <div className="mt-12 flex gap-3">
-          <button
-            onClick={onRestart}
-            className="border border-neutral-700 px-6 py-3 text-[11px] tracking-[0.2em] text-neutral-300 transition hover:border-amber-200/50 hover:text-amber-100"
-          >
-            RUN IT AGAIN
-          </button>
+          {onRestart && (
+            <button
+              onClick={onRestart}
+              className="border border-neutral-700 px-6 py-3 text-[11px] tracking-[0.2em] text-neutral-300 transition hover:border-amber-200/50 hover:text-amber-100"
+            >
+              RUN IT AGAIN
+            </button>
+          )}
           <Link
             href="/"
             className="border border-neutral-800 px-6 py-3 text-[11px] tracking-[0.2em] text-neutral-500 transition hover:text-neutral-300"
