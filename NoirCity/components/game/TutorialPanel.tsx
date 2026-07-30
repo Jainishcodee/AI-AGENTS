@@ -12,20 +12,18 @@ export function TutorialPanel({ progress }: { progress: TutorialProgress }) {
   if (!step) return null;
 
   return (
-    <section className="shrink-0 border-b border-amber-200/15 bg-amber-100/[0.03] px-5 py-5 sm:px-6">
+    <section className="shrink-0 border-b border-line bg-raised/50 px-5 py-5 sm:px-6">
       <div className="flex items-baseline justify-between">
-        <p className="text-[10px] tracking-[0.3em] text-amber-200/70">
-          {step.verb}
-        </p>
-        <p className="text-[10px] tabular-nums tracking-[0.2em] text-neutral-600">
+        <p className="text-[10px] tracking-[0.3em] text-muted">{step.verb}</p>
+        <p className="numeral text-[10px] tracking-[0.2em] text-faint">
           {progress.index + 1} / {progress.total}
         </p>
       </div>
 
-      <h2 className="mt-2 font-serif text-base text-neutral-100">{step.title}</h2>
+      <h2 className="mt-2 font-serif text-base text-bright">{step.title}</h2>
 
       {step.body.split("\n\n").map((para, i) => (
-        <p key={i} className="mt-2 text-[13px] leading-relaxed text-neutral-400">
+        <p key={i} className="mt-2 text-[13px] leading-relaxed text-muted">
           {para}
         </p>
       ))}
@@ -34,7 +32,7 @@ export function TutorialPanel({ progress }: { progress: TutorialProgress }) {
         {Array.from({ length: progress.total }, (_, i) => (
           <span
             key={i}
-            className={`h-px flex-1 ${i < progress.index ? "bg-amber-200/50" : "bg-neutral-800"}`}
+            className={`h-px flex-1 ${i < progress.index ? "bg-muted" : "bg-line"}`}
           />
         ))}
       </div>

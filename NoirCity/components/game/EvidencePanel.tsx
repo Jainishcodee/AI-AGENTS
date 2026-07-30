@@ -31,7 +31,7 @@ export function EvidencePanel({
 
   if (!view.clues.length) {
     return (
-      <p className="px-5 py-8 font-serif text-[14px] leading-relaxed text-neutral-600 sm:px-6">
+      <p className="px-5 py-8 font-serif text-[14px] leading-relaxed text-faint sm:px-6">
         Nothing yet. Evidence turns up by searching places and pressing people —
         and both cost hours you will want back later.
       </p>
@@ -39,7 +39,7 @@ export function EvidencePanel({
   }
 
   return (
-    <div className="divide-y divide-neutral-900">
+    <div className="divide-y divide-line">
       {view.clues.map((clue) => {
         const isOpen = open === clue.id;
         const suspect = clue.implicates
@@ -50,18 +50,18 @@ export function EvidencePanel({
           <article key={clue.id}>
             <button
               onClick={() => setOpen(isOpen ? null : clue.id)}
-              className="flex w-full items-baseline justify-between px-5 py-3.5 text-left transition hover:bg-neutral-900/40 sm:px-6"
+              className="flex w-full items-baseline justify-between px-5 py-3.5 text-left lift hover:bg-surface/40 sm:px-6"
             >
               <span>
-                <span className="block font-serif text-[15px] leading-tight text-neutral-100">
+                <span className="block font-serif text-[15px] leading-tight text-bright">
                   {clue.title}
                 </span>
-                <span className="mt-0.5 block text-[10px] tracking-[0.2em] text-neutral-600">
+                <span className="mt-0.5 block text-[10px] tracking-[0.2em] text-faint">
                   {TYPE_LABEL[clue.type]}
                   {suspect && ` · POINTS AT ${suspect.name.toUpperCase()}`}
                 </span>
               </span>
-              <span className="ml-3 text-neutral-700">{isOpen ? "−" : "+"}</span>
+              <span className="ml-3 text-ghost">{isOpen ? "−" : "+"}</span>
             </button>
 
             {isOpen && (
@@ -69,8 +69,8 @@ export function EvidencePanel({
                 <div
                   className={
                     clue.type === "document" || clue.type === "forensic"
-                      ? "border-l-2 border-neutral-700 bg-neutral-100/[0.02] py-3 pl-4 pr-3 font-mono text-[12.5px] leading-relaxed text-neutral-300"
-                      : "font-serif text-[14px] leading-relaxed text-neutral-400"
+                      ? "border-l-2 border-edge bg-bright/[0.02] py-3 pl-4 pr-3 font-mono text-[12.5px] leading-relaxed text-muted"
+                      : "font-serif text-[14px] leading-relaxed text-muted"
                   }
                 >
                   {clue.body}
@@ -80,7 +80,7 @@ export function EvidencePanel({
                   <button
                     disabled={busy || closed || clue.labTested}
                     onClick={() => act({ type: "lab", clueId: clue.id })}
-                    className="mt-4 w-full border border-neutral-700 px-4 py-2 text-[11px] tracking-[0.2em] text-neutral-300 transition hover:border-amber-200/50 hover:text-amber-100 disabled:cursor-not-allowed disabled:opacity-30"
+                    className="mt-4 w-full border border-edge px-4 py-2 text-[11px] tracking-[0.2em] text-muted lift hover:border-muted hover:text-bright disabled:cursor-not-allowed disabled:opacity-30"
                   >
                     {clue.labTested
                       ? "SENT TO THE LAB"

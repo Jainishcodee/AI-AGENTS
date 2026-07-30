@@ -32,53 +32,61 @@ export function HerePanel({
   return (
     <div className="space-y-6 px-5 py-5 sm:px-6">
       {isElsewhere && selected && (
-        <section className="border border-neutral-800 p-4">
-          <p className="text-[10px] tracking-[0.25em] text-neutral-600">
+        <section className="border border-line p-4">
+          <p className="text-[10px] tracking-[0.25em] text-faint">
             {selected.type.toUpperCase()}
             {selected.isLandmark && " · LANDMARK"}
           </p>
-          <h3 className="mt-1.5 font-serif text-lg leading-tight text-neutral-100">
+          <h3 className="mt-1.5 font-serif text-lg leading-tight text-bright">
             {selected.name}
           </h3>
-          <p className="mt-0.5 text-xs text-neutral-500">{selected.address}</p>
-          <p className="mt-3 font-serif text-[13px] leading-relaxed text-neutral-400">
+          <p className="mt-0.5 text-xs text-faint">{selected.address}</p>
+          <p className="mt-3 font-serif text-[13px] leading-relaxed text-muted">
             {selected.blurb}
           </p>
           <button
             disabled={busy || closed || travelCost > view.state.timeRemaining}
             onClick={() => act({ type: "travel", locationId: selected.id })}
-            className="mt-4 w-full border border-neutral-700 px-4 py-2.5 text-[11px] tracking-[0.2em] text-neutral-300 transition hover:border-amber-200/50 hover:text-amber-100 disabled:cursor-not-allowed disabled:opacity-30"
+            className="mt-4 w-full border border-edge px-4 py-2.5 text-[11px] tracking-[0.2em] text-muted lift hover:border-muted hover:text-bright disabled:cursor-not-allowed disabled:opacity-30"
           >
-            DRIVE OVER &mdash; {travelCost} {travelCost === 1 ? "HOUR" : "HOURS"}
+            DRIVE OVER &mdash; <span className="numeral">{travelCost}</span>{" "}
+            {travelCost === 1 ? "HOUR" : "HOURS"}
           </button>
         </section>
       )}
 
       <section>
-        <p className="text-[10px] tracking-[0.3em] text-amber-200/60">YOU ARE AT</p>
-        <h3 className="mt-1.5 font-serif text-xl leading-tight text-neutral-100">
+        {/* Gold's third and last permitted use: where you are standing. */}
+        <p className="text-[10px] tracking-[0.3em] text-gold">YOU ARE AT</p>
+        <h3 className="mt-1.5 font-serif text-xl leading-tight text-bright">
           {here.name}
         </h3>
-        <p className="mt-0.5 text-xs text-neutral-500">
+        <p className="mt-0.5 text-xs text-faint">
           {here.address} &middot; {here.boroughName}
         </p>
-        <p className="mt-3 font-serif text-[14px] leading-relaxed text-neutral-400">
+        <p className="mt-3 font-serif text-[14px] leading-relaxed text-muted">
           {here.description}
         </p>
 
         <button
           disabled={busy || closed}
           onClick={() => act({ type: "search" })}
-          className="mt-4 w-full border border-neutral-700 px-4 py-2.5 text-[11px] tracking-[0.2em] text-neutral-200 transition hover:border-amber-200/50 hover:text-amber-100 disabled:cursor-not-allowed disabled:opacity-30"
+          className="mt-4 w-full border border-edge px-4 py-2.5 text-[11px] tracking-[0.2em] text-bright lift hover:border-muted hover:text-bright disabled:cursor-not-allowed disabled:opacity-30"
         >
           SEARCH THIS PLACE
-          {here.searchCount > 0 && ` (${here.searchCount}× ALREADY)`}
+          {here.searchCount > 0 && (
+            <>
+              {" ("}
+              <span className="numeral">{here.searchCount}</span>
+              {"× ALREADY)"}
+            </>
+          )}
         </button>
       </section>
 
       {here.npcs.length > 0 && (
         <section className="space-y-4">
-          <p className="text-[10px] tracking-[0.3em] text-neutral-600">
+          <p className="text-[10px] tracking-[0.3em] text-faint">
             PEOPLE HERE
           </p>
           {here.npcs.map((npc) => (
@@ -109,9 +117,9 @@ function NpcBlock({
     feed.find((f) => f.answer && f.summary.includes(questionText))?.answer;
 
   return (
-    <div className="border border-neutral-800 p-4">
-      <h4 className="font-serif text-base text-neutral-100">{npc.name}</h4>
-      <p className="mt-0.5 text-[11px] tracking-wide text-neutral-600">{npc.role}</p>
+    <div className="border border-line p-4">
+      <h4 className="font-serif text-base text-bright">{npc.name}</h4>
+      <p className="mt-0.5 text-[11px] tracking-wide text-faint">{npc.role}</p>
 
       <ul className="mt-3 space-y-2">
         {npc.questions.map((q) => {
@@ -125,24 +133,24 @@ function NpcBlock({
                     ? setOpen(open === q.id ? null : q.id)
                     : act({ type: "interview", npcId: npc.id, questionId: q.id })
                 }
-                className={`w-full text-left font-serif text-[13px] leading-snug transition ${
+                className={`w-full text-left font-serif text-[13px] leading-snug lift ${
                   q.asked
-                    ? "text-neutral-600 hover:text-neutral-400"
-                    : "text-amber-100/80 hover:text-amber-100"
+                    ? "text-faint hover:text-muted"
+                    : "text-muted hover:text-bright"
                 } disabled:cursor-not-allowed`}
               >
-                <span className="mr-1.5 text-neutral-700">
+                <span className="mr-1.5 text-ghost">
                   {q.asked ? "✓" : "›"}
                 </span>
                 &ldquo;{q.text}&rdquo;
                 {!q.asked && (
-                  <span className="ml-1.5 text-[10px] tracking-widest text-neutral-600">
-                    1H
+                  <span className="ml-1.5 text-[10px] tracking-widest text-faint">
+                    <span className="numeral">1</span>H
                   </span>
                 )}
               </button>
               {q.asked && open === q.id && answer && (
-                <p className="mt-2 border-l border-neutral-800 pl-3 font-serif text-[13px] leading-relaxed text-neutral-400">
+                <p className="mt-2 border-l border-line pl-3 font-serif text-[13px] leading-relaxed text-muted">
                   {answer}
                 </p>
               )}
@@ -152,7 +160,7 @@ function NpcBlock({
       </ul>
 
       {npc.questions.every((q) => q.asked) && (
-        <p className="mt-3 text-[11px] italic text-neutral-700">
+        <p className="mt-3 text-[11px] italic text-ghost">
           Nothing further, unless you turn something up.
         </p>
       )}

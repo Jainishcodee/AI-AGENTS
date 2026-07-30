@@ -18,7 +18,14 @@
     "cf:preview": "opennextjs-cloudflare build && opennextjs-cloudflare preview",
     "cf:deploy": "opennextjs-cloudflare build && opennextjs-cloudflare deploy",
     "test:api": "node scripts/api-e2e.mjs",
-    "test:e2e": "node scripts/play-e2e.mjs && node scripts/board-e2e.mjs && node scripts/journal-e2e.mjs"
+    "test:e2e": "node scripts/play-e2e.mjs && node scripts/board-e2e.mjs && node scripts/journal-e2e.mjs && node scripts/room-e2e.mjs && node scripts/flicker-e2e.mjs",
+    "art:build": "node scripts/build-art.mjs",
+    "art:slots": "node scripts/art-manifest.mjs",
+    "art:prompts": "node scripts/art-manifest.mjs --prompts",
+    "db:apply": "node scripts/supabase-apply.mjs",
+    "db:check": "node scripts/supabase-check.mjs",
+    "test:room": "node scripts/room-e2e.mjs",
+    "test:flicker": "node scripts/flicker-e2e.mjs"
   },
   "dependencies": {
     "@supabase/ssr": "^0.12.3",

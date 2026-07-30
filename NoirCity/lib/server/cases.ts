@@ -60,6 +60,7 @@ export function listCases(): CaseSummary[] {
       title: file.title,
       brief: file.brief,
       timeBudget: file.timeBudget,
+      sessionMinutes: file.sessionMinutes,
       suspectCount: file.suspects.length,
       locationCount: file.locations.length,
       isTutorial: file.tutorial.length > 0,

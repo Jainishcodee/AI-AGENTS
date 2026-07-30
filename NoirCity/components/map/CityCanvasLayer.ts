@@ -28,9 +28,34 @@ const EMPTY_STATE: CityLayerState = {
 };
 
 export class CityCanvasLayer extends L.Layer {
+  /** What the user sees. Only ever written to by blitting the buffer. */
   private canvas: HTMLCanvasElement | null = null;
+  private visibleCtx: CanvasRenderingContext2D | null = null;
+  /**
+   * Everything is drawn here first, then copied across in one operation.
+   *
+   * The reason is specific: assigning to `canvas.width` blanks a canvas
+   * synchronously. With a single canvas, any resize left it empty until the next
+   * frame drew - one guaranteed blank frame per resize, which is exactly what
+   * made the map flash every time the panel moved. The buffer means the visible
+   * canvas goes straight from the old picture to the new one.
+   */
+  private buffer: HTMLCanvasElement | null = null;
   private ctx: CanvasRenderingContext2D | null = null;
   private frame = 0;
+  /**
+   * While held, the buffer keeps updating but nothing reaches the screen.
+   *
+   * Re-fitting the view is several Leaflet operations - invalidateSize, then
+   * fitBounds, then a min-zoom clamp - and each one fires events that ask us to
+   * draw. Drawn mid-sequence the transform can put the whole city outside the
+   * viewport, and every shape gets culled, leaving a flat background fill. That
+   * is what the flicker actually was: not a cleared canvas, a correctly drawn
+   * one containing nothing.
+   *
+   * Holding the blit means the last good picture stays up until the view settles.
+   */
+  private held = false;
 
   constructor(
     private city: City,
@@ -44,12 +69,29 @@ export class CityCanvasLayer extends L.Layer {
     this.redraw();
   }
 
+  /** Freeze what is on screen. Pair every call with `release()`. */
+  hold() {
+    this.held = true;
+  }
+
+  /** Unfreeze, and put one correct frame up immediately. */
+  release() {
+    this.held = false;
+    this.drawNow();
+  }
+
   onAdd(map: L.Map): this {
     const canvas = L.DomUtil.create("canvas", "citymap-canvas");
     canvas.style.position = "absolute";
     canvas.style.pointerEvents = "none";
     this.canvas = canvas;
-    this.ctx = canvas.getContext("2d");
+    this.visibleCtx = canvas.getContext("2d");
+
+    this.buffer = document.createElement("canvas");
+    // `willReadFrequently` is off deliberately: nothing reads this back, and
+    // asking for it would push the buffer onto the CPU path.
+    this.ctx = this.buffer.getContext("2d");
+
     map.getPanes().overlayPane?.appendChild(canvas);
 
     map.on("move zoom viewreset resize zoomanim", this.reposition, this);
@@ -59,36 +101,60 @@ export class CityCanvasLayer extends L.Layer {
 
   onRemove(map: L.Map): this {
     map.off("move zoom viewreset resize zoomanim", this.reposition, this);
+    if (this.frame) cancelAnimationFrame(this.frame);
+    this.frame = 0;
     this.canvas?.remove();
     this.canvas = null;
+    this.visibleCtx = null;
+    this.buffer = null;
     this.ctx = null;
     return this;
   }
 
   private reposition = () => {
     const map = this._map;
-    if (!map || !this.canvas) return;
+    if (!map || !this.canvas || !this.buffer) return;
     const size = map.getSize();
     const dpr = window.devicePixelRatio || 1;
+    const resized =
+      this.buffer.width !== size.x * dpr || this.buffer.height !== size.y * dpr;
 
-    if (this.canvas.width !== size.x * dpr || this.canvas.height !== size.y * dpr) {
-      this.canvas.width = size.x * dpr;
-      this.canvas.height = size.y * dpr;
+    if (resized) {
+      // Only the buffer is resized here. The visible canvas is resized inside
+      // `blit()`, immediately before it is drawn into - assigning to `width`
+      // blanks a canvas, so the clear and the redraw have to be in one task.
+      this.buffer.width = size.x * dpr;
+      this.buffer.height = size.y * dpr;
+      // CSS size is safe to set at any time; it does not clear anything.
       this.canvas.style.width = `${size.x}px`;
       this.canvas.style.height = `${size.y}px`;
     }
     // The canvas covers the viewport, so it has to be pinned back to the
     // top-left of the container every time Leaflet shifts the layer pane.
     L.DomUtil.setPosition(this.canvas, map.containerPointToLayerPoint([0, 0]));
-    this.redraw();
+
+    // A resize just blanked both canvases. Redraw in the SAME task rather than
+    // waiting for a frame, so the browser never composites the empty state.
+    if (resized) this.drawNow();
+    else this.redraw();
   };
 
+  /** Coalesced. Correct for pan and zoom, where a frame of latency is invisible. */
   private redraw() {
     if (this.frame) return;
     this.frame = requestAnimationFrame(() => {
       this.frame = 0;
       this.draw();
     });
+  }
+
+  /** Immediate. The only correct choice after a resize has cleared the canvas. */
+  private drawNow() {
+    if (this.frame) {
+      cancelAnimationFrame(this.frame);
+      this.frame = 0;
+    }
+    this.draw();
   }
 
   /**
@@ -111,12 +177,13 @@ export class CityCanvasLayer extends L.Layer {
   private draw() {
     const map = this._map;
     const ctx = this.ctx;
-    if (!map || !ctx || !this.canvas) return;
+    if (!map || !ctx || !this.canvas || !this.buffer) return;
 
     const dpr = window.devicePixelRatio || 1;
     const size = map.getSize();
+    // Everything below draws into the buffer. `blit()` at the end of this method
+    // is the only thing that touches the visible canvas.
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-    ctx.clearRect(0, 0, size.x, size.y);
     ctx.fillStyle = MAP_COLORS.ink;
     ctx.fillRect(0, 0, size.x, size.y);
 
@@ -175,6 +242,32 @@ export class CityCanvasLayer extends L.Layer {
     ctx.lineWidth = 1;
     ctx.stroke();
 
+    // Mist on the water. Clipped to the river so it cannot creep over the
+    // banks, and run top to bottom of the river's own extent so it reads as
+    // something lifting off the surface rather than a flat wash over it.
+    {
+      let top = Infinity;
+      let bottom = -Infinity;
+      for (const p of city.river.polygon) {
+        const sy = t.y(p[1]);
+        if (sy < top) top = sy;
+        if (sy > bottom) bottom = sy;
+      }
+      if (bottom > top) {
+        ctx.save();
+        trace(city.river.polygon);
+        ctx.closePath();
+        ctx.clip();
+        const fog = ctx.createLinearGradient(0, top, 0, bottom);
+        fog.addColorStop(0, MAP_COLORS.riverFog);
+        fog.addColorStop(0.55, "rgba(150, 180, 196, 0.02)");
+        fog.addColorStop(1, "rgba(150, 180, 196, 0)");
+        ctx.fillStyle = fog;
+        ctx.fillRect(0, top, size.x, bottom - top);
+        ctx.restore();
+      }
+    }
+
     // --- railways ---------------------------------------------------------
     ctx.strokeStyle = MAP_COLORS.rail;
     ctx.lineWidth = Math.max(1, 2.4 * Math.min(1, scale * 4));
@@ -200,6 +293,23 @@ export class CityCanvasLayer extends L.Layer {
     for (const kind of order) {
       if (kind === "lane" && scale < 0.075) continue;
       if (kind === "street" && scale < 0.045) continue;
+
+      // The avenues are the lit ones. A single wide, nearly transparent pass
+      // underneath the carriageway reads as sodium light spilling onto the
+      // buildings either side - which is what makes a night map feel inhabited
+      // rather than merely dark. One extra pass over the fewest roads in the
+      // city, and no blur filter, so it costs almost nothing.
+      if (kind === "avenue") {
+        ctx.strokeStyle = MAP_COLORS.avenueGlow;
+        ctx.lineWidth = roadPx(kind) * 3.4;
+        for (const s of city.streets) {
+          if (s.kind !== "avenue") continue;
+          if (!visible(s.points[0]) && !visible(s.points[s.points.length - 1])) continue;
+          trace(s.points);
+          ctx.stroke();
+        }
+      }
+
       ctx.strokeStyle = colors[kind];
       ctx.lineWidth = roadPx(kind);
       for (const s of city.streets) {
@@ -325,14 +435,32 @@ export class CityCanvasLayer extends L.Layer {
     const here = this.state.hereId
       ? city.locations.find((l) => l.id === this.state.hereId)
       : null;
-    if (here) this.drawMarker(ctx, t.x(here.x), t.y(here.y), MAP_COLORS.here, here.name, true);
+    if (here) {
+      this.drawMarker(
+        ctx,
+        t.x(here.x),
+        t.y(here.y),
+        MAP_COLORS.here,
+        here.name,
+        true,
+        claimed,
+      );
+    }
 
     const focused =
       this.state.focusedId && this.state.focusedId !== this.state.hereId
         ? city.locations.find((l) => l.id === this.state.focusedId)
         : null;
     if (focused) {
-      this.drawMarker(ctx, t.x(focused.x), t.y(focused.y), MAP_COLORS.landmark, focused.name, false);
+      this.drawMarker(
+        ctx,
+        t.x(focused.x),
+        t.y(focused.y),
+        MAP_COLORS.landmark,
+        focused.name,
+        false,
+        claimed,
+      );
     }
 
     // --- borough names ----------------------------------------------------
@@ -341,7 +469,30 @@ export class CityCanvasLayer extends L.Layer {
     ctx.shadowColor = MAP_COLORS.ink;
     ctx.shadowBlur = 6;
     ctx.fillStyle = MAP_COLORS.boroughLabel;
-    for (const b of city.boroughs) {
+    // The one set of labels that had no overlap rejection, and on a phone it
+    // showed: at that width Millgate and Bridge District sit close enough to
+    // print through each other and read as one nonsense borough. Same box test
+    // the street and landmark labels already use.
+    //
+    // Seeded with `claimed` - the landmark labels - so a borough never prints
+    // over one. A landmark name is somewhere you can go; a borough name is
+    // context. When they collide the context is what gives way.
+    const boroughLabels = [...claimed];
+    // Biggest first, so that when two boroughs collide it is the lesser name
+    // that is dropped. Shoelace rather than a vertex count: the generator emits
+    // more points round a convoluted waterfront than round a large plain block,
+    // so counting them would have ranked several boroughs backwards.
+    const area = (poly: ReadonlyArray<readonly [number, number]>) => {
+      let sum = 0;
+      for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+        sum += (poly[j][0] + poly[i][0]) * (poly[j][1] - poly[i][1]);
+      }
+      return Math.abs(sum / 2);
+    };
+    const byArea = [...city.boroughs].sort(
+      (a, b) => area(b.polygon) - area(a.polygon),
+    );
+    for (const b of byArea) {
       let cx = 0;
       let cy = 0;
       for (const p of b.polygon) {
@@ -353,11 +504,81 @@ export class CityCanvasLayer extends L.Layer {
       const sx = t.x(cx);
       const sy = t.y(cy);
       if (sx < 0 || sx > size.x || sy < 0 || sy > size.y) continue;
-      ctx.fillText(b.name.toUpperCase().split("").join(" "), sx, sy);
+
+      const text = b.name.toUpperCase().split("").join(" ");
+      const half = ctx.measureText(text).width / 2;
+      const box: [number, number, number, number] = [
+        sx - half,
+        sy - 9,
+        sx + half,
+        sy + 6,
+      ];
+      if (
+        boroughLabels.some(
+          (c) => box[0] < c[2] && box[2] > c[0] && box[1] < c[3] && box[3] > c[1],
+        )
+      ) {
+        continue;
+      }
+      boroughLabels.push(box);
+      ctx.fillText(text, sx, sy);
     }
     ctx.shadowBlur = 0;
+
+    // --- vignette ---------------------------------------------------------
+    // Last, so it sits over everything including the labels. One radial fill a
+    // draw - there is no per-frame cost here, and it is what stops the city
+    // ending in a hard rectangle against the page behind it.
+    {
+      const cx = size.x / 2;
+      const cy = size.y / 2;
+      const vg = ctx.createRadialGradient(
+        cx,
+        cy,
+        Math.min(size.x, size.y) * 0.42,
+        cx,
+        cy,
+        Math.max(size.x, size.y) * 0.86,
+      );
+      vg.addColorStop(0, "rgba(0, 0, 0, 0)");
+      vg.addColorStop(1, MAP_COLORS.vignette);
+      ctx.fillStyle = vg;
+      ctx.fillRect(0, 0, size.x, size.y);
+    }
+
+    this.blit();
   }
 
+  /**
+   * The buffer becomes the picture, in one operation. Because this is the only
+   * write to the visible canvas, it can never be caught half-drawn or empty.
+   */
+  private blit() {
+    const target = this.visibleCtx;
+    if (this.held || !target || !this.canvas || !this.buffer) return;
+
+    // Matching the size clears the visible canvas, so it happens here and
+    // nowhere else - one statement before the pixels that replace them.
+    if (
+      this.canvas.width !== this.buffer.width ||
+      this.canvas.height !== this.buffer.height
+    ) {
+      this.canvas.width = this.buffer.width;
+      this.canvas.height = this.buffer.height;
+    }
+    target.setTransform(1, 0, 0, 1, 0, 0);
+    target.drawImage(this.buffer, 0, 0);
+  }
+
+  /**
+   * Where the team is, and whatever address is currently selected.
+   *
+   * `claimed` is the running list of label boxes already on the plate. This
+   * adds its own to it so the borough names drawn afterwards do not print
+   * through it - which is exactly what "West Borough" was doing across
+   * "Blackthorn Security Company", the one label on the map that names where
+   * you are actually standing.
+   */
   private drawMarker(
     ctx: CanvasRenderingContext2D,
     sx: number,
@@ -365,6 +586,7 @@ export class CityCanvasLayer extends L.Layer {
     color: string,
     label: string,
     pulse: boolean,
+    claimed?: Array<[number, number, number, number]>,
   ) {
     ctx.beginPath();
     ctx.arc(sx, sy, 8, 0, Math.PI * 2);
@@ -384,7 +606,11 @@ export class CityCanvasLayer extends L.Layer {
     ctx.fill();
     ctx.font = '600 12px Georgia, "Times New Roman", serif';
     ctx.textAlign = "center";
-    ctx.fillText(label, sx, sy - 17);
+    const ly = sy - 17;
+    ctx.fillText(label, sx, ly);
+
+    const half = ctx.measureText(label).width / 2;
+    claimed?.push([sx - half - 3, ly - 11, sx + half + 3, ly + 4]);
   }
 }
 

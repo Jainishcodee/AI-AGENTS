@@ -1,6 +1,13 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
 import dynamic from "next/dynamic";
 import { useCity } from "@/lib/city/useCity";
 import { indexCity, travelCost, type CityLocation } from "@/lib/engine/citySchema";
@@ -18,18 +25,17 @@ import { EvidencePanel } from "./EvidencePanel";
 import { AccusePanel } from "./AccusePanel";
 import { Verdict } from "./Verdict";
 import { Corkboard } from "./Corkboard";
+import { CaseTabs, type Tab } from "./CaseTabs";
 import { useBoard } from "@/lib/game/useBoard";
 
 const CityMap = dynamic(() => import("@/components/map/CityMap"), {
   ssr: false,
   loading: () => (
-    <div className="flex h-full items-center justify-center text-[11px] tracking-[0.3em] text-neutral-700">
+    <div className="flex h-full items-center justify-center text-[11px] tracking-[0.3em] text-ghost">
       DEVELOPING PLATE...
     </div>
   ),
 });
-
-type Tab = "journal" | "here" | "evidence" | "accuse";
 
 /**
  * The board. Identical whether one person is playing or six - the only
@@ -121,30 +127,41 @@ export function Investigation({
   const travelCostTo = (id: string) =>
     index ? travelCost(index, hereId, id) : 0;
 
-  // The folded sheet on a phone shows the countdown too, so the hard limit is
-  // the one thing that never goes away however the panel is arranged.
-  const sheetCountdown = useLocalCountdown(
-    sessionRemainingMs,
-    view.state.status === "finished",
-  );
-
-  // Picking a pin is a question about that address, so answer it: surface the
-  // panel that can, and on a phone raise the sheet that is hiding it.
-  function pickLocation(location: CityLocation) {
-    setSelected(location);
-    showPanel("here");
-  }
 
   function showPanel(next: Tab) {
     setTab(next);
     setSheetOpen(true);
   }
 
+  // Picking a pin is a question about that address, so answer it: surface the
+  // panel that can, and on a phone raise the sheet that is hiding it.
+  //
+  // Stable identity matters here - this is a prop on the memoised map, and a
+  // fresh closure every render would defeat the memo entirely.
+  const pickLocation = useCallback((location: CityLocation) => {
+    setSelected(location);
+    setTab("here");
+    setSheetOpen(true);
+  }, []);
+
   return (
-    <main className="relative flex h-dvh flex-col bg-[#08090b] text-neutral-300 md:flex-row">
-      {/* min-h-0 so the map yields to the sheet instead of overflowing the
-          column - a flex child defaults to min-height:auto and would not. */}
-      <div className="relative min-h-0 flex-1">
+    <main className="relative flex h-dvh flex-col overflow-hidden bg-ink text-muted md:block">
+      {/*
+        The city.
+
+        On a desktop it is the entire screen and the notebook lies on top of it,
+        so the map never changes size and the city is never cut down to whatever
+        is left over beside a panel.
+
+        On a phone it stays a pane above the sheet rather than behind it. An
+        overlay there would cover the pin you just tapped to open the thing -
+        the sheet is two thirds of a phone screen, and tapping an address to
+        read about it must not hide the address.
+
+        min-h-0 so the pane yields to the sheet instead of overflowing the
+        column; a flex child defaults to min-height:auto and would not.
+      */}
+      <div className="relative min-h-0 flex-1 md:absolute md:inset-0">
         {city && (
           <CityMap
             city={city}
@@ -156,41 +173,46 @@ export function Investigation({
         )}
 
         {briefOpen && (
-          <div className="absolute inset-x-3 top-3 z-[1100] max-h-[70dvh] max-w-lg overflow-y-auto border border-neutral-800 bg-[#0e0f11]/95 p-5 backdrop-blur sm:inset-x-6 sm:top-6 sm:p-6">
-            <p className="text-[10px] tracking-[0.3em] text-amber-200/60">THE JOB</p>
-            <h2 className="mt-2 font-serif text-lg text-neutral-100 sm:text-xl">
+          <div className="reveal absolute inset-x-3 top-3 z-[1100] max-h-[70dvh] max-w-lg overflow-y-auto border border-line bg-surface/95 p-5 backdrop-blur sm:inset-x-6 sm:top-6 sm:p-6">
+            <p className="text-[10px] tracking-[0.3em] text-faint">THE JOB</p>
+            <h2 className="mt-2 font-serif text-lg text-bright sm:text-xl">
               {view.title}
             </h2>
-            <p className="mt-3 font-serif text-[14px] leading-relaxed text-neutral-400">
+            <p className="mt-3 font-serif text-[14px] leading-relaxed text-muted">
               {view.brief}
             </p>
             <button
               onClick={() => setBriefOpen(false)}
-              className="mt-5 border border-neutral-700 px-5 py-2.5 text-[11px] tracking-[0.2em] text-neutral-300 transition hover:border-amber-200/50 hover:text-amber-100"
+              className="mt-5 border border-edge px-5 py-2.5 text-[11px] tracking-[0.2em] text-muted lift hover:border-muted hover:text-bright"
             >
               GET TO WORK
             </button>
           </div>
         )}
 
-        {!briefOpen && (
-          <button
-            onClick={() => setBriefOpen(true)}
-            className="absolute left-3 top-3 z-[1000] border border-neutral-800 bg-[#0e0f11]/90 px-3 py-2 text-[10px] tracking-[0.2em] text-neutral-500 backdrop-blur transition hover:text-neutral-300 sm:left-6 sm:top-6 sm:py-1.5"
-          >
-            THE JOB
-          </button>
-        )}
-
-        <button
-          onClick={() => setBoardOpen(true)}
-          className="absolute right-3 top-3 z-[1000] border border-neutral-800 bg-[#0e0f11]/90 px-3 py-2 text-[10px] tracking-[0.2em] text-neutral-400 backdrop-blur transition hover:border-amber-200/40 hover:text-amber-100 sm:right-6 sm:top-6 sm:px-4"
-        >
-          THE BOARD
-          {view.clues.length > 0 && (
-            <span className="ml-2 text-neutral-600">{view.clues.length}</span>
+        {/* One cluster in the corner rather than a button pinned to each end.
+            The right-hand end of a desktop screen now belongs to the notebook,
+            and two controls that read as a pair should sit as one. */}
+        <div className="absolute left-3 top-3 z-[1000] flex gap-2 sm:left-6 sm:top-6">
+          {!briefOpen && (
+            <button
+              onClick={() => setBriefOpen(true)}
+              className="border border-line bg-surface/85 px-3 py-2 text-[10px] tracking-[0.2em] text-faint backdrop-blur lift hover:border-edge hover:text-muted sm:py-1.5"
+            >
+              THE JOB
+            </button>
           )}
-        </button>
+
+          <button
+            onClick={() => setBoardOpen(true)}
+            className="border border-line bg-surface/85 px-3 py-2 text-[10px] tracking-[0.2em] text-muted backdrop-blur lift hover:border-edge hover:text-bright sm:px-4 sm:py-1.5"
+          >
+            THE BOARD
+            {view.clues.length > 0 && (
+              <span className="numeral ml-2 text-faint">{view.clues.length}</span>
+            )}
+          </button>
+        </div>
 
         {banner}
         {overlay}
@@ -206,12 +228,33 @@ export function Investigation({
         )}
       </div>
 
-      {/* One element, two shapes: a fixed column beside the map on a desktop,
-          a bottom sheet under it on a phone. Kept in flow rather than floated
-          over the map so the city never hides behind the panel you are using
-          to decide where to go next. */}
+      {/* The index tabs, stitched into the notebook's outer edge. Desktop only -
+          on a phone they run across the top of the sheet instead, further down.
+          Positioned a pixel inside the notebook so the active tab's fill covers
+          the seam and the two read as one piece of card. */}
+      <CaseTabs
+        variant="rail"
+        active={tab}
+        onSelect={showPanel}
+        evidenceCount={view.clues.length}
+        // Centred on the notebook rather than hung from its top corner: tabs
+        // level with the header read as part of the chrome, tabs level with the
+        // middle read as stitched into the edge of the file.
+        className="absolute top-1/2 z-[1210] hidden -translate-y-1/2 md:flex"
+        style={{
+          right: "calc(var(--notebook-w) + var(--notebook-inset) - 1px)",
+        }}
+      />
+
+      {/* One element, two shapes.
+          Desktop: a notebook lying on the map - inset from every edge so it
+          reads as an object on a surface rather than a wall bolted to the side
+          of the window, and translucent enough that the city stays present
+          underneath it.
+          Phone: a bottom sheet in flow, which is the right shape at that size
+          and keeps the map above it usable. */}
       <aside
-        className={`flex shrink-0 flex-col border-t border-neutral-800 bg-[#0e0f11] md:h-auto md:w-[400px] md:border-l md:border-t-0 ${
+        className={`z-[1200] flex shrink-0 flex-col border-t border-line bg-surface md:absolute md:top-[var(--notebook-inset)] md:bottom-[var(--notebook-inset)] md:right-[var(--notebook-inset)] md:h-auto md:w-[var(--notebook-w)] md:overflow-hidden md:rounded-sm md:border md:border-edge md:bg-surface/92 md:shadow-[0_28px_70px_-20px_rgba(0,0,0,0.95)] md:backdrop-blur-md ${
           sheetOpen ? "h-[68dvh]" : "h-auto"
         }`}
       >
@@ -220,21 +263,25 @@ export function Investigation({
           onClick={() => setSheetOpen((v) => !v)}
           aria-expanded={sheetOpen}
           aria-label={sheetOpen ? "Collapse the case panel" : "Expand the case panel"}
-          className="relative flex shrink-0 items-center justify-end border-b border-neutral-800 px-5 pb-2.5 pt-4 md:hidden"
+          className="relative flex shrink-0 items-center justify-end border-b border-line px-5 pb-2.5 pt-4 md:hidden"
         >
-          <span className="absolute left-1/2 top-2 h-1 w-10 -translate-x-1/2 rounded-full bg-neutral-700" />
-          {/* The clock lives here in both states - folded or not - so it is the
-              one thing on a phone that never moves and never goes away. */}
-          <span className="flex items-baseline gap-2">
-            <span className="font-mono text-base leading-none tabular-nums text-neutral-100">
-              {view.state.status === "finished"
-                ? "--:--:--"
-                : formatCountdown(sheetCountdown)}
+          <span className="absolute left-1/2 top-2 h-1 w-10 -translate-x-1/2 rounded-full bg-ghost" />
+          {/* Only while the sheet is folded. Raised, the HUD sits directly
+              underneath this and carries the same two figures - printing the
+              clock twice, a centimetre apart, reads as a bug rather than as
+              emphasis. Folded, this is the only clock on the screen. */}
+          {!sheetOpen && (
+            <span className="flex items-baseline gap-2">
+              <SheetClock
+                remainingMs={sessionRemainingMs}
+                frozen={view.state.status === "finished"}
+              />
+              <span className="text-[9px] tracking-[0.2em] text-faint">
+                <span className="numeral">{view.state.timeRemaining}</span>H IN
+                HAND
+              </span>
             </span>
-            <span className="text-[9px] tracking-[0.2em] text-neutral-600">
-              {view.state.timeRemaining}H IN HAND
-            </span>
-          </span>
+          )}
         </button>
 
         <div className={sheetOpen ? "contents" : "hidden md:contents"}>
@@ -254,28 +301,15 @@ export function Investigation({
           </div>
         </div>
 
-        <nav className="flex shrink-0 border-b border-neutral-800">
-          {(
-            [
-              ["journal", "JOURNAL"],
-              ["here", "HERE"],
-              ["evidence", `EVIDENCE (${view.clues.length})`],
-              ["accuse", "ACCUSE"],
-            ] as Array<[Tab, string]>
-          ).map(([id, label]) => (
-            <button
-              key={id}
-              onClick={() => showPanel(id)}
-              className={`flex-1 border-b-2 px-2 py-3.5 text-[10px] tracking-[0.2em] transition sm:py-3 ${
-                tab === id
-                  ? "border-amber-200/60 text-amber-100"
-                  : "border-transparent text-neutral-600 hover:text-neutral-400"
-              }`}
-            >
-              {label}
-            </button>
-          ))}
-        </nav>
+        {/* The phone's copy of the same four. Above `md` the rail outside the
+            notebook does this job and this one is not rendered at all. */}
+        <CaseTabs
+          variant="row"
+          active={tab}
+          onSelect={showPanel}
+          evidenceCount={view.clues.length}
+          className="shrink-0 md:hidden"
+        />
 
         <div
           ref={panelRef}
@@ -286,6 +320,11 @@ export function Investigation({
           <div className="md:hidden">
             <TutorialPanel progress={tutorial} />
           </div>
+          {/* Keyed on the tab so the arrival animation restarts each time the
+              section changes. Behaviour-neutral: every panel below is already
+              conditionally rendered, so switching tabs already unmounts the one
+              you left - the key adds nothing to throw away. */}
+          <div key={tab} className="reveal">
           {tab === "journal" && (
             <Journal view={view} feed={feed} brief={now} />
           )}
@@ -313,6 +352,7 @@ export function Investigation({
           )}
           {tab === "evidence" && <EvidencePanel view={view} act={act} busy={busy} />}
           {tab === "accuse" && <AccusePanel view={view} act={act} busy={busy} />}
+          </div>
         </div>
       </aside>
 
@@ -320,6 +360,29 @@ export function Investigation({
         <Verdict view={view} onRestart={onRestart} />
       )}
     </main>
+  );
+}
+
+/**
+ * The clock on the folded phone sheet.
+ *
+ * A leaf of its own so that ticking it re-renders one span rather than the whole
+ * screen. Held at the top level it re-rendered the map once a second for the
+ * entire session, which is both wasteful and makes profiling anything else
+ * impossible.
+ */
+function SheetClock({
+  remainingMs,
+  frozen,
+}: {
+  remainingMs: number;
+  frozen: boolean;
+}) {
+  const remaining = useLocalCountdown(remainingMs, frozen);
+  return (
+    <span className="numeral text-base leading-none text-bright">
+      {frozen ? "--:--:--" : formatCountdown(remaining)}
+    </span>
   );
 }
 
@@ -337,18 +400,23 @@ function ActionFeed({ feed }: { feed: FeedEntry[] }) {
       {recent.map((entry) => (
         <li
           key={entry.seq}
-          className="border-l-2 border-amber-200/40 bg-[#0e0f11]/95 py-1.5 pl-3 pr-4 backdrop-blur"
+          // Gold's second permitted use, and it is conditional: the edge lights
+          // up only when the action actually turned something up. Most actions
+          // do not, so the colour stays rare enough to be worth looking at.
+          className={`reveal border-l-2 bg-surface/95 py-1.5 pl-3 pr-4 backdrop-blur ${
+            entry.newClues.length ? "border-gold" : "border-line"
+          }`}
         >
-          <span className="font-serif text-[13px] text-neutral-300">
+          <span className="font-serif text-[13px] text-muted">
             {entry.summary}
           </span>
           {entry.timeSpent > 0 && (
-            <span className="ml-2 text-[10px] tracking-widest text-neutral-600">
-              &minus;{entry.timeSpent}H
+            <span className="ml-2 text-[10px] tracking-widest text-faint">
+              &minus;<span className="numeral">{entry.timeSpent}</span>H
             </span>
           )}
           {entry.newClues.map((c) => (
-            <span key={c.id} className="mt-0.5 block text-[12px] text-amber-200/70">
+            <span key={c.id} className="mt-0.5 block text-[12px] text-gold">
               + {c.title}
             </span>
           ))}

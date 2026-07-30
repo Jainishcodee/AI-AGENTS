@@ -42,7 +42,7 @@ export function HostButton({
     return (
       <span
         title="Set NEXT_PUBLIC_SUPABASE_URL and friends to enable rooms"
-        className="cursor-not-allowed text-[11px] tracking-[0.2em] text-neutral-800"
+        className="cursor-not-allowed text-[11px] tracking-[0.2em] text-ghost"
       >
         WITH FRIENDS &mdash; NOT CONFIGURED
       </span>
@@ -66,7 +66,7 @@ export function HostButton({
     return (
       <button
         onClick={() => setOpen(true)}
-        className="text-[11px] tracking-[0.2em] text-neutral-500 transition hover:text-amber-100"
+        className="text-[11px] tracking-[0.2em] text-faint lift hover:text-bright"
       >
         PLAY WITH FRIENDS &rarr;
       </button>
@@ -83,16 +83,16 @@ export function HostButton({
         placeholder="Your name"
         maxLength={24}
         // 16px below `sm`, or iOS zooms the page the moment this takes focus.
-        className="min-w-0 flex-1 border border-neutral-800 bg-transparent px-3 py-2 font-serif text-[16px] text-neutral-200 outline-none placeholder:text-neutral-700 focus:border-amber-200/40 sm:flex-none sm:py-1.5 sm:text-[13px]"
+        className="min-w-0 flex-1 border border-line bg-transparent px-3 py-2 font-serif text-[16px] text-bright outline-none placeholder:text-ghost focus:border-muted sm:flex-none sm:py-1.5 sm:text-[13px]"
       />
       <button
         disabled={busy || !name.trim()}
         onClick={host}
-        className="shrink-0 border border-neutral-700 px-4 py-2 text-[11px] tracking-[0.2em] text-neutral-300 transition hover:border-amber-200/50 hover:text-amber-100 disabled:opacity-30 sm:py-1.5"
+        className="shrink-0 border border-edge px-4 py-2 text-[11px] tracking-[0.2em] text-muted lift hover:border-muted hover:text-bright disabled:opacity-30 sm:py-1.5"
       >
         {busy ? "OPENING..." : "OPEN A ROOM"}
       </button>
-      {error && <span className="text-[11px] text-red-400">{error}</span>}
+      {error && <span className="text-[11px] text-danger">{error}</span>}
     </div>
   );
 }
@@ -127,8 +127,8 @@ export function JoinBox({ enabled }: { enabled: boolean }) {
   const ready = code.trim().length >= 3 && name.trim().length > 0;
 
   return (
-    <section className="mt-16 border-t border-neutral-900 pt-10">
-      <p className="text-[10px] tracking-[0.3em] text-neutral-600">
+    <section className="mt-16 border-t border-line pt-10">
+      <p className="text-[10px] tracking-[0.3em] text-faint">
         SOMEBODY GAVE YOU A CODE
       </p>
       <div className="mt-4 flex flex-wrap items-center gap-2">
@@ -140,7 +140,7 @@ export function JoinBox({ enabled }: { enabled: boolean }) {
           maxLength={8}
           autoCapitalize="characters"
           autoComplete="off"
-          className="w-24 shrink-0 border border-neutral-800 bg-transparent px-3 py-2 text-center font-serif text-lg tracking-[0.2em] text-amber-100 outline-none placeholder:text-neutral-700 focus:border-amber-200/40 sm:w-28 sm:tracking-[0.3em]"
+          className="numeral w-24 shrink-0 border border-line bg-transparent px-3 py-2 text-center text-lg tracking-[0.2em] text-paper outline-none placeholder:text-ghost focus:border-muted sm:w-28 sm:tracking-[0.3em]"
         />
         <input
           value={name}
@@ -149,17 +149,17 @@ export function JoinBox({ enabled }: { enabled: boolean }) {
           placeholder="Your name"
           maxLength={24}
           // 16px below `sm`, or iOS zooms the page the moment this takes focus.
-          className="min-w-0 flex-1 border border-neutral-800 bg-transparent px-3 py-2 font-serif text-[16px] text-neutral-200 outline-none placeholder:text-neutral-700 focus:border-amber-200/40 sm:flex-none sm:text-[14px]"
+          className="min-w-0 flex-1 border border-line bg-transparent px-3 py-2 font-serif text-[16px] text-bright outline-none placeholder:text-ghost focus:border-muted sm:flex-none sm:text-[14px]"
         />
         <button
           disabled={busy || !ready}
           onClick={join}
-          className="shrink-0 border border-neutral-700 px-5 py-2.5 text-[11px] tracking-[0.2em] text-neutral-300 transition hover:border-amber-200/50 hover:text-amber-100 disabled:opacity-30 sm:py-2"
+          className="shrink-0 border border-edge px-5 py-2.5 text-[11px] tracking-[0.2em] text-muted lift hover:border-muted hover:text-bright disabled:opacity-30 sm:py-2"
         >
           {busy ? "JOINING..." : "JOIN THE CASE"}
         </button>
       </div>
-      {error && <p className="mt-3 text-[12px] text-red-400">{error}</p>}
+      {error && <p className="mt-3 text-[12px] text-danger">{error}</p>}
     </section>
   );
 }

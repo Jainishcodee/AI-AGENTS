@@ -74,6 +74,11 @@ export const caseLocationSchema = z.object({
   cityLocationId: z.string(),
   /** Case-specific override of the city blurb. */
   description: z.string(),
+  /**
+   * Illustration for this place, shown on the journal entry when you arrive.
+   * Omit and a deterministic noir plate is drawn instead - see lib/art/plates.
+   */
+  scene: z.string().nullable().default(null),
   searchable: z.boolean().default(true),
   /** Clue ids findable here, subject to each clue's own `requires`. */
   clues: z.array(z.string()).default([]),
@@ -122,6 +127,8 @@ export const caseSchema = z.object({
   title: z.string(),
   cityId: z.string(),
   brief: z.string(),
+  /** Cover art id, resolved to public/art/covers/<id>.webp. */
+  cover: z.string().nullable().default(null),
   /**
    * Two clocks, doing two different jobs.
    *

@@ -1,34 +1,64 @@
 /**
  * The map's whole colour vocabulary, in one place. Backlund at night: cold
- * water, warm sodium light on the main roads, everything else drained.
+ * water, a little sodium light on the main roads, everything else drained.
+ *
+ * This is the canvas half of the palette in `app/globals.css`, and the two are
+ * deliberately the same city. Canvas cannot read CSS custom properties without
+ * a `getComputedStyle` per draw, so the values are repeated here rather than
+ * referenced - which makes it worth saying explicitly that `ink` is
+ * `--color-ink`, `here` is `--color-gold`, and the greys sit on the same cold
+ * axis as the text ladder. Changing one without the other will show.
  */
 export const MAP_COLORS = {
   ink: "#08090b",
-  water: "#0d1a22",
-  waterEdge: "#16303c",
+  water: "#0b1720",
+  waterEdge: "#132a36",
 
   // Blocks have to sit clearly above the background or the city reads as a bare
   // road network with holes in it.
-  blockBuilt: "#1d1e23",
-  blockBuiltEdge: "#2b2c33",
-  blockPark: "#16241a",
-  blockParkEdge: "#233327",
-  blockYard: "#211f19",
-  blockYardEdge: "#302b23",
+  blockBuilt: "#191b20",
+  blockBuiltEdge: "#262930",
+  blockPark: "#141f19",
+  blockParkEdge: "#1f2c25",
+  blockYard: "#1c1d1f",
+  blockYardEdge: "#292b2e",
 
-  lane: "#34343c",
-  street: "#454851",
-  avenue: "#5f5c53",
-  rail: "#4a463f",
-  bridge: "#8d8168",
+  // Roads sit only just above the blocks they divide. They were much brighter,
+  // which turned the whole city into a lit web that fought the panel for
+  // attention - and a map you have to look past is not doing its job. The
+  // hierarchy between the three is what carries navigation, not their absolute
+  // brightness, so it survives the drop intact.
+  lane: "#24262c",
+  street: "#31343b",
+  avenue: "#45474d",
+  rail: "#34363a",
+  bridge: "#5c5d62",
 
-  pin: "#c9a227",
-  pinVisited: "#5f6b70",
-  landmark: "#d94f3d",
-  here: "#f2e5c4",
+  // The only warm marks on the whole map, and the same rule as the UI: gold is
+  // where you are, and where you could go. Everywhere you have already been
+  // goes cold and stops competing for attention.
+  pin: "#8a7a3f",
+  pinVisited: "#4a525a",
+  landmark: "#a24a3c",
+  here: "#c9a227",
 
-  boroughLabel: "#8f887a",
-  landmarkLabel: "#cdc5b2",
+  boroughLabel: "#6f757d",
+  landmarkLabel: "#9aa0a8",
+
+  // --- atmosphere ---------------------------------------------------------
+  // Not features of the city, but of the night it is sitting in. All three are
+  // painted once per draw like everything else here - there is no animation
+  // loop behind any of it.
+  /** Sodium light spilling off the main roads. Very low alpha, laid wide. */
+  avenueGlow: "rgba(198, 162, 96, 0.055)",
+  /** Mist coming off the Tussock, heaviest at the near bank. */
+  riverFog: "rgba(150, 180, 196, 0.07)",
+  /**
+   * Corners of the plate, so the city does not end in a hard rectangle.
+   * Kept light: this is a frame, not a spotlight, and the far boroughs still
+   * have to be readable enough to navigate by.
+   */
+  vignette: "rgba(0, 0, 0, 0.42)",
 } as const;
 
 /**

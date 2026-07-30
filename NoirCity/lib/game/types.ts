@@ -74,6 +74,8 @@ export interface CaseSummary {
   title: string;
   brief: string;
   timeBudget: number;
+  /** Real minutes at the table - the number a group actually plans around. */
+  sessionMinutes: number;
   suspectCount: number;
   locationCount: number;
   isTutorial: boolean;

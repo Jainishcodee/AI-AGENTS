@@ -125,21 +125,21 @@ export function Corkboard({
     // Beside the map on a desktop, so the evidence list stays readable next to
     // it; over everything on a phone, where sharing the screen with a 68dvh
     // sheet would leave the cork about two cards tall.
-    <div className="absolute inset-0 z-[1900] flex flex-col bg-[#0b0a09] max-md:fixed">
-      <header className="flex items-center justify-between gap-3 border-b border-neutral-800 px-4 py-2.5 sm:px-6 sm:py-3">
+    <div className="absolute inset-0 z-[1900] flex flex-col bg-ink max-md:fixed">
+      <header className="flex items-center justify-between gap-3 border-b border-line px-4 py-2.5 sm:px-6 sm:py-3">
         <div className="min-w-0">
-          <h2 className="font-serif text-base text-neutral-100 sm:text-lg">
+          <h2 className="font-serif text-base text-bright sm:text-lg">
             The Board
           </h2>
           {/* The linking prompt is live feedback and always shows. The idle
               instructions are desktop-only - they name a double-click a phone
               cannot perform, and the buttons beside them say the same thing. */}
           {linkFrom ? (
-            <p className="mt-0.5 text-[10px] leading-tight tracking-[0.2em] text-neutral-600">
+            <p className="mt-0.5 text-[10px] leading-tight tracking-[0.2em] text-faint">
               PICK A SECOND CARD TO RUN STRING — OR THE SAME ONE TO CANCEL
             </p>
           ) : (
-            <p className="mt-0.5 hidden text-[10px] tracking-[0.2em] text-neutral-600 sm:block">
+            <p className="mt-0.5 hidden text-[10px] tracking-[0.2em] text-faint sm:block">
               DRAG TO ARRANGE · CLICK TWO CARDS TO CONNECT · DOUBLE-CLICK THE CORK
               FOR A NOTE
             </p>
@@ -148,13 +148,13 @@ export function Corkboard({
         <div className="flex shrink-0 items-center gap-2">
           <button
             onClick={addNoteInView}
-            className="border border-neutral-700 px-3 py-2 text-[10px] tracking-[0.2em] text-neutral-400 transition hover:border-amber-200/50 hover:text-amber-100 sm:hidden"
+            className="border border-edge px-3 py-2 text-[10px] tracking-[0.2em] text-muted lift hover:border-muted hover:text-bright sm:hidden"
           >
             + NOTE
           </button>
           <button
             onClick={onClose}
-            className="border border-neutral-700 px-3 py-2 text-[10px] tracking-[0.2em] text-neutral-400 transition hover:border-amber-200/50 hover:text-amber-100 sm:px-4 sm:py-1.5"
+            className="border border-edge px-3 py-2 text-[10px] tracking-[0.2em] text-muted lift hover:border-muted hover:text-bright sm:px-4 sm:py-1.5"
           >
             <span className="sm:hidden">DONE</span>
             <span className="hidden sm:inline">BACK TO THE CASE</span>
@@ -250,22 +250,22 @@ export function Corkboard({
                   width: CARD.width,
                   minHeight: CARD.height,
                 }}
-                className={`absolute cursor-grab touch-none select-none border p-3 shadow-lg transition-colors active:cursor-grabbing ${
+                className={`absolute cursor-grab touch-none select-none border p-3 shadow-lg settle active:cursor-grabbing ${
                   selected
-                    ? "border-amber-300 bg-[#f3ead6]"
-                    : "border-neutral-400/40 bg-[#e8e0cf]"
+                    ? "border-ink bg-paper shadow-xl"
+                    : "border-muted/40 bg-paper"
                 }`}
               >
                 {/* The pin */}
-                <span className="absolute -top-1.5 left-1/2 h-3 w-3 -translate-x-1/2 rounded-full bg-red-700 shadow" />
-                <p className="text-[8px] tracking-[0.2em] text-neutral-500">
+                <span className="absolute -top-1.5 left-1/2 h-3 w-3 -translate-x-1/2 rounded-full bg-danger shadow" />
+                <p className="text-[8px] tracking-[0.2em] text-faint">
                   {clue.type.toUpperCase()}
                 </p>
-                <h3 className="mt-1 font-serif text-[13px] leading-tight text-neutral-900">
+                <h3 className="mt-1 font-serif text-[13px] leading-tight text-ghost">
                   {clue.title}
                 </h3>
                 {suspect && (
-                  <p className="mt-1.5 text-[10px] italic text-red-900/80">
+                  <p className="mt-1.5 text-[10px] italic text-danger/80">
                     points at {suspect.name}
                   </p>
                 )}
@@ -290,11 +290,11 @@ function StickyNote({
   return (
     <div
       style={{ left: note.x, top: note.y }}
-      className="absolute w-[168px] bg-[#d8cf7a] p-2 shadow-lg"
+      className="absolute w-[168px] bg-note p-2 shadow-lg"
     >
       <button
         onClick={onRemove}
-        className="absolute right-0 top-0 flex h-7 w-7 items-center justify-center text-[15px] leading-none text-neutral-700/60 hover:text-neutral-900"
+        className="absolute right-0 top-0 flex h-7 w-7 items-center justify-center text-[15px] leading-none text-ghost/60 hover:text-ghost"
         aria-label="Remove note"
       >
         ×
@@ -306,7 +306,7 @@ function StickyNote({
         rows={3}
         // 16px on a phone: anything smaller and Safari zooms the whole board in
         // the moment the note takes focus.
-        className="w-full resize-none bg-transparent pr-3 font-serif text-[16px] leading-snug text-neutral-900 outline-none placeholder:text-neutral-700/50 sm:text-[12px]"
+        className="w-full resize-none bg-transparent pr-3 font-serif text-[16px] leading-snug text-ghost outline-none placeholder:text-ghost/50 sm:text-[12px]"
       />
     </div>
   );

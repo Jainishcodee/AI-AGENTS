@@ -1,32 +1,234 @@
 @import "tailwindcss";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
-
+/* ---------------------------------------------------------------------------
+   Typefaces.
+   `inline` because these point at CSS variables Next injects per-font; the
+   values must be substituted where they are used rather than re-exported.
+--------------------------------------------------------------------------- */
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  /* Georgia from the system - no download, and it carries the journal's long
+     prose better than anything we would pay bytes for. */
+  --font-serif: Georgia, "Times New Roman", Times, serif;
+  /* Courier Prime. Documents only: this is the texture of a typed page, and it
+     is a poor face for figures - its digits are narrow and its zero is bare. */
+  --font-mono: var(--font-typewriter), "Courier New", monospace;
+  /* IBM Plex Mono. Every digit in the game. See `.numeral` below. */
+  --font-numeral: var(--font-figures), ui-monospace, "SF Mono", monospace;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+/* ---------------------------------------------------------------------------
+   The palette, and the only place a colour is chosen.
+   Backlund after dark: everything cold and drained, with three warm exceptions
+   that have to earn their place. Not `inline`, so these are real custom
+   properties and plain CSS below can reach them too.
+--------------------------------------------------------------------------- */
+@theme {
+  /* Surfaces, deepest first. Three steps is enough to build any panel; a
+     fourth only ever gets used to paper over a layout problem. */
+  --color-ink: #08090b; /* the page, and the map behind everything */
+  --color-surface: #0e0f12; /* a panel sitting on the page */
+  --color-raised: #15171b; /* a card sitting on a panel */
+
+  /* Two borders: one you read past, one you are meant to notice. */
+  --color-line: #1e2127;
+  --color-edge: #2b2f37;
+
+  /* The text ladder. Four rungs, and the gaps between them are what carries
+     hierarchy now that colour no longer does. */
+  --color-bright: #e3e5e9; /* what you are reading */
+  --color-muted: #949aa4; /* supporting detail */
+  --color-faint: #5a616b; /* labels, captions, metadata */
+  --color-ghost: #3a4048; /* dividers, disabled, decoration */
+
+  /* Documents are warm, because paper is. This is deliberately NOT gold - it
+     was `amber-100` before, which is why gold read as ordinary. */
+  --color-paper: #ece4d3;
+  --color-paper-dim: #a9a293;
+  /* A note you wrote yourself, on the board. Buff rather than yellow: it has to
+     read as a different object from an evidence card without spending the gold
+     accent on a decoration - a solid gold block was by far the largest thing of
+     that colour anywhere in the game. */
+  --color-note: #d2bd8f;
+
+  /* The three accents. Gold is rationed: the countdown once it is under
+     pressure, evidence you have only just found, and where you are standing.
+     Nothing else, ever. */
+  --color-gold: #c9a227;
+  --color-danger: #b8503f;
+  --color-alive: #4f9d6e;
+}
+
+/* ---------------------------------------------------------------------------
+   Motion vocabulary. One curve, three durations - anything outside this set is
+   a decision someone should have to justify.
+--------------------------------------------------------------------------- */
+:root {
+  /* Decelerating, never bouncy. Things in this game arrive and settle. */
+  --ease-noir: cubic-bezier(0.22, 0.61, 0.36, 1);
+  --dur-quick: 120ms; /* hover, press - must feel instant */
+  --dur-settle: 260ms; /* a panel moving, a tab changing */
+  --dur-reveal: 520ms; /* something appearing that was not there */
+
+  /* ---------------------------------------------------------------------
+     The notebook's footprint.
+
+     On a desktop the notebook lies on top of a full-bleed map, so anything
+     else floating over that map has to keep out of its way. Rather than have
+     four components each hard-code the same offset and drift apart the first
+     time the notebook is resized, they all measure from here.
+  --------------------------------------------------------------------- */
+  --notebook-w: 400px;
+  --rail-w: 66px; /* wide enough for EVIDENCE at the tab's own size */
+  --notebook-inset: 1.25rem; /* gap between the notebook and the viewport edge */
+  /* Where the map is still yours to use. */
+  --notebook-clear: calc(
+    var(--notebook-w) + var(--rail-w) + var(--notebook-inset) + 1rem
+  );
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  /* The template shipped `Arial, Helvetica, sans-serif` here, which meant every
+     element without an explicit font class - all the wide-tracked labels across
+     the game - silently rendered in Arial. Serif is the deliberate default. */
+  font-family: var(--font-serif);
+  background-color: var(--color-ink);
+  color: var(--color-bright);
 }
 
 html {
   /* Safari on a phone inflates text in landscape unless told not to, which
      wrecks every tracking-[0.3em] label in the game. */
   -webkit-text-size-adjust: 100%;
+}
+
+/* ---------------------------------------------------------------------------
+   Figures.
+   Every number the player reads - clocks, scores, addresses, counts, case
+   numbers - goes through this. Two things matter:
+
+   `tabular-nums` fixes the advance width of every digit, so a counting-down
+   clock stops shivering as its digits change. Without it `11:59:59` and
+   `12:00:00` are different widths and the whole row twitches once a second.
+
+   `zero` cuts the slash through it, which is what turns a monospace font into
+   a ledger hand - it is the mark a clerk makes so a nought cannot be read as
+   an O. Exactly the register this game wants.
+--------------------------------------------------------------------------- */
+@utility numeral {
+  font-family: var(--font-numeral);
+  font-variant-numeric: tabular-nums slashed-zero;
+  /* Plex is set a little tight for figures read at a glance. */
+  letter-spacing: 0.02em;
+}
+
+/* ---------------------------------------------------------------------------
+   Motion.
+
+   Three utilities, and between them they cover everything that moves. Each
+   carries its own `prefers-reduced-motion` guard rather than relying on callers
+   to remember one - a transition that has to be opted out of at every call site
+   is a transition that will eventually ship unguarded.
+--------------------------------------------------------------------------- */
+
+/** Hover and press. Colour only: nothing should move under the pointer. */
+@utility lift {
+  @media (prefers-reduced-motion: no-preference) {
+    transition-property: color, background-color, border-color, opacity;
+    transition-duration: var(--dur-quick);
+    transition-timing-function: var(--ease-noir);
+  }
+}
+
+/** A thing changing state in place - a tab, a selected card, a panel edge. */
+@utility settle {
+  @media (prefers-reduced-motion: no-preference) {
+    transition-property: color, background-color, border-color, opacity,
+      transform, box-shadow;
+    transition-duration: var(--dur-settle);
+    transition-timing-function: var(--ease-noir);
+  }
+}
+
+/**
+ * Something arriving that was not there a moment ago.
+ *
+ * Four pixels and a fade. Enough that the eye registers where it came from,
+ * far too little to be a flourish - which is the whole brief for motion here.
+ */
+@utility reveal {
+  @media (prefers-reduced-motion: no-preference) {
+    animation: reveal var(--dur-reveal) var(--ease-noir) both;
+  }
+}
+
+/**
+ * Where the team is standing, breathing.
+ *
+ * A Leaflet marker rather than something drawn on the canvas, and deliberately:
+ * Leaflet already repositions its markers on pan and zoom, and `transform` and
+ * `opacity` animate on the compositor. So this is the one moving thing on the
+ * map and it costs no JavaScript per frame and no canvas redraw at all - the
+ * map still records zero re-renders while it sits there pulsing.
+ *
+ * Under reduced motion the animation never applies and it stays at opacity 0.
+ * The solid pin underneath is drawn on the canvas and is what actually marks
+ * the spot; this only draws the eye to it.
+ */
+.here-pulse {
+  position: absolute;
+  left: -21px;
+  top: -21px;
+  height: 42px;
+  width: 42px;
+  border: 1px solid var(--color-gold);
+  border-radius: 9999px;
+  opacity: 0;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .here-pulse {
+    animation: here-pulse 3s var(--ease-noir) infinite;
+  }
+}
+
+@keyframes here-pulse {
+  0% {
+    transform: scale(0.3);
+    opacity: 0.5;
+  }
+  70% {
+    opacity: 0;
+  }
+  100% {
+    transform: scale(1);
+    opacity: 0;
+  }
+}
+
+@keyframes reveal {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/*
+  The safety net, and it is not redundant with the guards above: it also catches
+  Leaflet's own transitions, Tailwind's `animate-pulse` on the countdown, and
+  anything added later that forgets. Someone who has asked the operating system
+  to stop things moving has asked once, not per component.
+*/
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }

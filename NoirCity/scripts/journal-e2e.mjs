@@ -73,14 +73,14 @@ const hasDateline = await page.getByText(/1984/).count();
 log(`datelines rendered: ${hasDateline > 0}`);
 if (!hasDateline) throw new Error("no in-fiction dateline on any entry");
 
-const countdown = (await page.locator("header p.font-mono").first().innerText()).trim();
+const countdown = (await page.getByTestId("countdown").innerText()).trim();
 log(`session countdown: ${countdown}`);
 if (!/^\d{2}:\d{2}:\d{2}$/.test(countdown)) {
   throw new Error(`countdown not ticking: "${countdown}"`);
 }
 
 await page.waitForTimeout(2200);
-const later = (await page.locator("header p.font-mono").first().innerText()).trim();
+const later = (await page.getByTestId("countdown").innerText()).trim();
 log(`two seconds later:  ${later}`);
 if (later === countdown) throw new Error("countdown is frozen");
 

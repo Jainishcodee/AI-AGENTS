@@ -3,6 +3,7 @@
 import { useEffect, useRef } from "react";
 import type { FeedEntry } from "@/lib/game/types";
 import type { ClientView } from "@/lib/engine/view";
+import { Plate } from "@/components/art/Plate";
 
 /**
  * The case file, written as you work.
@@ -40,7 +41,14 @@ export function Journal({
         title="Your office"
         showDateline
       >
-        <p className="whitespace-pre-line font-serif text-[14px] leading-relaxed text-neutral-400">
+        <Plate
+          kind="cover"
+          id={view.caseId}
+          alt={view.title}
+          className="mb-3.5"
+          ratio="aspect-[16/7]"
+        />
+        <p className="whitespace-pre-line font-serif text-[14px] leading-relaxed text-muted">
           {view.brief}
         </p>
       </Entry>
@@ -58,14 +66,28 @@ export function Journal({
             kind={entry.kind}
             showDateline={showDateline}
           >
-            <p className="whitespace-pre-line font-serif text-[14px] leading-relaxed text-neutral-400">
+            {/* Only on arrival. Illustrating every search would turn the journal
+                into a gallery and bury the writing that carries the case. */}
+            {entry.kind === "travel" && (
+              <Plate
+                kind="scene"
+                id={entry.locationId}
+                alt={entry.title}
+                className="mb-3.5"
+                ratio="aspect-[16/9]"
+              />
+            )}
+            <p className="whitespace-pre-line font-serif text-[14px] leading-relaxed text-muted">
               {entry.body}
             </p>
 
+            {/* Not gold: by the time an entry is in the journal the clue is no
+                longer news, it is record. Gold is for the moment of finding,
+                which the action feed already marks. */}
             {entry.newClues.length > 0 && (
-              <ul className="mt-4 space-y-1 border-l-2 border-amber-200/30 pl-3">
+              <ul className="mt-4 space-y-1 border-l-2 border-edge pl-3">
                 {entry.newClues.map((c) => (
-                  <li key={c.id} className="text-[12.5px] text-amber-200/80">
+                  <li key={c.id} className="text-[12.5px] text-paper-dim">
                     Into evidence &mdash; {c.title}
                   </li>
                 ))}
@@ -73,8 +95,9 @@ export function Journal({
             )}
 
             {entry.timeSpent > 0 && (
-              <p className="mt-3 text-[10px] tracking-[0.2em] text-neutral-700">
-                {entry.timeSpent} {entry.timeSpent === 1 ? "HOUR" : "HOURS"} GONE
+              <p className="mt-3 text-[10px] tracking-[0.2em] text-ghost">
+                <span className="numeral">{entry.timeSpent}</span>{" "}
+                {entry.timeSpent === 1 ? "HOUR" : "HOURS"} GONE
               </p>
             )}
           </Entry>
@@ -112,21 +135,21 @@ function Entry({
   return (
     <article>
       {showDateline && (
-        <p className="mb-3 border-b border-neutral-800 pb-2 font-serif text-[15px] text-neutral-200">
+        <p className="mb-3 border-b border-line pb-2 font-serif text-[15px] text-bright">
           {dateline}
         </p>
       )}
 
       <div className="flex items-baseline justify-between gap-3">
-        <p className="text-[10px] tracking-[0.25em] text-neutral-600">
+        <p className="text-[10px] tracking-[0.25em] text-faint">
           {kind ? KIND_LABEL[kind] : "THE JOB"}
         </p>
-        <p className="shrink-0 font-mono text-[11px] tabular-nums text-neutral-600">
+        <p className="numeral shrink-0 text-[11px] text-faint">
           {time}
         </p>
       </div>
 
-      <h3 className="mt-1 font-serif text-lg leading-tight text-neutral-100">
+      <h3 className="mt-1 font-serif text-lg leading-tight text-bright">
         {title}
       </h3>
 

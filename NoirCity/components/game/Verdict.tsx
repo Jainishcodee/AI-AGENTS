@@ -21,9 +21,12 @@ export function Verdict({
   const named = view.suspects.find((s) => s.id === result.accusation.culpritId);
 
   return (
-    <div className="absolute inset-0 z-[2000] overflow-y-auto overscroll-contain bg-[#08090b]/97 backdrop-blur-sm">
+    <div className="absolute inset-0 z-[2000] overflow-y-auto overscroll-contain bg-ink/97 backdrop-blur-sm">
       <div className="mx-auto max-w-2xl px-5 py-10 sm:px-8 sm:py-16">
-        <p className="text-[10px] tracking-[0.4em] text-neutral-600">
+        <p
+          className="text-[10px] tracking-[0.4em] text-faint"
+          data-testid="verdict-banner"
+        >
           {result.solved
             ? "CASE CLOSED"
             : result.culpritCorrect
@@ -33,13 +36,13 @@ export function Verdict({
 
         <h1
           className={`mt-3 font-serif text-2xl leading-tight sm:text-3xl ${
-            result.solved ? "text-amber-100" : "text-neutral-300"
+            result.solved ? "text-paper" : "text-muted"
           }`}
         >
           You named {named?.name}.
         </h1>
 
-        <div className="mt-8 grid grid-cols-3 gap-px border border-neutral-800 bg-neutral-800 text-center">
+        <div className="mt-8 grid grid-cols-3 gap-px border border-line bg-raised text-center">
           <Cell label="CULPRIT" ok={result.culpritCorrect} />
           <Cell label="MOTIVE" ok={result.motiveCorrect} />
           <Cell
@@ -49,32 +52,54 @@ export function Verdict({
           />
         </div>
 
-        <div className="mt-8 flex flex-wrap items-baseline gap-x-8 gap-y-4 border-y border-neutral-800 py-5">
+        <div className="mt-8 flex flex-wrap items-baseline gap-x-8 gap-y-4 border-y border-line py-5">
           <div>
-            <p className="font-serif text-4xl tabular-nums text-neutral-100">
+            <p className="numeral text-4xl text-bright" data-testid="score">
               {result.score}
             </p>
-            <p className="mt-1 text-[10px] tracking-[0.2em] text-neutral-600">
+            <p className="mt-1 text-[10px] tracking-[0.2em] text-faint">
               POINTS
             </p>
           </div>
-          <ul className="space-y-1 text-[12px] text-neutral-500">
-            {result.culpritCorrect && <li>Right person &mdash; 50</li>}
-            {result.motiveCorrect && <li>Right reason &mdash; 25</li>}
-            {result.correctEvidenceIds.length > 0 && (
-              <li>Evidence that held up &mdash; {result.correctEvidenceIds.length * 5}</li>
+          {/* Every figure the player reads takes the numeral face, down to the
+              ones in a breakdown - a column of points that half aligns and half
+              does not is worse than one that never tried. */}
+          <ul className="space-y-1 text-[12px] text-faint">
+            {result.culpritCorrect && (
+              <li>
+                Right person &mdash; <span className="numeral">50</span>
+              </li>
             )}
-            {result.timeBonus > 0 && <li>Hours to spare &mdash; {result.timeBonus}</li>}
+            {result.motiveCorrect && (
+              <li>
+                Right reason &mdash; <span className="numeral">25</span>
+              </li>
+            )}
+            {result.correctEvidenceIds.length > 0 && (
+              <li>
+                Evidence that held up &mdash;{" "}
+                <span className="numeral">
+                  {result.correctEvidenceIds.length * 5}
+                </span>
+              </li>
+            )}
+            {result.timeBonus > 0 && (
+              <li>
+                Hours to spare &mdash;{" "}
+                <span className="numeral">{result.timeBonus}</span>
+              </li>
+            )}
             {result.redHerringIds.length > 0 && (
-              <li className="text-red-400">
-                Evidence that fell apart &mdash; {result.redHerringIds.length * 10}
+              <li className="text-danger">
+                Evidence that fell apart &mdash;{" "}
+                <span className="numeral">{result.redHerringIds.length * 10}</span>
               </li>
             )}
           </ul>
         </div>
 
         {result.redHerringIds.length > 0 && (
-          <p className="mt-6 font-serif text-[13px] italic leading-relaxed text-red-300/70">
+          <p className="mt-6 font-serif text-[13px] italic leading-relaxed text-danger/70">
             {result.redHerringIds.length === 1
               ? "One of the things you submitted proved nothing at all."
               : `${result.redHerringIds.length} of the things you submitted proved nothing at all.`}
@@ -85,7 +110,7 @@ export function Verdict({
           {result.epilogue.split("\n\n").map((para, i) => (
             <p
               key={i}
-              className="font-serif text-[15px] leading-relaxed text-neutral-300"
+              className="font-serif text-[15px] leading-relaxed text-muted"
             >
               {para}
             </p>
@@ -96,14 +121,14 @@ export function Verdict({
           {onRestart && (
             <button
               onClick={onRestart}
-              className="border border-neutral-700 px-6 py-3.5 text-[11px] tracking-[0.2em] text-neutral-300 transition hover:border-amber-200/50 hover:text-amber-100 sm:py-3"
+              className="border border-edge px-6 py-3.5 text-[11px] tracking-[0.2em] text-muted lift hover:border-muted hover:text-bright sm:py-3"
             >
               RUN IT AGAIN
             </button>
           )}
           <Link
             href="/"
-            className="border border-neutral-800 px-6 py-3.5 text-[11px] tracking-[0.2em] text-neutral-500 transition hover:text-neutral-300 sm:py-3"
+            className="border border-line px-6 py-3.5 text-[11px] tracking-[0.2em] text-faint lift hover:text-muted sm:py-3"
           >
             ANOTHER CASE
           </Link>
@@ -115,12 +140,12 @@ export function Verdict({
 
 function Cell({ label, ok, note }: { label: string; ok: boolean; note?: string }) {
   return (
-    <div className="bg-[#0e0f11] px-3 py-4">
-      <p className={`font-serif text-xl ${ok ? "text-amber-200" : "text-neutral-700"}`}>
+    <div className="bg-surface px-3 py-4">
+      <p className={`font-serif text-xl ${ok ? "text-paper" : "text-ghost"}`}>
         {ok ? "✓" : "✕"}
       </p>
-      <p className="mt-1.5 text-[10px] tracking-[0.2em] text-neutral-600">{label}</p>
-      {note && <p className="mt-0.5 text-[10px] text-neutral-700">{note}</p>}
+      <p className="mt-1.5 text-[10px] tracking-[0.2em] text-faint">{label}</p>
+      {note && <p className="numeral mt-0.5 text-[10px] text-ghost">{note}</p>}
     </div>
   );
 }

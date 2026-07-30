@@ -56,8 +56,11 @@ async function travelTo(locationId) {
   await page.waitForTimeout(500);
 }
 
+// Read through `data-testid`, not through styling classes. This used to select
+// `p.tabular-nums`, which meant a purely visual change - swapping that class for
+// the `.numeral` utility - broke a test that cares about none of it.
 async function hoursLeft() {
-  const text = await page.locator("p.tabular-nums").first().textContent();
+  const text = await page.getByTestId("hours-left").first().textContent();
   return Number(text.trim());
 }
 
@@ -142,10 +145,10 @@ await shot("10-verdict");
 
 // The HUD also carries an h1, so take the last one - the verdict's.
 const verdict = await page.locator("h1").last().textContent();
-const banner = await page.locator("p.tracking-\\[0\\.4em\\]").first().textContent();
+const banner = await page.getByTestId("verdict-banner").textContent();
 log(`verdict: ${banner?.trim()} — ${verdict?.trim()}`);
 
-const score = await page.locator("p.tabular-nums").last().textContent();
+const score = await page.getByTestId("score").textContent();
 log(`score: ${score?.trim()}`);
 
 console.log(
