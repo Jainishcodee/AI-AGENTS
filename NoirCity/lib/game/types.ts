@@ -7,8 +7,17 @@ import type { TutorialProgress } from "@/lib/engine/tutorial";
  * from a client component is a build error.
  */
 
+/** One entry in the case journal. Rendered chronologically, newest last. */
 export interface FeedEntry {
   seq: number;
+  kind: "travel" | "search" | "interview" | "lab" | "accuse";
+  /** In-fiction moment, precomputed on the server so every client agrees. */
+  dateline: string;
+  time: string;
+  day: number;
+  locationId: string;
+  title: string;
+  body: string;
   summary: string;
   timeSpent: number;
   /** Resolved titles, so the client never has to look a clue up. */
@@ -21,6 +30,14 @@ export interface GameSnapshot {
   view: ClientView;
   feed: FeedEntry[];
   tutorial: TutorialProgress;
+  /** Where the story clock stands now, for the header. */
+  now: { dateline: string; time: string; day: number };
+  /**
+   * Milliseconds of real session time left, measured when the server answered.
+   * The client ticks it down locally rather than polling.
+   */
+  sessionRemainingMs: number;
+  sessionMinutes: number;
 }
 
 export interface RoomPlayer {

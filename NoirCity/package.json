@@ -18,7 +18,7 @@
     "cf:preview": "opennextjs-cloudflare build && opennextjs-cloudflare preview",
     "cf:deploy": "opennextjs-cloudflare build && opennextjs-cloudflare deploy",
     "test:api": "node scripts/api-e2e.mjs",
-    "test:e2e": "node scripts/play-e2e.mjs && node scripts/board-e2e.mjs"
+    "test:e2e": "node scripts/play-e2e.mjs && node scripts/board-e2e.mjs && node scripts/journal-e2e.mjs"
   },
   "dependencies": {
     "@supabase/ssr": "^0.12.3",

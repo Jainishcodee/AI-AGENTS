@@ -30,6 +30,12 @@ export interface GameState {
   labTested: string[];
   /** Bumped on every accepted action. Rejects stale writes from other clients. */
   version: number;
+  /**
+   * Wall-clock epoch (ms) when the case opened, set by the server. The REAL
+   * deadline is derived from this and the case's `sessionMinutes`; the reducer
+   * never reads a clock itself, so it stays pure and testable.
+   */
+  startedAt: number;
   result: AccusationResult | null;
 }
 
@@ -45,8 +51,19 @@ export type Action =
       evidenceIds: string[];
     };
 
-/** What just happened, for the shared action feed. Never contains the solution. */
+/**
+ * What just happened. This becomes one entry in the case journal, so it carries
+ * a heading and prose rather than only a log line. Never contains the solution.
+ */
 export interface ActionEffect {
+  kind: "travel" | "search" | "interview" | "lab" | "accuse";
+  /** Where it happened, for the journal's dateline. */
+  locationId: string;
+  /** Heading: the place you arrived at, or the person you pressed. */
+  title: string;
+  /** The body of the entry. */
+  body: string;
+  /** One line, for the compact feed over the map. */
   summary: string;
   timeSpent: number;
   newClueIds: string[];
@@ -73,9 +90,25 @@ export function initialState(
     askedQuestions: [],
     labTested: [],
     version: 0,
+    startedAt: 0,
     result: null,
     ...overrides,
   };
+}
+
+/** Hours consumed so far, which is what the story clock runs on. */
+export function hoursElapsed(caseIndex: CaseIndex, state: GameState): number {
+  return caseIndex.file.timeBudget - state.timeRemaining;
+}
+
+/** Milliseconds of real session time left, or Infinity if it never started. */
+export function sessionRemaining(
+  caseIndex: CaseIndex,
+  state: GameState,
+  now: number,
+): number {
+  if (!state.startedAt) return Infinity;
+  return state.startedAt + caseIndex.file.sessionMinutes * 60_000 - now;
 }
 
 /** A clue surfaces only once every clue it depends on is already held. */
@@ -151,10 +184,17 @@ export function applyAction(
       }
       const next = spend(state, cost);
       next.currentLocationId = action.locationId;
+      const caseTarget = caseIndex.locations.get(action.locationId);
       return {
         ok: true,
         state: next,
         effect: {
+          kind: "travel",
+          locationId: action.locationId,
+          title: target.name,
+          // The case's own words if it has any, the city's otherwise. This is
+          // the prose the journal is built from.
+          body: caseTarget?.description ?? target.blurb,
           summary: `Drove to ${target.name}.`,
           timeSpent: cost,
           newClueIds: [],
@@ -183,6 +223,10 @@ export function applyAction(
           ok: true,
           state: next,
           effect: {
+            kind: "search",
+            locationId: locId,
+            title: `Searched ${cityLoc.name}`,
+            body: "You went through it properly, and there was nothing here that had anything to do with anything. It happens more often than the pictures admit.",
             summary: `Turned over ${cityLoc.name}. Nothing worth the shoe leather.`,
             timeSpent: cost,
             newClueIds: [],
@@ -204,6 +248,15 @@ export function applyAction(
         ok: true,
         state: next,
         effect: {
+          kind: "search",
+          locationId: locId,
+          title: `Searched ${cityLoc.name}`,
+          body: fresh.length
+            ? fresh
+                .map((id) => caseIndex.clues.get(id)?.body ?? "")
+                .filter(Boolean)
+                .join("\n\n")
+            : "You went over the same ground a second time and it gave up nothing it had not already given up. Whatever is still here needs something you do not have yet.",
           summary: fresh.length
             ? `Searched ${cityLoc.name}. Turned up ${fresh.length} thing${fresh.length === 1 ? "" : "s"}.`
             : `Searched ${cityLoc.name}. Nothing new.`,
@@ -244,6 +297,10 @@ export function applyAction(
         ok: true,
         state: next,
         effect: {
+          kind: "interview",
+          locationId: state.currentLocationId,
+          title: npc.name,
+          body: `"${q.text}"\n\n${q.answer}`,
           summary: `Pressed ${npc.name}: "${q.text}"`,
           timeSpent: ACTION_COST.interview,
           newClueIds: fresh,
@@ -275,6 +332,15 @@ export function applyAction(
         ok: true,
         state: next,
         effect: {
+          kind: "lab",
+          locationId: state.currentLocationId,
+          title: "The laboratory",
+          body: fresh.length
+            ? fresh
+                .map((id) => caseIndex.clues.get(id)?.body ?? "")
+                .filter(Boolean)
+                .join("\n\n")
+            : `${clue.title} came back with nothing they could use.`,
           summary: `Sent ${clue.title} to the lab.`,
           timeSpent: ACTION_COST.lab,
           newClueIds: fresh,
@@ -298,6 +364,10 @@ export function applyAction(
           result: scored.result,
         },
         effect: {
+          kind: "accuse",
+          locationId: state.currentLocationId,
+          title: "Accusation filed",
+          body: `You named ${caseIndex.suspects.get(action.culpritId)?.name ?? "somebody"}.`,
           summary: "Accusation filed.",
           timeSpent: 0,
           newClueIds: [],

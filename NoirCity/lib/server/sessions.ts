@@ -1,9 +1,10 @@
 import "server-only";
-import { applyAction, initialState, type Action, type ActionEffect } from "@/lib/engine/reducer";
+import { applyAction, initialState, type Action } from "@/lib/engine/reducer";
 import { buildView } from "@/lib/engine/view";
 import { tutorialProgress } from "@/lib/engine/tutorial";
 import type { FeedEntry, GameSnapshot } from "@/lib/game/types";
 import { loadCase, loadCity } from "./cases";
+import { clockFields, sessionExpired, toFeedEntry } from "./journal";
 import { signSession, verifySession, type SessionPayload } from "./sessionToken";
 
 export type { FeedEntry, GameSnapshot };
@@ -13,20 +14,6 @@ export type { FeedEntry, GameSnapshot };
  * server memory - see `sessionToken.ts` for why.
  */
 
-function toFeedEntry(
-  effect: ActionEffect,
-  seq: number,
-  clueTitle: (id: string) => string,
-): FeedEntry {
-  return {
-    seq,
-    summary: effect.summary,
-    timeSpent: effect.timeSpent,
-    newClues: effect.newClueIds.map((id) => ({ id, title: clueTitle(id) })),
-    ...(effect.answer ? { answer: effect.answer } : {}),
-  };
-}
-
 async function snapshot(payload: SessionPayload): Promise<GameSnapshot | null> {
   const caseIndex = loadCase(payload.caseId);
   if (!caseIndex) return null;
@@ -35,19 +22,39 @@ async function snapshot(payload: SessionPayload): Promise<GameSnapshot | null> {
     view: buildView(caseIndex, loadCity(), payload.state),
     feed: payload.feed,
     tutorial: tutorialProgress(caseIndex, payload.state),
+    ...clockFields(caseIndex, payload.state, Date.now()),
   };
 }
 
 export async function startSession(caseId: string): Promise<GameSnapshot | null> {
   const caseIndex = loadCase(caseId);
   if (!caseIndex) return null;
-  return snapshot({ caseId, state: initialState(caseIndex), feed: [] });
+  // The real clock starts the moment the file is opened.
+  const state = initialState(caseIndex, { startedAt: Date.now() });
+  return snapshot({ caseId, state, feed: [] });
 }
 
 export async function getSession(token: string): Promise<GameSnapshot | null> {
   const payload = await verifySession(token);
   if (!payload) return null;
-  return snapshot(payload);
+  return snapshot(closeIfExpired(payload));
+}
+
+/**
+ * A group that runs out of real time has the case closed for them. Enforced on
+ * read as well as on write, so leaving the tab open past the deadline does not
+ * quietly buy you extra minutes.
+ */
+function closeIfExpired(payload: SessionPayload): SessionPayload {
+  const caseIndex = loadCase(payload.caseId);
+  if (!caseIndex) return payload;
+  if (payload.state.status === "finished") return payload;
+  if (!sessionExpired(caseIndex, payload.state, Date.now())) return payload;
+
+  return {
+    ...payload,
+    state: { ...payload.state, status: "finished", timeRemaining: 0 },
+  };
 }
 
 export type ActionOutcome =
@@ -58,13 +65,21 @@ export async function actOnSession(
   token: string,
   action: Action,
 ): Promise<ActionOutcome> {
-  const payload = await verifySession(token);
-  if (!payload) {
+  const verified = await verifySession(token);
+  if (!verified) {
     return { ok: false, error: "That case file is no longer open.", status: 404 };
   }
 
-  const caseIndex = loadCase(payload.caseId);
+  const caseIndex = loadCase(verified.caseId);
   if (!caseIndex) return { ok: false, error: "Case not found.", status: 500 };
+
+  const payload = closeIfExpired(verified);
+  if (payload.state.status === "finished" && verified.state.status !== "finished") {
+    const built = await snapshot(payload);
+    return built
+      ? { ok: false, error: "Time is up. The case is closed.", status: 409 }
+      : { ok: false, error: "Case not found.", status: 500 };
+  }
 
   const result = applyAction(caseIndex, loadCity(), payload.state, action);
   if (!result.ok) {
@@ -77,11 +92,7 @@ export async function actOnSession(
     state: result.state,
     feed: [
       ...payload.feed,
-      toFeedEntry(
-        result.effect,
-        payload.feed.length,
-        (id) => caseIndex.clues.get(id)?.title ?? id,
-      ),
+      toFeedEntry(caseIndex, result.state, result.effect, payload.feed.length),
     ],
   };
 

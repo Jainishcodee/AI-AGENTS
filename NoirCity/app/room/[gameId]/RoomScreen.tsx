@@ -48,6 +48,8 @@ export function RoomScreen({ gameId }: { gameId: string }) {
       view={room.view}
       tutorial={room.tutorial}
       feed={room.feed}
+      now={room.now}
+      sessionRemainingMs={room.sessionRemainingMs}
       act={act}
       busy={syncing}
       gameId={gameId}

@@ -4,6 +4,8 @@
   "cityId": "backlund",
   "brief": "They pulled Tommy Vance out of No. 4 Dry Dock on Tuesday morning, and the dock has been drained since the middle of last month. The police wrote it up as a fall and closed it in a day. His sister does not believe them, and she has scraped together forty pounds to say so. You have until Friday.",
   "timeBudget": 48,
+  "sessionMinutes": 90,
+  "startsAt": "1984-09-11T08:00:00",
   "startLocationId": "loc_lm_blackthorn_security_company",
 
   "suspects": [

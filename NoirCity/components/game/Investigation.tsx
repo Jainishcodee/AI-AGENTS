@@ -8,8 +8,11 @@ import type { Action } from "@/lib/engine/reducer";
 import type { ClientView } from "@/lib/engine/view";
 import type { TutorialProgress } from "@/lib/engine/tutorial";
 import type { FeedEntry } from "@/lib/game/types";
-import { Hud, timeTone } from "./Hud";
+import { Hud, useLocalCountdown } from "./Hud";
+import { formatCountdown } from "@/lib/engine/storyClock";
 import { TutorialPanel } from "./TutorialPanel";
+import { Journal } from "./Journal";
+import { AddressBook } from "./AddressBook";
 import { HerePanel } from "./HerePanel";
 import { EvidencePanel } from "./EvidencePanel";
 import { AccusePanel } from "./AccusePanel";
@@ -26,7 +29,7 @@ const CityMap = dynamic(() => import("@/components/map/CityMap"), {
   ),
 });
 
-type Tab = "here" | "evidence" | "accuse";
+type Tab = "journal" | "here" | "evidence" | "accuse";
 
 /**
  * The board. Identical whether one person is playing or six - the only
@@ -36,6 +39,8 @@ export function Investigation({
   view,
   tutorial,
   feed,
+  now,
+  sessionRemainingMs,
   act,
   busy = false,
   onRestart,
@@ -47,6 +52,8 @@ export function Investigation({
   view: ClientView;
   tutorial: TutorialProgress;
   feed: FeedEntry[];
+  now: { dateline: string; time: string; day: number };
+  sessionRemainingMs: number;
   act: (a: Action) => void;
   busy?: boolean;
   /** Solo only - a shared room cannot be reset by one player. */
@@ -61,7 +68,10 @@ export function Investigation({
   gameId?: string | null;
 }) {
   const { city } = useCity();
-  const [tab, setTab] = useState<Tab>("here");
+  // The journal opens first: the case brief is its first entry, so a new player
+  // starts by reading the job rather than staring at a map of a city they have
+  // no reason to care about yet.
+  const [tab, setTab] = useState<Tab>("journal");
   const [selected, setSelected] = useState<CityLocation | null>(null);
   const [briefOpen, setBriefOpen] = useState(true);
   const [boardOpen, setBoardOpen] = useState(false);
@@ -97,6 +107,26 @@ export function Investigation({
   );
 
   const cost = index && selected ? travelCost(index, hereId, selected.id) : 0;
+
+  // Somewhere counts as known once you have been there. The address book will
+  // take you back without making you write the address down twice.
+  const visitedIds = useMemo(() => {
+    const seen = new Set<string>([hereId]);
+    for (const entry of feed) {
+      if (entry.kind === "travel") seen.add(entry.locationId);
+    }
+    return [...seen];
+  }, [feed, hereId]);
+
+  const travelCostTo = (id: string) =>
+    index ? travelCost(index, hereId, id) : 0;
+
+  // The folded sheet on a phone shows the countdown too, so the hard limit is
+  // the one thing that never goes away however the panel is arranged.
+  const sheetCountdown = useLocalCountdown(
+    sessionRemainingMs,
+    view.state.status === "finished",
+  );
 
   // Picking a pin is a question about that address, so answer it: surface the
   // panel that can, and on a phone raise the sheet that is hiding it.
@@ -195,22 +225,25 @@ export function Investigation({
           <span className="absolute left-1/2 top-2 h-1 w-10 -translate-x-1/2 rounded-full bg-neutral-700" />
           {/* The clock lives here in both states - folded or not - so it is the
               one thing on a phone that never moves and never goes away. */}
-          <span className="flex items-baseline gap-1.5">
-            <span
-              className={`font-serif text-lg leading-none tabular-nums ${timeTone(
-                view.state.timeRemaining / view.timeBudget,
-              )}`}
-            >
-              {view.state.timeRemaining}
+          <span className="flex items-baseline gap-2">
+            <span className="font-mono text-base leading-none tabular-nums text-neutral-100">
+              {view.state.status === "finished"
+                ? "--:--:--"
+                : formatCountdown(sheetCountdown)}
             </span>
             <span className="text-[9px] tracking-[0.2em] text-neutral-600">
-              HOURS LEFT
+              {view.state.timeRemaining}H IN HAND
             </span>
           </span>
         </button>
 
         <div className={sheetOpen ? "contents" : "hidden md:contents"}>
-          <Hud view={view} onRestart={onRestart} />
+          <Hud
+            view={view}
+            now={now}
+            sessionRemainingMs={sessionRemainingMs}
+            onRestart={onRestart}
+          />
           {aside}
           {/* Pinned above the tabs where there is room for it. On a phone there
               is not: a five-line tutorial step plus the HUD fills the sheet and
@@ -224,6 +257,7 @@ export function Investigation({
         <nav className="flex shrink-0 border-b border-neutral-800">
           {(
             [
+              ["journal", "JOURNAL"],
               ["here", "HERE"],
               ["evidence", `EVIDENCE (${view.clues.length})`],
               ["accuse", "ACCUSE"],
@@ -252,15 +286,30 @@ export function Investigation({
           <div className="md:hidden">
             <TutorialPanel progress={tutorial} />
           </div>
+          {tab === "journal" && (
+            <Journal view={view} feed={feed} brief={now} />
+          )}
           {tab === "here" && (
-            <HerePanel
-              view={view}
-              selected={selected}
-              travelCost={cost}
-              feed={feed}
-              act={act}
-              busy={busy}
-            />
+            <>
+              {city && (
+                <AddressBook
+                  city={city}
+                  visitedIds={visitedIds}
+                  hereId={hereId}
+                  travelCostTo={travelCostTo}
+                  act={act}
+                  busy={busy}
+                />
+              )}
+              <HerePanel
+                view={view}
+                selected={selected}
+                travelCost={cost}
+                feed={feed}
+                act={act}
+                busy={busy}
+              />
+            </>
           )}
           {tab === "evidence" && <EvidencePanel view={view} act={act} busy={busy} />}
           {tab === "accuse" && <AccusePanel view={view} act={act} busy={busy} />}
@@ -274,24 +323,21 @@ export function Investigation({
   );
 }
 
-/** The last few things that happened, so a team can see what just changed. */
+/**
+ * One line, for when you are looking at the map rather than the journal. The
+ * journal is the record now, so repeating four entries here just says the same
+ * thing twice in two places.
+ */
 function ActionFeed({ feed }: { feed: FeedEntry[] }) {
-  const recent = feed.slice(-4);
+  const recent = feed.slice(-1);
   if (!recent.length) return null;
 
   return (
     <ul className="pointer-events-none absolute bottom-3 left-3 right-3 z-[1000] max-w-md space-y-1.5 sm:bottom-6 sm:left-6 sm:right-6">
-      {recent.map((entry, i) => (
+      {recent.map((entry) => (
         <li
           key={entry.seq}
-          // The map pane is a third of a phone screen; four entries would bury
-          // it. The older two are desktop-only.
-          className={`border-l-2 border-neutral-700 bg-[#0e0f11]/95 py-1.5 pl-3 pr-4 backdrop-blur ${
-            i < recent.length - 2 ? "hidden sm:block" : ""
-          }`}
-          // Older entries recede, but never so far that they stop being legible
-          // against the map underneath.
-          style={{ opacity: 0.6 + (i / recent.length) * 0.4 }}
+          className="border-l-2 border-amber-200/40 bg-[#0e0f11]/95 py-1.5 pl-3 pr-4 backdrop-blur"
         >
           <span className="font-serif text-[13px] text-neutral-300">
             {entry.summary}

@@ -122,8 +122,20 @@ export const caseSchema = z.object({
   title: z.string(),
   cityId: z.string(),
   brief: z.string(),
-  /** Shared team time budget, in units. */
+  /**
+   * Two clocks, doing two different jobs.
+   *
+   * `timeBudget` is the STORY clock, in hours. Actions cost it, it gates what
+   * the team can still afford, and every case is balanced against it. It also
+   * stamps each journal entry with an in-fiction date and time.
+   *
+   * `sessionMinutes` is the REAL clock: wall time at the table. It is the hard
+   * limit a group actually feels. Whichever runs out first closes the case.
+   */
   timeBudget: z.number().int().positive(),
+  sessionMinutes: z.number().int().positive().default(90),
+  /** In-fiction moment the case opens. Drives the journal's datelines. */
+  startsAt: z.string().default("1984-05-25T08:00:00"),
   /** Where the team starts. Must be a city location id. */
   startLocationId: z.string(),
   suspects: z.array(suspectSchema).min(2),

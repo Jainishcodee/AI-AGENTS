@@ -4,6 +4,8 @@
   "cityId": "backlund",
   "brief": "Six people sat in the dark at 85 Sodela Walk on Thursday evening to speak with the dead. When the lamp came back up, Ottoline Frayne was still in her chair with her eyes open and her heart stopped. The doctor at the table signed her off as heart failure inside the hour, which is very quick work, and her solicitor would like a second opinion. Four addresses. Three days. Everything you need is inside them, and one of the six people at that table is lying to you about something that has nothing to do with the murder.",
   "timeBudget": 32,
+  "sessionMinutes": 45,
+  "startsAt": "1984-03-09T09:00:00",
   "startLocationId": "loc_lm_blackthorn_security_company",
 
   "suspects": [

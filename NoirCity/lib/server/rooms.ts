@@ -5,6 +5,7 @@ import { buildView } from "@/lib/engine/view";
 import { tutorialProgress } from "@/lib/engine/tutorial";
 import type { FeedEntry, RoomPlayer, RoomSnapshot } from "@/lib/game/types";
 import { loadCase, loadCity } from "./cases";
+import { clockFields, sessionExpired, toFeedEntry } from "./journal";
 import { supabaseAdmin } from "@/lib/supabase/server";
 
 /**
@@ -129,6 +130,7 @@ async function snapshot(
     view: buildView(caseIndex, loadCity(), row.state),
     feed,
     tutorial: tutorialProgress(caseIndex, row.state),
+    ...clockFields(caseIndex, row.state, Date.now()),
   };
 }
 
@@ -247,9 +249,16 @@ export async function startRoom(
   if (row.host_id !== userId) return fail("Only the host can start.", 403);
   if (row.status !== "lobby") return fail("Already started.", 409);
 
+  // The real session clock starts when the host opens the file, not when the
+  // room was created - people take a while to assemble.
   const { data, error } = await db
     .from("games")
-    .update({ status: "active", started_at: new Date().toISOString() })
+    .update({
+      status: "active",
+      started_at: new Date().toISOString(),
+      state: { ...row.state, startedAt: Date.now() },
+      state_version: row.state_version + 1,
+    })
     .eq("id", gameId)
     .eq("status", "lobby")
     .select("*")
@@ -285,6 +294,22 @@ export async function actInRoom(
     const caseIndex = loadCase(row.case_id);
     if (!caseIndex) return fail("That case no longer exists.", 500);
 
+    // Real time at the table is a hard limit. Checked here rather than on a
+    // timer, so a tab left open past the deadline buys nobody extra minutes.
+    if (sessionExpired(caseIndex, row.state, Date.now())) {
+      await db
+        .from("games")
+        .update({
+          status: "finished",
+          state: { ...row.state, status: "finished", timeRemaining: 0 },
+          state_version: row.state_version + 1,
+          finished_at: new Date().toISOString(),
+        })
+        .eq("id", gameId)
+        .eq("state_version", row.state_version);
+      return fail("Time is up. The case is closed.", 409);
+    }
+
     const result = applyAction(caseIndex, loadCity(), row.state, action);
     if (!result.ok) return fail(result.error, 400);
 
@@ -306,22 +331,19 @@ export async function actInRoom(
     if (error) return fail(error.message, 500);
     if (!updated) continue; // somebody else moved first; re-read and retry
 
-    const entry: Omit<FeedEntry, "seq"> = {
-      summary: result.effect.summary,
-      timeSpent: result.effect.timeSpent,
-      newClues: result.effect.newClueIds.map((id) => ({
-        id,
-        title: caseIndex.clues.get(id)?.title ?? id,
-      })),
-      ...(result.effect.answer ? { answer: result.effect.answer } : {}),
-    };
+    const { seq: _seq, ...entry } = toFeedEntry(
+      caseIndex,
+      result.state,
+      result.effect,
+      row.state_version,
+    );
 
     await db.from("game_events").insert({
       game_id: gameId,
       seq: row.state_version,
       actor_id: userId,
       type: action.type,
-      payload: entry,
+      payload: entry as Omit<FeedEntry, "seq">,
     });
 
     return snapshot(db, updated as GameRow, userId);

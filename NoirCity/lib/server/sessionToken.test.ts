@@ -80,6 +80,13 @@ describe("session tokens", () => {
     const payload = fresh();
     payload.feed = Array.from({ length: 60 }, (_, seq) => ({
       seq,
+      kind: "interview" as const,
+      dateline: "Friday, 25 May 1984",
+      time: "11:20",
+      day: 1,
+      locationId: "loc_0269",
+      title: "Madame Sabine Roux",
+      body: "A journal entry of the length this game actually writes, which runs to a couple of paragraphs and sometimes a good deal more than that.",
       summary: `Searched somewhere with a reasonably long name. ${seq}`,
       timeSpent: 2,
       newClues: [{ id: `c_${seq}`, title: "A clue with a title of usual length" }],

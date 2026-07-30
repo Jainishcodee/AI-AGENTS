@@ -35,6 +35,8 @@ export function GameScreen({ caseId }: { caseId: string }) {
       view={snapshot.view}
       tutorial={snapshot.tutorial}
       feed={snapshot.feed}
+      now={snapshot.now}
+      sessionRemainingMs={snapshot.sessionRemainingMs}
       act={act}
       onRestart={restart}
       banner={refusal ? <Refusal message={refusal} /> : null}

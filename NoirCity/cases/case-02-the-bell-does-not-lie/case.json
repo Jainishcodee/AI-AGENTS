@@ -4,6 +4,8 @@
   "cityId": "backlund",
   "brief": "Alderman Cornelius Reeve went into the library at the Delgado Assembly Rooms during a subscription dinner and did not come out. Nine people were in the building and every one of them can tell you exactly where they stood when the Bell of Order struck nine, because that is the sort of evening it was. All nine accounts agree. That is the first thing about this case that ought to worry you.",
   "timeBudget": 44,
+  "sessionMinutes": 75,
+  "startsAt": "1984-11-16T09:00:00",
   "startLocationId": "loc_lm_blackthorn_security_company",
 
   "suspects": [
