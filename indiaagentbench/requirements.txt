@@ -1,0 +1,3 @@
+# The harness deliberately has one dependency. Tests need none of it -- they run
+# against the scripted Mock provider, so the whole suite works offline.
+requests>=2.31

@@ -66,6 +66,51 @@ class ReminderService {
     return "Reminder set: $content, $dayWord at $pretty.";
   }
 
+  /// Fixed id so rescheduling replaces the digest rather than stacking copies.
+  static const _digestId = 90210;
+
+  /// A once-a-day nudge that today's list and fact are waiting.
+  ///
+  /// The text is composed now and repeats verbatim — without a background
+  /// isolate there's no way to recount tasks at fire time, so callers should
+  /// re-schedule on app open to keep it roughly current.
+  Future<void> scheduleDailyDigest({
+    required int hour,
+    required int minute,
+    required String body,
+  }) async {
+    await init();
+
+    final now = tz.TZDateTime.now(tz.local);
+    var first = tz.TZDateTime(tz.local, now.year, now.month, now.day, hour, minute);
+    if (!first.isAfter(now)) first = first.add(const Duration(days: 1));
+
+    const android = AndroidNotificationDetails(
+      'jarvis_digest',
+      'Daily digest',
+      channelDescription: 'Your tasks and fact of the day',
+      importance: Importance.defaultImportance,
+      priority: Priority.defaultPriority,
+    );
+
+    await _plugin.zonedSchedule(
+      _digestId,
+      'Today',
+      body,
+      first,
+      const NotificationDetails(android: android),
+      androidScheduleMode: AndroidScheduleMode.inexactAllowWhileIdle,
+      uiLocalNotificationDateInterpretation:
+          UILocalNotificationDateInterpretation.absoluteTime,
+      matchDateTimeComponents: DateTimeComponents.time, // repeat daily
+    );
+  }
+
+  Future<void> cancelDailyDigest() async {
+    await init();
+    await _plugin.cancel(_digestId);
+  }
+
   String _dayWord(DateTime t) {
     final now = DateTime.now();
     final isToday = t.year == now.year && t.month == now.month && t.day == now.day;

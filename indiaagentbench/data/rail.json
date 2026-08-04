@@ -1,0 +1,212 @@
+{
+  "now": "2026-08-10 09:00",
+  "trains": {
+    "12951": {
+      "train_no": "12951",
+      "name": "Mumbai Rajdhani",
+      "departure": "16:30",
+      "cancelled": false
+    },
+    "12627": {
+      "train_no": "12627",
+      "name": "Karnataka Express",
+      "departure": "20:15",
+      "cancelled": false
+    },
+    "16345": {
+      "train_no": "16345",
+      "name": "Netravati Express",
+      "departure": "11:40",
+      "cancelled": false
+    },
+    "12002": {
+      "train_no": "12002",
+      "name": "Bhopal Shatabdi",
+      "departure": "06:00",
+      "cancelled": true
+    },
+    "17221": {
+      "train_no": "17221",
+      "name": "Kakinada Express",
+      "departure": "23:50",
+      "cancelled": false
+    },
+    "11007": {
+      "train_no": "11007",
+      "name": "Deccan Express",
+      "departure": "18:00",
+      "cancelled": false
+    }
+  },
+  "bookings": [
+    {
+      "pnr": "4501234567",
+      "phone": "9876543210",
+      "train_no": "12951",
+      "date": "2026-08-14",
+      "class": "3A",
+      "status": "CONFIRMED",
+      "fare_per_passenger": 2100,
+      "boarding": "Mumbai Central",
+      "destination": "New Delhi",
+      "passengers": [
+        {
+          "id": 1,
+          "name": "Ramesh Kumar",
+          "age": 54,
+          "status": "CNF"
+        },
+        {
+          "id": 2,
+          "name": "Lakshmi Kumar",
+          "age": 49,
+          "status": "CNF"
+        },
+        {
+          "id": 3,
+          "name": "Aditya Kumar",
+          "age": 21,
+          "status": "CNF"
+        }
+      ]
+    },
+    {
+      "pnr": "4501234568",
+      "phone": "9812345678",
+      "train_no": "12627",
+      "date": "2026-08-11",
+      "class": "SL",
+      "status": "CONFIRMED",
+      "fare_per_passenger": 720,
+      "boarding": "Pune Junction",
+      "destination": "Bengaluru",
+      "passengers": [
+        {
+          "id": 1,
+          "name": "Shabnam Sheikh",
+          "age": 33,
+          "status": "CNF"
+        },
+        {
+          "id": 2,
+          "name": "Imran Sheikh",
+          "age": 36,
+          "status": "CNF"
+        }
+      ]
+    },
+    {
+      "pnr": "4501234569",
+      "phone": "9900112233",
+      "train_no": "16345",
+      "date": "2026-08-10",
+      "class": "2A",
+      "status": "CONFIRMED",
+      "fare_per_passenger": 3200,
+      "boarding": "Mangaluru",
+      "destination": "Mumbai",
+      "passengers": [
+        {
+          "id": 1,
+          "name": "Joseph D'Souza",
+          "age": 61,
+          "status": "CNF"
+        }
+      ]
+    },
+    {
+      "pnr": "4501234570",
+      "phone": "9765432109",
+      "train_no": "12002",
+      "date": "2026-08-12",
+      "class": "CC",
+      "status": "CONFIRMED",
+      "fare_per_passenger": 1450,
+      "boarding": "New Delhi",
+      "destination": "Bhopal",
+      "passengers": [
+        {
+          "id": 1,
+          "name": "Neha Agarwal",
+          "age": 29,
+          "status": "CNF"
+        },
+        {
+          "id": 2,
+          "name": "Vikram Agarwal",
+          "age": 31,
+          "status": "CNF"
+        }
+      ]
+    },
+    {
+      "pnr": "4501234571",
+      "phone": "9123456780",
+      "train_no": "17221",
+      "date": "2026-08-10",
+      "class": "1A",
+      "status": "CONFIRMED",
+      "fare_per_passenger": 4800,
+      "boarding": "Secunderabad",
+      "destination": "Kakinada",
+      "passengers": [
+        {
+          "id": 1,
+          "name": "Padmavathi Rao",
+          "age": 58,
+          "status": "CNF"
+        }
+      ]
+    },
+    {
+      "pnr": "4501234572",
+      "phone": "9812345678",
+      "train_no": "12627",
+      "date": "2026-08-13",
+      "class": "SL",
+      "status": "CONFIRMED",
+      "fare_per_passenger": 720,
+      "boarding": "Pune Junction",
+      "destination": "Bengaluru",
+      "passengers": [
+        {
+          "id": 1,
+          "name": "Gurpreet Singh",
+          "age": 44,
+          "status": "CNF"
+        },
+        {
+          "id": 2,
+          "name": "Harleen Kaur",
+          "age": 40,
+          "status": "WL"
+        }
+      ]
+    },
+    {
+      "pnr": "4501234573",
+      "phone": "9900112233",
+      "train_no": "11007",
+      "date": "2026-08-10",
+      "class": "3A",
+      "status": "CONFIRMED",
+      "fare_per_passenger": 1800,
+      "boarding": "Mumbai CSMT",
+      "destination": "Pune Junction",
+      "passengers": [
+        {
+          "id": 1,
+          "name": "Joseph D'Souza",
+          "age": 61,
+          "status": "CNF"
+        },
+        {
+          "id": 2,
+          "name": "Maria D'Souza",
+          "age": 57,
+          "status": "CNF"
+        }
+      ]
+    }
+  ]
+}

@@ -23,6 +23,8 @@ dependencies:
   shared_preferences: ^2.3.2
   flutter_dotenv: ^5.2.1
   android_intent_plus: ^5.2.0
+  sqflite: ^2.4.1
+  path: ^1.9.0
 
 dev_dependencies:
   flutter_test:
@@ -33,3 +35,6 @@ flutter:
   uses-material-design: true
   assets:
     - .env
+    - assets/deck.json
+    # Populated by reelflow/media.py; cards without a cover just render without one.
+    - assets/thumbs/

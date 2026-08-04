@@ -3,9 +3,21 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 
+import 'screens/facts_screen.dart';
+import 'screens/library_screen.dart';
+import 'screens/today_screen.dart';
+import 'services/deck_db.dart';
+import 'services/digest_settings.dart';
 import 'services/jarvis_brain.dart';
+import 'services/reminder_service.dart';
 import 'services/voice_service.dart';
 import 'widgets/mascot.dart';
+
+final deckDb = DeckDb();
+// One instance app-wide: reminders and the daily digest share a notification
+// channel setup, so permission is only ever requested once.
+final reminders = ReminderService();
+final digest = DigestSettings(reminders);
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -14,6 +26,18 @@ Future<void> main() async {
     await dotenv.load(fileName: '.env');
   } catch (_) {
     // .env missing — app still runs but Gemini will ask for a key.
+  }
+  try {
+    await deckDb.init();
+  } catch (_) {
+    // No deck yet — the Today tab shows its empty state rather than crashing.
+  }
+  try {
+    await digest.load();
+    // Re-arm on every launch so the repeating text reflects today's counts.
+    await digest.apply(deckDb);
+  } catch (_) {
+    // Notification permission refused or unavailable — the app is still usable.
   }
   runApp(const JarvisApp());
 }
@@ -36,7 +60,66 @@ class JarvisApp extends StatelessWidget {
         ),
         useMaterial3: true,
       ),
-      home: const JarvisHome(),
+      home: const RootShell(),
+    );
+  }
+}
+
+/// Two places to be: talk to Jarvis, or work through what today asks of you.
+class RootShell extends StatefulWidget {
+  const RootShell({super.key});
+
+  @override
+  State<RootShell> createState() => _RootShellState();
+}
+
+class _RootShellState extends State<RootShell> {
+  int _tab = 0;
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      // IndexedStack so the mascot's voice session and the day's list both
+      // survive a tab switch instead of rebuilding from scratch.
+      body: IndexedStack(
+        index: _tab,
+        children: [
+          const JarvisHome(),
+          SafeArea(child: TodayScreen(deck: deckDb, digest: digest)),
+          SafeArea(child: FactsScreen(deck: deckDb)),
+          SafeArea(child: LibraryScreen(deck: deckDb)),
+        ],
+      ),
+      bottomNavigationBar: NavigationBar(
+        selectedIndex: _tab,
+        onDestinationSelected: (i) => setState(() => _tab = i),
+        height: 64,
+        backgroundColor: const Color(0xFF120B14),
+        indicatorColor: const Color(0xFFE74848).withOpacity(0.22),
+        labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
+        destinations: const [
+          NavigationDestination(
+            icon: Icon(Icons.graphic_eq, color: Colors.white54),
+            selectedIcon: Icon(Icons.graphic_eq, color: Color(0xFFE74848)),
+            label: 'Jarvis',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.check_circle_outline, color: Colors.white54),
+            selectedIcon: Icon(Icons.check_circle, color: Color(0xFFE74848)),
+            label: 'Today',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.lightbulb_outline, color: Colors.white54),
+            selectedIcon: Icon(Icons.lightbulb, color: Color(0xFF00E5C9)),
+            label: 'Facts',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.grid_view_outlined, color: Colors.white54),
+            selectedIcon: Icon(Icons.grid_view, color: Color(0xFFE74848)),
+            label: 'Library',
+          ),
+        ],
+      ),
     );
   }
 }
@@ -50,7 +133,7 @@ class JarvisHome extends StatefulWidget {
 
 class _JarvisHomeState extends State<JarvisHome> {
   final _voice = VoiceService();
-  final _brain = JarvisBrain();
+  final _brain = JarvisBrain(deck: deckDb, reminders: reminders);
 
   MascotState _state = MascotState.idle;
   String _chatLine = "Tap the mic and talk to me.";
