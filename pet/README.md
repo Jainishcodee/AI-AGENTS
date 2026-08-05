@@ -135,7 +135,17 @@ look before committing.
 Per-mood art is optional: `pet_nag.png`, `pet_sleepy.png` and so on are used
 when present, and anything missing falls back to `pet_idle.png`. With a single
 image the face can't change, so mood is carried by a coloured glow behind the
-pet instead.
+pet instead; with the full set the pose does the work and the glow just backs
+it up.
+
+Poses don't have to share a shape. Each sprite is fitted into a box rather than
+scaled to a fixed height, so a curled-up sleeping pose sits low and wide
+instead of ballooning to twice everyone else's width. The click mask is sized
+from the widest pose, or the sleeping pet would hang outside it and be
+unclickable.
+
+Originals live in `art/source/` — the cut is lossy and you'll want to redo it
+with a different `--tol` sooner or later.
 
 ## Roadmap
 
@@ -171,6 +181,7 @@ skills/  apps.py      find and open Windows apps
          gform.py     read/fill Google Forms, keyed by question text
          webtask.py   a browser session on its own thread; teach and replay
 art/     pet_*.png    the pet's body, one PNG per mood (idle is the only must)
+         source/      the uncut originals, kept for re-cutting later
 shell/   mascot.py    picks sprite or vector; the hand-painted fallback
          sprite.py    loads art/, caches scaled + flipped pixmaps
          window.py    frameless translucent window, walking, speech queue

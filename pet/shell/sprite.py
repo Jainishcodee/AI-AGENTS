@@ -18,6 +18,13 @@ import config
 ART = Path(config.ROOT) / "art"
 FALLBACK = "idle"
 
+# Poses aren't all the same shape — a sitting cat is portrait, a curled
+# sleeping one is landscape. Scaling everything to the same *height* makes the
+# curled pose balloon to nearly twice the width of the others. Fitting each
+# into a box instead keeps them the same visual weight, and a sleeping cat
+# correctly ends up lower and wider than a sitting one.
+MAX_ASPECT = 1.35
+
 
 class SpriteSet:
     def __init__(self, folder: Path = ART) -> None:
@@ -47,10 +54,17 @@ class SpriteSet:
         return sorted(self._originals)
 
     def aspect(self) -> float:
-        """width / height of the base sprite, for sizing the window mask."""
+        """Widest pose, for sizing the window's click mask.
+
+        Measured across every mood, not just idle — mask the pet for a sitting
+        pose and the sleeping one hangs outside it, unclickable.
+        """
         self._scan()
-        pm = self._originals.get(FALLBACK)
-        return (pm.width() / pm.height()) if pm and pm.height() else 1.0
+        widest = 1.0
+        for pm in self._originals.values():
+            if pm.height():
+                widest = max(widest, pm.width() / pm.height())
+        return min(widest, MAX_ASPECT)
 
     def get(self, mood: str, height: int, facing: int) -> QPixmap | None:
         self._scan()
@@ -65,7 +79,9 @@ class SpriteSet:
         if base is None:
             return None
 
-        pm = base.scaledToHeight(height, Qt.TransformationMode.SmoothTransformation)
+        pm = base.scaled(int(height * MAX_ASPECT), height,
+                         Qt.AspectRatioMode.KeepAspectRatio,
+                         Qt.TransformationMode.SmoothTransformation)
         if facing < 0:
             pm = pm.transformed(QTransform().scale(-1, 1),
                                 Qt.TransformationMode.SmoothTransformation)
