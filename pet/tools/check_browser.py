@@ -60,13 +60,26 @@ def main() -> int:
             print(f"           (no session cookie; {len(names)} google cookies present)")
 
         if args.login and not signed_in:
-            print("\nSign in in the window that's open. Waiting up to 4 minutes…")
-            try:
-                page.wait_for_url(lambda u: "myaccount.google.com" in u
-                                  and "signin" not in u, timeout=240_000)
-                print("signed in — the profile will remember this.")
-            except Exception:  # noqa: BLE001
-                print("timed out; run again with --login when you're ready.")
+            print("\nSign in in the window that's open. Waiting up to 15 minutes…")
+            print("(close the window when you're done, or just leave it)")
+            # Generous on purpose: this is a human walking off to find a
+            # password and a 2FA code, not a network call.
+            deadline = 900
+            waited = 0
+            while waited < deadline:
+                page.wait_for_timeout(3000)
+                waited += 3
+                try:
+                    names = {c["name"] for c in ctx.cookies()
+                             if "google.com" in c.get("domain", "")}
+                except Exception:  # noqa: BLE001 - window closed by hand
+                    break
+                if names & {"SID", "__Secure-1PSID", "__Secure-3PSID"}:
+                    signed_in = True
+                    print(f"signed in after {waited}s — the profile remembers it.")
+                    break
+            if not signed_in:
+                print("no sign-in detected; run again with --login when ready.")
 
         ctx.close()
 

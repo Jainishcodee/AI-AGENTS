@@ -20,6 +20,9 @@ from PySide6.QtCore import QObject, Signal
 import config
 from skills import gform
 
+# Overwritten each replay — it only matters between filling and your decision.
+SHOT = config.ROOT / "last_form.png"
+
 
 class FormTask(QObject):
     # url, list[Question] — the form is open and waiting for you
@@ -37,6 +40,7 @@ class FormTask(QObject):
         self._gate = threading.Event()
         self._approved = False
         self._busy = False
+        self.last_shot: str | None = None
 
     @property
     def busy(self) -> bool:
@@ -136,6 +140,16 @@ class FormTask(QObject):
                 if not filled:
                     return ("failed",
                             "couldn't fill anything — the form has changed.")
+
+                # Snapshot what's on screen at the moment of asking. The list
+                # of field names says what the pet *thinks* it filled; the
+                # picture says what's actually there, which is the thing you're
+                # being asked to approve.
+                try:
+                    page.screenshot(path=str(SHOT), full_page=True)
+                    self.last_shot = str(SHOT)
+                except Exception:  # noqa: BLE001 - a missing picture isn't fatal
+                    self.last_shot = None
 
                 self.awaiting_approval.emit(name, filled, skipped)
                 self._gate.wait()                 # you look at it and decide
