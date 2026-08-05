@@ -113,9 +113,29 @@ cloud model — but that's opt-in and one env var, not a dependency.
 email — shows you a filled preview and waits for a click. This stays even when
 it feels slow, because one wrong recipient on a cold mail is unrecoverable.
 
-**Hand-painted, not sprites.** The mascot is drawn with QPainter
-(`shell/mascot.py`), same choice as `Jarvis/lib/widgets/mascot.dart`. Scales to
-any DPI, zero assets, and its mood is a parameter instead of a folder of PNGs.
+**The art is swappable.** Drop `pet_idle.png` into `art/` and the pet wears it;
+delete it and the hand-painted QPainter creature in `shell/mascot.py` comes
+back. Neither path is load-bearing, so new art can't break the pet.
+
+```bash
+python tools/prep_art.py "path\to\image.png" --name idle --tol 80
+```
+
+That cuts the background, trims the padding and writes `art/pet_idle.png`.
+Generated images never have real transparency, so the cut is done here: the
+tool keeps only background that is **connected to the image border** and
+**within `--tol` of the border colour**. Both conditions matter — colour alone
+leaves the glow halo behind as a visible rectangle, and connectivity alone
+walks down the anti-aliased edge and eats the character.
+
+`--tol` is the dial worth knowing. Too low and a baked-in drop shadow survives;
+too high and thin translucent details (wings, whiskers) dissolve. Sweep it and
+look before committing.
+
+Per-mood art is optional: `pet_nag.png`, `pet_sleepy.png` and so on are used
+when present, and anything missing falls back to `pet_idle.png`. With a single
+image the face can't change, so mood is carried by a coloured glow behind the
+pet instead.
 
 ## Roadmap
 
@@ -150,7 +170,9 @@ core/    events.py    the signal bus nudges and skills talk through
 skills/  apps.py      find and open Windows apps
          gform.py     read/fill Google Forms, keyed by question text
          webtask.py   a browser session on its own thread; teach and replay
-shell/   mascot.py    the creature, drawn in a normalised 100x100 box
+art/     pet_*.png    the pet's body, one PNG per mood (idle is the only must)
+shell/   mascot.py    picks sprite or vector; the hand-painted fallback
+         sprite.py    loads art/, caches scaled + flipped pixmaps
          window.py    frameless translucent window, walking, speech queue
          bubble.py    the speech bubble
          ask.py       command bar + the picker it uses when it doesn't know

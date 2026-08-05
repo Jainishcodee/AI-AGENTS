@@ -24,6 +24,10 @@ EYE_WHITE = QColor("#FFF8F4")
 SHADOW = QColor(0, 0, 0, 46)
 
 # The antenna bulb is the pet's mood light — it's the fastest read at a glance.
+# Sprite art is drawn taller than the vector pet: a full-body creature needs
+# more vertical room than the little blob did to read at the same weight.
+SPRITE_SCALE = 1.28
+
 MOOD_GLOW = {
     "happy": QColor("#FFCF8F"),
     "nag": QColor("#7FD1E8"),      # water-blue when it's pestering you
@@ -50,7 +54,68 @@ def _glow_for(mood: str) -> QColor:
 
 
 def draw(p: QPainter, cx: float, baseline: float, size: float, st: PetState) -> None:
-    """Draw the pet standing on `baseline`, horizontally centred on `cx`."""
+    """Draw the pet standing on `baseline`, horizontally centred on `cx`.
+
+    Uses the art in `art/` when it's there, and the hand-painted creature below
+    when it isn't — so the pet still has a body on a fresh checkout.
+    """
+    from shell.sprite import sprites
+    if sprites.available():
+        _draw_sprite(p, cx, baseline, size, st, sprites)
+    else:
+        _draw_vector(p, cx, baseline, size, st)
+
+
+def footprint(size: float) -> tuple[float, float]:
+    """Roughly how much room the pet takes, for the window's click mask."""
+    from shell.sprite import sprites
+    if sprites.available():
+        h = size * SPRITE_SCALE
+        return (h * sprites.aspect(), h)
+    return (size * 1.0, size * 1.1)
+
+
+def _draw_sprite(p: QPainter, cx: float, baseline: float, size: float,
+                 st: PetState, sprites) -> None:
+    p.setRenderHint(QPainter.RenderHint.Antialiasing, True)
+    p.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform, True)
+
+    u = size / 100.0
+    bounce = abs(math.sin(st.walk_phase * math.tau)) if st.walking else 0.0
+    hop = bounce * 4.0 * u
+    # Breathing, as a gentle vertical squash. The sprite is one static frame,
+    # so this and the hop are what stop it looking like a sticker.
+    squash = 1.0 + 0.022 * math.sin(st.breathe * math.tau)
+
+    height = size * SPRITE_SCALE
+    pm = sprites.get(st.mood, int(round(height * squash)), st.facing)
+    if pm is None:
+        _draw_vector(p, cx, baseline, size, st)
+        return
+
+    shadow_w = 46 * u * (1.0 - 0.2 * bounce)
+    p.setPen(Qt.PenStyle.NoPen)
+    p.setBrush(QBrush(SHADOW))
+    p.drawEllipse(QRectF(cx - shadow_w / 2, baseline - 6 * u, shadow_w, 9 * u))
+
+    # With one static image the face can't change, so mood is carried by a soft
+    # glow behind the pet instead. It's subtle on purpose — it should read as
+    # atmosphere, not as a status LED.
+    glow = _glow_for(st.mood)
+    gr = height * 0.62
+    halo = QRadialGradient(cx, baseline - height * 0.5, gr)
+    halo.setColorAt(0.0, QColor(glow.red(), glow.green(), glow.blue(),
+                                80 if st.mood != "happy" else 42))
+    halo.setColorAt(1.0, QColor(glow.red(), glow.green(), glow.blue(), 0))
+    p.setBrush(QBrush(halo))
+    p.drawEllipse(QRectF(cx - gr, baseline - height * 0.5 - gr, gr * 2, gr * 2))
+
+    p.drawPixmap(int(round(cx - pm.width() / 2)),
+                 int(round(baseline - hop - pm.height())), pm)
+
+
+def _draw_vector(p: QPainter, cx: float, baseline: float, size: float,
+                 st: PetState) -> None:
     p.setRenderHint(QPainter.RenderHint.Antialiasing, True)
 
     u = size / 100.0                      # one normalised unit in device pixels

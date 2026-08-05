@@ -142,10 +142,23 @@ class _Job(QRunnable):
         self._text = text
 
     def run(self) -> None:
-        if not ensure_running():
-            self._brain.parsed.emit(self._text, None)
-            return
-        self._brain.parsed.emit(self._text, parse_sync(self._text))
+        """Always answer, even on failure.
+
+        Without this guard an exception escapes into Qt, which prints a warning
+        and drops it — and the commander, still waiting on `parsed`, leaves you
+        staring at a pet that never replied. A failed parse must come back as
+        "I couldn't work that out", never as silence.
+        """
+        try:
+            intent = parse_sync(self._text) if ensure_running() else None
+        except Exception as e:  # noqa: BLE001 - a dead model must not kill the pet
+            print(f"[brain] {type(e).__name__}: {e}")
+            intent = None
+
+        try:
+            self._brain.parsed.emit(self._text, intent)
+        except RuntimeError:
+            pass        # pet shut down while this was in flight; nobody's listening
 
 
 class Brain(QObject):

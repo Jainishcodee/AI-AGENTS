@@ -20,6 +20,7 @@ from core.events import bus
 from shell import bubble as bubble_ui
 from shell.mascot import PetState
 from shell.mascot import draw as draw_mascot
+from shell.mascot import footprint as mascot_footprint
 
 FRAME_MS = 16                    # ~60fps
 BLINK_DUR = 0.16
@@ -304,9 +305,16 @@ class PetWindow(QWidget):
     def _update_mask(self) -> None:
         """Only the pet (and the bubble, when up) should catch mouse events."""
         u = self.scale
-        body = QRect(int(self.pet_cx - 50 * u), int(self.pet_baseline - 110 * u),
-                     int(100 * u), int(104 * u))
+        # Sized from whatever body is actually in use — sprite art is wider and
+        # taller than the vector pet, and a mask cut for the wrong one either
+        # eats clicks meant for the desktop or leaves the pet unclickable.
+        pw, ph = mascot_footprint(self.size_px)
+        body = QRect(int(self.pet_cx - pw / 2), int(self.pet_baseline - ph),
+                     int(pw), int(ph))
         region = QRegion(body, QRegion.RegionType.Ellipse)
+        core = QRect(int(self.pet_cx - pw * 0.34), int(self.pet_baseline - ph * 0.62),
+                     int(pw * 0.68), int(ph * 0.62))
+        region = region.united(QRegion(core))
         feet = QRect(int(self.pet_cx - 32 * u), int(self.pet_baseline - 20 * u),
                      int(64 * u), int(20 * u))
         region = region.united(QRegion(feet))
