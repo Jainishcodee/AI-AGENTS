@@ -1,0 +1,30 @@
+.env
+.env.local
+*.env.local
+
+# python
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+
+# node
+node_modules/
+.next/
+out/
+*.tsbuildinfo
+
+# runtime artefacts
+apps/api/var/
+*.log
+*.sqlite3
+
+# editors / os
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/*
+!.vscode/settings.json
