@@ -216,9 +216,9 @@ describe("a closed case stays closed", () => {
     const s = run(start(), [
       {
         type: "accuse",
-        culpritId: "s_guilty",
-        motiveId: "m_money",
-        evidenceIds: [],
+        culpritName: "Guilty Party",
+        argument:
+          "They were being paid money to keep quiet and it stopped.",
       },
     ]);
     expect(s.status).toBe("finished");

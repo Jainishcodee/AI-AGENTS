@@ -1,6 +1,7 @@
 import type { CaseIndex } from "./caseSchema";
 import { travelCost, type CityIndex } from "./citySchema";
 import { scoreAccusation, type AccusationResult } from "./scoring";
+import { gradeOffline, type Grade } from "./grade";
 
 /**
  * The authoritative game rules. Pure functions - no React, no network, no clock.
@@ -46,9 +47,23 @@ export type Action =
   | { type: "lab"; clueId: string }
   | {
       type: "accuse";
-      culpritId: string;
-      motiveId: string;
-      evidenceIds: string[];
+      /** As typed by the player. Matched against the suspects, not an id. */
+      culpritName: string;
+      /** Why, and what proves it, in the player's own words. */
+      argument: string;
+      /**
+       * How the argument was marked.
+       *
+       * Attached by the server after grading, never by the caller. The action
+       * schemas at both API routes do not declare this field, so a client that
+       * sends one has it stripped by zod before it is ever seen here - which is
+       * the only thing standing between a written accusation and a player
+       * awarding themselves full marks.
+       *
+       * Absent means "mark it offline", which is what every local caller and
+       * every test gets, and is why neither needs a network.
+       */
+      grade?: Grade;
     };
 
 /**
@@ -349,11 +364,12 @@ export function applyAction(
     }
 
     case "accuse": {
-      const scored = scoreAccusation(caseIndex, state, {
-        culpritId: action.culpritId,
-        motiveId: action.motiveId,
-        evidenceIds: action.evidenceIds,
-      });
+      const scored = scoreAccusation(
+        caseIndex,
+        state,
+        { culpritName: action.culpritName, argument: action.argument },
+        action.grade ?? gradeOffline(caseIndex, action.argument),
+      );
       if ("error" in scored) return { ok: false, error: scored.error };
       return {
         ok: true,
@@ -367,7 +383,7 @@ export function applyAction(
           kind: "accuse",
           locationId: state.currentLocationId,
           title: "Accusation filed",
-          body: `You named ${caseIndex.suspects.get(action.culpritId)?.name ?? "somebody"}.`,
+          body: `You named ${scored.result.accusation.culpritName}.\n\n${scored.result.accusation.argument}`,
           summary: "Accusation filed.",
           timeSpent: 0,
           newClueIds: [],

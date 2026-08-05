@@ -7,7 +7,6 @@
   "sessionMinutes": 75,
   "startsAt": "1984-11-16T09:00:00",
   "startLocationId": "loc_lm_blackthorn_security_company",
-
   "suspects": [
     {
       "id": "s_vole",
@@ -45,7 +44,6 @@
       "alibi": "On the door, where a steward is. Everybody walked past him all evening."
     }
   ],
-
   "motives": [
     {
       "id": "m_committee",
@@ -68,7 +66,6 @@
       "description": "A man dismissed without a character at fifty does not find another post in this city."
     }
   ],
-
   "clues": [
     {
       "id": "c_body",
@@ -81,7 +78,9 @@
       "type": "physical",
       "title": "The brass lamp",
       "body": "Back on its table, upright, and wiped. Somebody took the trouble — which is more thought than most killers manage in the first ten minutes.",
-      "requires": ["c_body"],
+      "requires": [
+        "c_body"
+      ],
       "labResult": "c_lab_wax"
     },
     {
@@ -113,7 +112,9 @@
       "type": "physical",
       "title": "A folded card in the striking train",
       "body": "Wedged into the striking train of the Bell of Order, worn soft by two hundred strikes: a subscription card for the Delgado Assembly Rooms, folded four times.\n\nThe jam does not stop the bell. It releases the train early. On the night Reeve died, the Bell of Order struck nine at eight forty-one — and nine people built their evening on it.",
-      "requires": ["c_doctor_estimate"],
+      "requires": [
+        "c_doctor_estimate"
+      ],
       "implicates": null
     },
     {
@@ -121,7 +122,9 @@
       "type": "document",
       "title": "The winding book",
       "body": "The Assembly Rooms clocks and the Bell of Order are on one contract, and the contract has not been paid in two years — because a gentleman does it as a courtesy. Every Tuesday, initialled in the same small hand: C.V.\n\nHe wound it on the Tuesday. Reeve died on the Thursday.",
-      "requires": ["c_bell_jam"],
+      "requires": [
+        "c_bell_jam"
+      ],
       "implicates": "s_vole"
     },
     {
@@ -136,7 +139,9 @@
       "type": "document",
       "title": "A clerk's bank book",
       "body": "Cash paid in on four occasions in eighteen months, each within a week of a committee award, none of them under sixty pounds. A secretary's wage is a hundred and ten a year.",
-      "requires": ["c_committee_ledger"],
+      "requires": [
+        "c_committee_ledger"
+      ],
       "implicates": "s_vole"
     },
     {
@@ -146,7 +151,6 @@
       "body": "In Reeve's hand, undated, in his own desk. It begins: I have gone back over the Hollis award and the Draycott award and I do not care for what I find, and I care still less that the hand it is written in is one I trained. It ends mid-sentence.",
       "implicates": "s_vole"
     },
-
     {
       "id": "c_lyne_letter",
       "type": "document",
@@ -179,7 +183,6 @@
       "isRedHerring": true,
       "implicates": "s_kell"
     },
-
     {
       "id": "c_vole_statement",
       "type": "statement",
@@ -199,7 +202,6 @@
       "body": "Time of death entered as twenty past nine, in Teague's hand, signed on the spot. He arrived at the body eight minutes after Lady Marchmont screamed and wrote down the time he was told the bell had struck, plus twenty."
     }
   ],
-
   "npcs": [
     {
       "id": "n_kell",
@@ -211,13 +213,17 @@
           "id": "q_last",
           "text": "When did you last see Alderman Reeve?",
           "answer": "\"Walked him in myself with the decanter. Few minutes before the bell — I know because I was watching the clock for the toast.\" He does not blink. \"Said he was expecting someone. Didn't say who, and I don't ask.\"",
-          "grants": ["c_steward_last"]
+          "grants": [
+            "c_steward_last"
+          ]
         },
         {
           "id": "q_cellar",
           "text": "You were to be dismissed at the quarter.",
           "answer": "\"Eleven bottles. Over three months, in a house that drinks four hundred.\" He straightens a chair that does not need it. \"I entered it myself, in the book, in my own hand. A man covering himself does not write it down.\"",
-          "requires": ["c_cellar_book"],
+          "requires": [
+            "c_cellar_book"
+          ],
           "grants": []
         }
       ]
@@ -232,13 +238,17 @@
           "id": "q_found",
           "text": "Take me to when you opened the door.",
           "answer": "\"Twenty minutes after the bell. I had been counting down to the toast since eight — you do, when it is your evening.\" Her hands are perfectly still, which is its own kind of tell. \"I opened the door and he was on the floor and I am afraid I was no use at all.\"",
-          "grants": ["c_found_body"]
+          "grants": [
+            "c_found_body"
+          ]
         },
         {
           "id": "q_debt",
           "text": "You owed him four hundred pounds.",
           "answer": "\"I owe a great many people a great many things. Cornelius was the only one who never once mentioned it in a room with anybody else in it.\" She looks up. \"You will find that people who are being blackmailed do not usually host dinners for the blackmailer.\"",
-          "requires": ["c_marchmont_note"],
+          "requires": [
+            "c_marchmont_note"
+          ],
           "grants": []
         }
       ]
@@ -253,8 +263,12 @@
           "id": "q_time",
           "text": "Dr. Teague put the time at twenty past nine.",
           "answer": "\"Dr. Teague put the time at twenty past nine because somebody told him the bell had struck at nine.\" She does not look up from the sheet. \"On temperature and stiffening this man died at a quarter to. Ten minutes either side and I will still say a quarter to, and I will say it in a witness box.\"\n\nWhich is a problem, because eight people watched him walk into that library alive AFTER a quarter to nine.",
-          "requires": ["c_body"],
-          "grants": ["c_doctor_estimate"]
+          "requires": [
+            "c_body"
+          ],
+          "grants": [
+            "c_doctor_estimate"
+          ]
         }
       ]
     },
@@ -268,20 +282,26 @@
           "id": "q_evening",
           "text": "Walk me through your evening.",
           "answer": "\"I took my seat at the long table just after the bell and I did not leave it until Lady Marchmont screamed.\" He offers you tea. \"Mr. Kell will confirm it, and Mrs. Alderton, and the Draycotts. I am sorry to be so dull about it.\"",
-          "grants": ["c_vole_statement"]
+          "grants": [
+            "c_vole_statement"
+          ]
         },
         {
           "id": "q_clocks",
           "text": "You wind the clocks there.",
           "answer": "The teacup goes down without a sound. \"I wind them because nobody else will pay to. Twelve years I have done small unpaid things for that man and this is the first time anybody has asked me about one.\"\n\nHe does not ask which clock.",
-          "requires": ["c_maintenance_log"],
+          "requires": [
+            "c_maintenance_log"
+          ],
           "grants": []
         },
         {
           "id": "q_awards",
           "text": "Four contracts, four revisions, four deposits.",
           "answer": "\"He trained me.\" A long pause; he is not performing it. \"Twelve years at a hundred and ten a year and he could not see why I might want more. He found the Hollis award on the Tuesday and told me he would give me until the Thursday to explain myself.\"\n\nHe stops there. He is far too careful to finish the sentence.",
-          "requires": ["c_vole_deposits"],
+          "requires": [
+            "c_vole_deposits"
+          ],
           "grants": []
         }
       ]
@@ -296,7 +316,9 @@
           "id": "q_letter",
           "text": "About that letter.",
           "answer": "\"I wrote it, I meant it, and I would write it again.\" She does not put the papers down. \"I wanted his chair and I would have had it off him in March at the vote, in front of the whole council. Killing him gets me a by-election and an opponent nobody is allowed to criticise. Use your head.\"",
-          "grants": ["c_lyne_statement"]
+          "grants": [
+            "c_lyne_statement"
+          ]
         }
       ]
     },
@@ -310,12 +332,13 @@
           "id": "q_certificate",
           "text": "How did you arrive at twenty past nine?",
           "answer": "\"The bell had gone nine. Lady Marchmont found him twenty minutes after. I was fetched, I attended, I wrote it down.\" He is already reaching for his hat. \"That is not an estimate, it is arithmetic.\"\n\nIt is arithmetic. It is arithmetic built entirely on the bell.",
-          "grants": ["c_teague_certificate"]
+          "grants": [
+            "c_teague_certificate"
+          ]
         }
       ]
     }
   ],
-
   "locations": [
     {
       "cityLocationId": "loc_lm_blackthorn_security_company",
@@ -327,13 +350,20 @@
     {
       "cityLocationId": "loc_0398",
       "description": "Delgado Assembly Rooms. Long table, card room, terrace, and a library at the back with one door and a fire that had burned down by the time anybody thought to look at it.",
-      "clues": ["c_body", "c_lamp", "c_reeve_letter"],
+      "clues": [
+        "c_body",
+        "c_lamp",
+        "c_reeve_letter"
+      ],
       "searchCost": 2
     },
     {
       "cityLocationId": "loc_lm_the_bell_of_order",
       "description": "Cast in a year nobody agrees on, and the only clock in Backlund that everybody trusts without checking. The striking train is behind a door that has not been locked in living memory.",
-      "clues": ["c_bell_jam", "c_maintenance_log"],
+      "clues": [
+        "c_bell_jam",
+        "c_maintenance_log"
+      ],
       "searchCost": 2
     },
     {
@@ -345,19 +375,26 @@
     {
       "cityLocationId": "loc_lm_backlund_city_hall",
       "description": "Granite steps and a committee room where four contracts were awarded in eighteen months. The minute books are public, which is the sort of thing nobody remembers until somebody asks.",
-      "clues": ["c_committee_ledger"],
+      "clues": [
+        "c_committee_ledger"
+      ],
       "searchCost": 2
     },
     {
       "cityLocationId": "loc_0401",
       "description": "The Grand Crown Apartments. Cassian Vole keeps three rooms, very clean, with a shelf of Reeve's old speeches bound at his own expense.",
-      "clues": ["c_vole_deposits"],
+      "clues": [
+        "c_vole_deposits"
+      ],
       "searchCost": 2
     },
     {
       "cityLocationId": "loc_0396",
       "description": "Voss & Delgado, Attorneys. Reeve's solicitors, and the only people in Backlund who kept copies of his correspondence when he did not.",
-      "clues": ["c_lyne_letter", "c_marchmont_note"],
+      "clues": [
+        "c_lyne_letter",
+        "c_marchmont_note"
+      ],
       "searchCost": 2
     },
     {
@@ -375,13 +412,18 @@
     {
       "cityLocationId": "loc_0423",
       "description": "The Crimson Dial. Half the council drinks here and all of it talks. The steward's cellar book trouble was common knowledge a month before the committee heard of it.",
-      "clues": ["c_cellar_book", "c_teague_habit"],
+      "clues": [
+        "c_cellar_book",
+        "c_teague_habit"
+      ],
       "searchCost": 2
     },
     {
       "cityLocationId": "loc_lm_divisional_police_headquarters",
       "description": "Six floors of filing. The Reeve file is thin, closed, and initialled by somebody who did not want it opened again.",
-      "clues": ["c_teague_certificate"],
+      "clues": [
+        "c_teague_certificate"
+      ],
       "searchCost": 3
     },
     {
@@ -391,12 +433,62 @@
       "searchCost": 2
     }
   ],
-
   "solution": {
     "culpritId": "s_vole",
     "motiveId": "m_committee",
-    "requiredEvidence": ["c_doctor_estimate", "c_bell_jam", "c_maintenance_log"],
+    "requiredEvidence": [
+      "c_doctor_estimate",
+      "c_bell_jam",
+      "c_maintenance_log"
+    ],
     "epilogue": "The evening was never wrong. The clock was.\n\nCassian Vole wound the Bell of Order on the Tuesday, as he had every Tuesday for two years without being paid or thanked, and he left a folded subscription card in the striking train. It does not stop a bell. It releases it early. On the Thursday the Bell of Order struck nine at eight forty-one, and nine people at a subscription dinner built the entire evening on it — including the four who gave him his alibi, who were telling the exact truth and had no idea what they were telling it about.\n\nReeve went into the library at a few minutes before the bell, which everyone understood as a few minutes before nine and which was in fact around half past eight. Vole followed him in, took up the lamp by its base the way you pick up a thing you mean to swing, and was at the long table by ten to. Everyone remembers him arriving just after the bell. Everyone is right. Just after the bell was eight forty-one.\n\nThe coroner never budged. A quarter to nine, she said, and ten minutes either side, and she said it in the witness box exactly as she promised. The defence spent two days trying to move her and moved her by nothing at all.\n\nHe is convicted on the winding book. Twelve years of small unpaid courtesies, and the last of them hanged him.",
-    "failureEpilogue": "The Assizes hear a great deal about a letter, a cellar book, and four hundred pounds owed against a house in Hillston, and rather less about a folded subscription card that nobody thought to look for. The Bell of Order is serviced in the spring by a firm that is actually paid for it, and the card comes out of the striking train and goes into a bin, and the bell keeps better time thereafter, and nobody remarks on it.\n\nCassian Vole gives evidence for the prosecution. He is described in two newspapers as the dead man's most loyal servant, and he weeps in the box, and it is not entirely an act — he did admire him. He takes a post with the Cherwood ward in the autumn and winds their clocks too, as a courtesy, because nobody else will pay to."
+    "failureEpilogue": "The Assizes hear a great deal about a letter, a cellar book, and four hundred pounds owed against a house in Hillston, and rather less about a folded subscription card that nobody thought to look for. The Bell of Order is serviced in the spring by a firm that is actually paid for it, and the card comes out of the striking train and goes into a bin, and the bell keeps better time thereafter, and nobody remarks on it.\n\nCassian Vole gives evidence for the prosecution. He is described in two newspapers as the dead man's most loyal servant, and he weeps in the box, and it is not entirely an act — he did admire him. He takes a post with the Cherwood ward in the autumn and winds their clocks too, as a courtesy, because nobody else will pay to.",
+    "keyPoints": [
+      {
+        "id": "kp_time",
+        "claim": "The coroner puts death at about a quarter to nine, which is nowhere near the time the Bell of Order appeared to give.",
+        "keywords": [
+          "coroner",
+          "quarter to nine",
+          "time of death",
+          "temperature",
+          "stiffening",
+          "certificate",
+          "teague",
+          "earlier"
+        ]
+      },
+      {
+        "id": "kp_bell",
+        "claim": "The bell was jammed with a folded subscription card so that it struck the wrong hour, and the alibi everyone accepted was built on that wrong hour.",
+        "keywords": [
+          "bell",
+          "jammed",
+          "card",
+          "striking train",
+          "folded",
+          "wrong hour",
+          "alibi",
+          "delgado",
+          "subscription"
+        ]
+      },
+      {
+        "id": "kp_access",
+        "claim": "Vole maintained the Assembly Rooms clocks and the Bell of Order on one unpaid contract, which is how he could reach the striking train at all - and he was burying a committee vote he had sold.",
+        "keywords": [
+          "winding book",
+          "contract",
+          "maintains",
+          "clocks",
+          "unpaid",
+          "access",
+          "vole",
+          "vote",
+          "committee",
+          "sold"
+        ]
+      }
+    ]
   }
 }

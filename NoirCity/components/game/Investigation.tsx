@@ -26,6 +26,7 @@ import { AccusePanel } from "./AccusePanel";
 import { Verdict } from "./Verdict";
 import { Corkboard } from "./Corkboard";
 import { CaseTabs, type Tab } from "./CaseTabs";
+import { PlaceCard } from "./PlaceCard";
 import { useBoard } from "@/lib/game/useBoard";
 
 const CityMap = dynamic(() => import("@/components/map/CityMap"), {
@@ -79,6 +80,9 @@ export function Investigation({
   // no reason to care about yet.
   const [tab, setTab] = useState<Tab>("journal");
   const [selected, setSelected] = useState<CityLocation | null>(null);
+  // The card over the map. Separate from `selected` so dismissing the card
+  // leaves the address still selected in the notebook and still lit on the map.
+  const [cardOpen, setCardOpen] = useState(false);
   const [briefOpen, setBriefOpen] = useState(true);
   const [boardOpen, setBoardOpen] = useState(false);
   // Phone only. Above `md` the panel is a permanent column and this is inert -
@@ -97,6 +101,7 @@ export function Investigation({
   const hereId = view.here.id;
   useEffect(() => {
     setSelected(null);
+    setCardOpen(false);
   }, [hereId]);
 
   // Whenever the panel changes what it is about - or reappears from behind a
@@ -133,15 +138,17 @@ export function Investigation({
     setSheetOpen(true);
   }
 
-  // Picking a pin is a question about that address, so answer it: surface the
-  // panel that can, and on a phone raise the sheet that is hiding it.
+  // Picking a pin asks one question - what is this, and is it worth the drive -
+  // so it opens a card on the map that answers exactly that. It deliberately
+  // does not raise the notebook any more: you click a pin while comparing it
+  // against the three others around it, and throwing a panel over the city mid
+  // comparison was answering a question nobody asked.
   //
   // Stable identity matters here - this is a prop on the memoised map, and a
   // fresh closure every render would defeat the memo entirely.
   const pickLocation = useCallback((location: CityLocation) => {
     setSelected(location);
-    setTab("here");
-    setSheetOpen(true);
+    setCardOpen(true);
   }, []);
 
   return (
@@ -213,6 +220,17 @@ export function Investigation({
             )}
           </button>
         </div>
+
+        {cardOpen && selected && (
+          <PlaceCard
+            location={selected}
+            onOpen={() => {
+              setCardOpen(false);
+              showPanel("here");
+            }}
+            onClose={() => setCardOpen(false)}
+          />
+        )}
 
         {banner}
         {overlay}

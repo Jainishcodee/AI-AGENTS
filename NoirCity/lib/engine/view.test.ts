@@ -31,6 +31,18 @@ describe("the client view never leaks the solution", () => {
           culpritId: "s_innocent",
           motiveId: "m_spite",
           requiredEvidence: ["c_talk"],
+          keyPoints: [
+            {
+              id: "kp_other",
+              claim: "A COMPLETELY DIFFERENT THING THEY HAD TO ESTABLISH.",
+              keywords: ["nothing", "at all"],
+            },
+            {
+              id: "kp_other2",
+              claim: "AND ANOTHER ONE.",
+              keywords: ["also", "nothing"],
+            },
+          ],
           epilogue: "A COMPLETELY DIFFERENT ENDING.",
           failureEpilogue: "ANOTHER DIFFERENT ENDING.",
         },
@@ -42,6 +54,21 @@ describe("the client view never leaks the solution", () => {
   it("does not contain either epilogue", () => {
     expect(serialised).not.toContain(caseIndex.file.solution.epilogue);
     expect(serialised).not.toContain(caseIndex.file.solution.failureEpilogue);
+  });
+
+  it("does not contain a single key point", () => {
+    // These are the solution written out in plain sentences - the most
+    // spoiler-heavy field in the whole case file, and the one thing a player
+    // could read straight out of a network response and win with. They exist
+    // only to mark a written accusation against, which is why grading is
+    // server-side and why this assertion is here.
+    for (const point of caseIndex.file.solution.keyPoints) {
+      expect(serialised).not.toContain(point.claim);
+      for (const word of point.keywords) {
+        expect(serialised).not.toContain(`"${word}"`);
+      }
+    }
+    expect(serialised).not.toContain("keyPoints");
   });
 
   it("does not carry a red-herring flag on any clue", () => {
@@ -121,9 +148,8 @@ describe("the view shows only what the team has earned", () => {
     const closed = advance([
       {
         type: "accuse",
-        culpritId: "s_guilty",
-        motiveId: "m_money",
-        evidenceIds: [],
+        culpritName: "Guilty Party",
+        argument: "They were being paid money to keep quiet and it stopped.",
       },
     ]);
     expect(buildView(caseIndex, cityIndex, closed).result).not.toBeNull();

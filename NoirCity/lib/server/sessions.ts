@@ -1,5 +1,6 @@
 import "server-only";
 import { applyAction, initialState, type Action } from "@/lib/engine/reducer";
+import { withGrade } from "./aiGrade";
 import { buildView } from "@/lib/engine/view";
 import { tutorialProgress } from "@/lib/engine/tutorial";
 import type { FeedEntry, GameSnapshot } from "@/lib/game/types";
@@ -81,7 +82,15 @@ export async function actOnSession(
       : { ok: false, error: "Case not found.", status: 500 };
   }
 
-  const result = applyAction(caseIndex, loadCity(), payload.state, action);
+  // Grading happens here, not in the reducer: it may call a model, so it may be
+  // slow and it may fail, and neither belongs inside a pure synchronous
+  // function. Non-accusations pass straight through.
+  const result = applyAction(
+    caseIndex,
+    loadCity(),
+    payload.state,
+    await withGrade(caseIndex, action),
+  );
   if (!result.ok) {
     // A rejected action costs nothing and changes nothing.
     return { ok: false, error: result.error, status: 400 };

@@ -1,6 +1,7 @@
 import L from "leaflet";
 import type { City, CityLocation, Point } from "@/lib/engine/citySchema";
 import { MAP_COLORS, ROAD_WIDTH } from "@/lib/city/palette";
+import { drawGlyph, glyphFamily } from "@/lib/city/glyphs";
 
 /**
  * Draws the whole city onto one canvas rather than handing Leaflet ~3,700
@@ -382,17 +383,55 @@ export class CityCanvasLayer extends L.Layer {
     // Small and dim at city zoom: 1,200 pins would otherwise bury the streets
     // they are supposed to sit on.
     const pinRadius = Math.max(0.9, Math.min(3.6, scale * 12));
+
+    /**
+     * Close in, every address becomes a chip carrying what kind of place it is;
+     * far out it goes back to being a dot.
+     *
+     * The threshold is not decoration. Twelve hundred glyphs at city scale is a
+     * grey mush that hides the streets they sit on, which is the failure the
+     * plain dots were already avoiding. A chip needs roughly its own width of
+     * clear space to be worth drawing, and that is what this scale buys.
+     */
+    const CHIP_SCALE = 0.45;
+    const chips = scale > CHIP_SCALE;
+    const chipR = Math.min(11, 7 + (scale - CHIP_SCALE) * 6);
+
     for (const loc of city.locations) {
       if (loc.isLandmark) continue;
       const sx = t.x(loc.x);
       const sy = t.y(loc.y);
       if (sx < -pad || sx > size.x + pad || sy < -pad || sy > size.y + pad) continue;
       const seen = this.state.visited.has(loc.id);
+
+      if (!chips) {
+        ctx.beginPath();
+        ctx.arc(sx, sy, pinRadius, 0, Math.PI * 2);
+        ctx.fillStyle = seen ? MAP_COLORS.pinVisited : MAP_COLORS.pin;
+        ctx.globalAlpha = seen ? 0.9 : Math.min(0.72, 0.28 + scale * 2.4);
+        ctx.fill();
+        continue;
+      }
+
+      // A filled disc behind the glyph, or the glyph competes with the roads and
+      // blocks under it and neither wins.
       ctx.beginPath();
-      ctx.arc(sx, sy, pinRadius, 0, Math.PI * 2);
-      ctx.fillStyle = seen ? MAP_COLORS.pinVisited : MAP_COLORS.pin;
-      ctx.globalAlpha = seen ? 0.9 : Math.min(0.72, 0.28 + scale * 2.4);
+      ctx.arc(sx, sy, chipR, 0, Math.PI * 2);
+      ctx.fillStyle = MAP_COLORS.chip;
+      ctx.globalAlpha = seen ? 0.82 : 0.94;
       ctx.fill();
+      ctx.globalAlpha = 1;
+      ctx.lineWidth = 1;
+      ctx.strokeStyle = seen ? MAP_COLORS.chipEdgeVisited : MAP_COLORS.chipEdge;
+      ctx.stroke();
+
+      // Somewhere you have been goes quiet. The city has to get smaller as you
+      // work it, or a thousand addresses stay a thousand addresses all game.
+      ctx.strokeStyle = seen ? MAP_COLORS.pinVisited : MAP_COLORS.chipGlyph;
+      ctx.lineWidth = 1.15;
+      ctx.lineJoin = "round";
+      ctx.lineCap = "round";
+      drawGlyph(ctx, glyphFamily(loc.type), sx, sy, chipR);
     }
     ctx.globalAlpha = 1;
 
@@ -406,6 +445,10 @@ export class CityCanvasLayer extends L.Layer {
     ctx.textBaseline = "alphabetic";
     for (const loc of city.locations) {
       if (!loc.isLandmark) continue;
+      // Whichever place you are standing in, and whichever you have selected,
+      // both get a marker of their own further down with their name above it.
+      // Labelling them here as well printed the name twice, a few pixels apart.
+      if (loc.id === this.state.hereId || loc.id === this.state.focusedId) continue;
       const sx = t.x(loc.x);
       const sy = t.y(loc.y);
       if (sx < -pad || sx > size.x + pad || sy < -pad || sy > size.y + pad) continue;

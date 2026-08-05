@@ -1,6 +1,7 @@
 import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { applyAction, initialState, type Action, type GameState } from "@/lib/engine/reducer";
+import { withGrade } from "./aiGrade";
 import { buildView } from "@/lib/engine/view";
 import { tutorialProgress } from "@/lib/engine/tutorial";
 import type { FeedEntry, RoomPlayer, RoomSnapshot } from "@/lib/game/types";
@@ -310,7 +311,13 @@ export async function actInRoom(
       return fail("Time is up. The case is closed.", 409);
     }
 
-    const result = applyAction(caseIndex, loadCity(), row.state, action);
+    // Same as the solo path: the grade is attached server-side or not at all.
+    const result = applyAction(
+      caseIndex,
+      loadCity(),
+      row.state,
+      await withGrade(caseIndex, action),
+    );
     if (!result.ok) return fail(result.error, 400);
 
     const finished = result.state.status === "finished";

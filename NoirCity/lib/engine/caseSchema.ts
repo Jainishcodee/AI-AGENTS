@@ -112,11 +112,43 @@ export const tutorialStepSchema = z.object({
   done: tutorialConditionSchema,
 });
 
+/**
+ * One thing a complete account of the case has to establish.
+ *
+ * The accusation is written in the player's own words, so there is nothing to
+ * compare ids against - these are what the writing is graded on. Each is scored
+ * independently, which is what lets a player be right about the killer and still
+ * lose marks for not knowing why, or name the reason without ever finding the
+ * thing that proves it.
+ */
+export const keyPointSchema = z.object({
+  id: z.string(),
+  /**
+   * The point itself, stated plainly. Doubles as the reference answer handed to
+   * the grader and as the line shown back in the verdict, so it has to read as
+   * a sentence a person would write rather than as a rubric item.
+   */
+  claim: z.string().min(10),
+  /**
+   * Words and phrases that indicate the player has this point.
+   *
+   * Only used by the offline grader - the fallback when no model is configured.
+   * Blunt by nature: it rewards vocabulary over understanding, which is exactly
+   * why it is the fallback and not the default.
+   */
+  keywords: z.array(z.string().min(3)).min(2),
+});
+
 export const solutionSchema = z.object({
   culpritId: z.string(),
   motiveId: z.string(),
   /** The three clues that actually prove it. */
   requiredEvidence: z.array(z.string()).min(1),
+  /**
+   * What the written accusation is marked against. Together these are the case:
+   * read end to end they say who, why, and what proves it.
+   */
+  keyPoints: z.array(keyPointSchema).min(2),
   epilogue: z.string(),
   /** Shown when the team accuses the wrong person. */
   failureEpilogue: z.string(),
@@ -162,6 +194,7 @@ export type Question = z.infer<typeof questionSchema>;
 export type Npc = z.infer<typeof npcSchema>;
 export type CaseLocation = z.infer<typeof caseLocationSchema>;
 export type Solution = z.infer<typeof solutionSchema>;
+export type KeyPoint = z.infer<typeof keyPointSchema>;
 export type TutorialCondition = z.infer<typeof tutorialConditionSchema>;
 export type TutorialStep = z.infer<typeof tutorialStepSchema>;
 export type CaseFile = z.infer<typeof caseSchema>;

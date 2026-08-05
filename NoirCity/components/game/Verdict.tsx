@@ -6,6 +6,10 @@ import type { ClientView } from "@/lib/engine/view";
 /**
  * The reveal. Shown over everything, because once the case is closed there is
  * nothing else to look at and the epilogue is the payoff for ninety minutes.
+ *
+ * The marking is shown in full, point by point. A score on its own tells a
+ * player they were wrong without telling them what they missed, and what they
+ * missed is the only part worth knowing.
  */
 export function Verdict({
   view,
@@ -17,8 +21,6 @@ export function Verdict({
 }) {
   const result = view.result;
   if (!result) return null;
-
-  const named = view.suspects.find((s) => s.id === result.accusation.culpritId);
 
   return (
     <div className="absolute inset-0 z-[2000] overflow-y-auto overscroll-contain bg-ink/97 backdrop-blur-sm">
@@ -35,52 +37,83 @@ export function Verdict({
         </p>
 
         <h1
+          data-testid="verdict-headline"
           className={`mt-3 font-serif text-2xl leading-tight sm:text-3xl ${
             result.solved ? "text-paper" : "text-muted"
           }`}
         >
-          You named {named?.name}.
+          You named {result.accusation.culpritName}.
         </h1>
 
-        <div className="mt-8 grid grid-cols-3 gap-px border border-line bg-raised text-center">
-          <Cell label="CULPRIT" ok={result.culpritCorrect} />
-          <Cell label="MOTIVE" ok={result.motiveCorrect} />
-          <Cell
-            label="EVIDENCE"
-            ok={result.correctEvidenceIds.length === 3}
-            note={`${result.correctEvidenceIds.length} of 3`}
-          />
-        </div>
+        {/* What they wrote, quoted back. It is the thing being marked, and a
+            mark you cannot see the working for is just a number. */}
+        <blockquote className="mt-6 border-l-2 border-edge pl-4 font-mono text-[12.5px] leading-relaxed text-paper-dim">
+          {result.accusation.argument}
+        </blockquote>
+
+        <section className="mt-8">
+          <p className="text-[10px] tracking-[0.3em] text-faint">
+            WHAT YOU ESTABLISHED
+          </p>
+          <ul className="mt-3 divide-y divide-line border-y border-line">
+            {result.points.map((p) => (
+              <li key={p.id} className="flex gap-3 py-3">
+                <span
+                  className={`shrink-0 font-serif text-[15px] leading-snug ${
+                    p.credit >= 0.999
+                      ? "text-paper"
+                      : p.credit > 0
+                        ? "text-muted"
+                        : "text-ghost"
+                  }`}
+                >
+                  {p.credit >= 0.999 ? "✓" : p.credit > 0 ? "±" : "✕"}
+                </span>
+                <div className="min-w-0">
+                  <p
+                    className={`font-serif text-[13.5px] leading-relaxed ${
+                      p.credit > 0 ? "text-muted" : "text-faint"
+                    }`}
+                  >
+                    {p.claim}
+                  </p>
+                  {p.note && (
+                    <p className="mt-1 text-[11.5px] italic leading-relaxed text-ghost">
+                      {p.note}
+                    </p>
+                  )}
+                </div>
+              </li>
+            ))}
+          </ul>
+          {/* Said plainly rather than hidden. A player comparing two runs
+              deserves to know whether the same words were marked the same way. */}
+          <p className="mt-2 text-[10px] tracking-[0.2em] text-ghost">
+            {result.gradedBy === "model"
+              ? "MARKED ON MEANING"
+              : "MARKED OFFLINE — ON WORDING ALONE"}
+          </p>
+        </section>
 
         <div className="mt-8 flex flex-wrap items-baseline gap-x-8 gap-y-4 border-y border-line py-5">
           <div>
             <p className="numeral text-4xl text-bright" data-testid="score">
               {result.score}
             </p>
-            <p className="mt-1 text-[10px] tracking-[0.2em] text-faint">
-              POINTS
-            </p>
+            <p className="mt-1 text-[10px] tracking-[0.2em] text-faint">POINTS</p>
           </div>
-          {/* Every figure the player reads takes the numeral face, down to the
-              ones in a breakdown - a column of points that half aligns and half
-              does not is worse than one that never tried. */}
           <ul className="space-y-1 text-[12px] text-faint">
-            {result.culpritCorrect && (
+            {result.culpritCorrect ? (
               <li>
                 Right person &mdash; <span className="numeral">50</span>
               </li>
+            ) : (
+              <li className="text-danger">Wrong person &mdash; nothing else counts</li>
             )}
-            {result.motiveCorrect && (
+            {result.argumentScore > 0 && (
               <li>
-                Right reason &mdash; <span className="numeral">25</span>
-              </li>
-            )}
-            {result.correctEvidenceIds.length > 0 && (
-              <li>
-                Evidence that held up &mdash;{" "}
-                <span className="numeral">
-                  {result.correctEvidenceIds.length * 5}
-                </span>
+                The case you made &mdash;{" "}
+                <span className="numeral">{result.argumentScore}</span>
               </li>
             )}
             {result.timeBonus > 0 && (
@@ -89,22 +122,8 @@ export function Verdict({
                 <span className="numeral">{result.timeBonus}</span>
               </li>
             )}
-            {result.redHerringIds.length > 0 && (
-              <li className="text-danger">
-                Evidence that fell apart &mdash;{" "}
-                <span className="numeral">{result.redHerringIds.length * 10}</span>
-              </li>
-            )}
           </ul>
         </div>
-
-        {result.redHerringIds.length > 0 && (
-          <p className="mt-6 font-serif text-[13px] italic leading-relaxed text-danger/70">
-            {result.redHerringIds.length === 1
-              ? "One of the things you submitted proved nothing at all."
-              : `${result.redHerringIds.length} of the things you submitted proved nothing at all.`}
-          </p>
-        )}
 
         <div className="mt-8 space-y-4">
           {result.epilogue.split("\n\n").map((para, i) => (
@@ -134,18 +153,6 @@ export function Verdict({
           </Link>
         </div>
       </div>
-    </div>
-  );
-}
-
-function Cell({ label, ok, note }: { label: string; ok: boolean; note?: string }) {
-  return (
-    <div className="bg-surface px-3 py-4">
-      <p className={`font-serif text-xl ${ok ? "text-paper" : "text-ghost"}`}>
-        {ok ? "✓" : "✕"}
-      </p>
-      <p className="mt-1.5 text-[10px] tracking-[0.2em] text-faint">{label}</p>
-      {note && <p className="numeral mt-0.5 text-[10px] text-ghost">{note}</p>}
     </div>
   );
 }

@@ -135,7 +135,55 @@ function CityMapImpl({
       refitting = false;
       framed = true;
     };
-    fitCity();
+
+    /**
+     * The zoom that shows roughly a district across the part of the map you can
+     * actually reach. Derived from the usable width rather than fixed, so a
+     * phone and a wide desktop open on the same amount of *city* instead of the
+     * same amount of pixels.
+     *
+     * Never below the fit: on a container too small to hold a district, the
+     * whole city is what you get.
+     */
+    const OPEN_METRES = 1600;
+    const openZoom = () => {
+      const usable = Math.max(240, map.getSize().x - reserved());
+      // CRS.Simple puts one city metre on 2^zoom pixels, so the zoom that fits
+      // OPEN_METRES across `usable` is just the log of the ratio.
+      const wanted = Math.log2(usable / OPEN_METRES);
+      return Math.max(fitZoom(), Math.min(map.getMaxZoom(), wanted));
+    };
+
+    /**
+     * Where the map starts.
+     *
+     * `fitCity` first, because it is what establishes the zoom floor and the
+     * pan clamp, and both have to be right before anything moves. Then in to
+     * the team's own doorstep.
+     *
+     * Opening on the whole city looked deliberate and read as useless: at that
+     * scale Backlund is a grey web of twelve hundred identical dots, no address
+     * is legible, and on a phone the city is a 300px band with black above and
+     * below it. You are a detective standing somewhere specific, so the map
+     * opens where you are standing. The whole city is still one pinch away, and
+     * the floor guarantees you can always get back to it.
+     */
+    const openHere = () => {
+      fitCity();
+      const at = hereId ? city.locations.find((l) => l.id === hereId) : null;
+      if (!at) return;
+      refitting = true;
+      // Offset so the team sits in the middle of the *usable* width, not behind
+      // the notebook - `setView` centres on the container, which is wider.
+      const z = openZoom();
+      const point = map.project([at.y, at.x], z).add([reserved() / 2, 0]);
+      map.setView(map.unproject(point, z), z, { animate: false });
+      refitting = false;
+      // Deliberately not `framed`: this is a chosen place, not the default
+      // frame, so a later resize must keep it rather than throw you back out.
+      framed = false;
+    };
+    openHere();
 
     // Anything the player does to the view is theirs to keep; anything we do
     // ourselves is still ours. Both fire the same events, so the difference has
@@ -187,11 +235,25 @@ function CityMapImpl({
         try {
           map.invalidateSize({ pan: false, animate: false });
           // A shorter container needs a wider view to hold the same city, so the
-          // floor moves with it. Re-frame too, but only for someone who was
-          // looking at the whole city - anyone zoomed into a street keeps their
-          // place rather than being thrown back out every time the sheet moves.
-          if (framed) fitCity();
-          else map.setMinZoom(fitZoom());
+          // floor and the pan clamp move with it. Re-frame too, but only for
+          // someone who was looking at the frame we chose - anyone who has gone
+          // to a street keeps their place rather than being thrown back out
+          // every time the sheet moves.
+          if (framed) {
+            fitCity();
+          } else {
+            // Both the floor and the clamp are side effects of fitting, and
+            // both are now wrong. Fit to recompute them, then put the player
+            // back exactly where they were - all inside the same held frame, so
+            // none of it is ever drawn.
+            const centre = map.getCenter();
+            const zoom = map.getZoom();
+            fitCity();
+            refitting = true;
+            map.setView(centre, zoom, { animate: false });
+            refitting = false;
+            framed = false;
+          }
         } finally {
           layer.release();
         }

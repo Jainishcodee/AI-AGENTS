@@ -7,6 +7,7 @@
  *   node scripts/play-e2e.mjs <shot-dir>
  */
 import { chromium } from "playwright";
+import { travelTo, QUIET_ROOM_CASE } from "./e2e-lib.mjs";
 
 const shots = process.argv[2] ?? ".";
 // Points at `npm run dev` by default; set BASE_URL to run the same script
@@ -37,25 +38,6 @@ if (process.env.TRACE_API) {
 const shot = (name) => page.screenshot({ path: `${shots}/${name}.png` });
 const log = (m) => console.log(`  ${m}`);
 
-/** Clicks a map pin by its city location id. */
-async function travelTo(locationId) {
-  const pt = await page.evaluate(async (id) => {
-    const city = await fetch("/city.json").then((r) => r.json());
-    const loc = city.locations.find((l) => l.id === id);
-    if (!loc) return null;
-    const map = window.__cityMap;
-    if (!map) return null;
-    const p = map.latLngToContainerPoint({ lat: loc.y, lng: loc.x });
-    const rect = map.getContainer().getBoundingClientRect();
-    return { x: rect.left + p.x, y: rect.top + p.y };
-  }, locationId);
-  if (!pt) throw new Error(`could not locate ${locationId} on screen`);
-
-  await page.mouse.click(pt.x, pt.y);
-  await page.getByRole("button", { name: /DRIVE OVER/ }).click();
-  await page.waitForTimeout(500);
-}
-
 // Read through `data-testid`, not through styling classes. This used to select
 // `p.tabular-nums`, which meant a purely visual change - swapping that class for
 // the `.numeral` utility - broke a test that cares about none of it.
@@ -84,7 +66,7 @@ await page.waitForTimeout(400);
 // --- tutorial step 1: travel ----------------------------------------------
 const step1 = await page.locator("h2").first().textContent();
 log(`tutorial: ${step1}`);
-await travelTo("loc_0269");
+await travelTo(page, "loc_0269");
 await shot("03-at-the-scene");
 
 // --- step 2: search --------------------------------------------------------
@@ -112,29 +94,28 @@ log(`lab report back, ${await hoursLeft()}h left`);
 
 // --- the rest of the investigation ----------------------------------------
 await page.getByRole("button", { name: "HERE" }).click();
-await travelTo("loc_0023");
+await travelTo(page, "loc_0023");
 await page.getByRole("button", { name: /SEARCH THIS PLACE/ }).click();
 await page.waitForTimeout(600);
 log("searched the clinic");
 
-await travelTo("loc_0272");
+await travelTo(page, "loc_0272");
 await page.getByRole("button", { name: /SEARCH THIS PLACE/ }).click();
 await page.waitForTimeout(600);
 log(`searched the apartment, ${await hoursLeft()}h left`);
 await shot("08-mid-case");
 
 // --- accuse ----------------------------------------------------------------
-await page.getByRole("button", { name: "ACCUSE" }).click();
+await page.getByRole("button", { name: /^ACCUSE/ }).click();
 await page.waitForTimeout(300);
-await page.getByRole("button", { name: /Dr\. Emmanuel Vane/ }).click();
-await page.getByRole("button", { name: /To close an account/ }).click();
-for (const title of [
-  "Analysis of the dregs",
-  "The prescription book",
-  "The Frayne accounts",
-]) {
-  await page.getByRole("button", { name: title, exact: false }).last().click();
-}
+
+// Written out, not picked from a list. This is the whole point of the form:
+// there is nothing here to guess from, so the test has to actually make the
+// case the same way a player would.
+await page.getByPlaceholder("A name").fill("Dr. Vane");
+await page
+  .getByPlaceholder("What happened, why, and what proves it.")
+  .fill(QUIET_ROOM_CASE);
 await shot("09-accusation-form");
 
 await page.getByRole("button", { name: "FILE THE ACCUSATION" }).click();
@@ -143,8 +124,7 @@ await page.getByRole("button", { name: "GO AHEAD" }).click();
 await page.waitForTimeout(1000);
 await shot("10-verdict");
 
-// The HUD also carries an h1, so take the last one - the verdict's.
-const verdict = await page.locator("h1").last().textContent();
+const verdict = await page.getByTestId("verdict-headline").textContent();
 const banner = await page.getByTestId("verdict-banner").textContent();
 log(`verdict: ${banner?.trim()} — ${verdict?.trim()}`);
 

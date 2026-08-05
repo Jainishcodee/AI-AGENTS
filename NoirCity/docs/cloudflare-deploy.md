@@ -63,6 +63,33 @@ The two `NEXT_PUBLIC_SUPABASE_*` values are inlined into the client bundle at
 build time, so they belong in `.env.local` (or your CI environment) **before**
 `cf:build` — putting them in `wrangler secret` will not work.
 
+## Marking accusations
+
+An accusation is two written fields: a name, and the case in the player's own
+words. The name is matched against the suspects in code. The written case is
+marked against the solution's `keyPoints` by **Workers AI**, declared as the
+`AI` binding in `wrangler.jsonc`. There is no key and no API call — it runs in
+this worker, on Cloudflare's free daily neuron allowance.
+
+**It is optional, and that is deliberate.** With no binding — every local run,
+every test, any other host — `lib/server/aiGrade.ts` falls back to keyword
+coverage and the verdict says `MARKED OFFLINE — ON WORDING ALONE`. The game is
+never unplayable because a model is missing; it is marked more bluntly, which is
+a different thing. The model is also given a hard 8-second timeout and a
+try/catch, so a slow or failing one costs a player nothing but a coarser mark.
+
+Grading is server-side and cannot move. `keyPoints` are the solution written out
+as plain sentences — the single most spoiler-heavy field in a case file, and the
+one thing a player could read out of a network response and win with. That is
+what `lib/engine/view.ts` redacts, and `view.test.ts` asserts no key point or
+keyword ever appears in a client view.
+
+To watch what the grader is actually doing:
+
+```bash
+npx wrangler tail --format pretty
+```
+
 ## Sizes
 
 | | |

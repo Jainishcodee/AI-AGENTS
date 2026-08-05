@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
+import { ARGUMENT_LIMIT } from "@/lib/engine/scoring";
 import { actInRoom, getRoom, isFail, startRoom } from "@/lib/server/rooms";
 import { currentUserId, multiplayerReady } from "@/lib/supabase/server";
 
@@ -19,9 +20,10 @@ const bodySchema = z.union([
       z.object({ type: z.literal("lab"), clueId: z.string() }),
       z.object({
         type: z.literal("accuse"),
-        culpritId: z.string(),
-        motiveId: z.string(),
-        evidenceIds: z.array(z.string()),
+        // No `grade` field, deliberately. Zod strips what it does not
+        // declare, so a client cannot mark its own accusation.
+        culpritName: z.string().min(1).max(120),
+        argument: z.string().min(1).max(ARGUMENT_LIMIT),
       }),
     ]),
   }),

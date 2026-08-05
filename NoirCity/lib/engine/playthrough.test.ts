@@ -8,6 +8,20 @@ import { tutorialProgress } from "./tutorial";
 import { buildView } from "./view";
 
 /**
+ * A written accusation that makes every point in each case.
+ *
+ * These are what the offline grader is marking, so they are phrased the way a
+ * player would phrase them rather than as a list of the case's keywords - if a
+ * plausible sentence stops scoring, that is the grader drifting and the test
+ * should say so.
+ */
+const SOLVED = {
+  vane: "Vane had been charging her for consultations she never had. Her own account books show she went back years and totalled the money - that ledger is why she died. The digitalis was in the tea cup before the lamp went out, so the dark and the seance are beside the point, and the dose was several times what any doctor would write. He wrote her a prescription three days beforehand for a bottle she never asked for, so her medicine cabinet would explain the overdose.",
+  pell: "Pell struck three containers from manifest 44-B in his own hand, and Vance counted cargo for a living, so an honest count of that paperwork would have finished him. The paint on the body is Admiralty green hull plating from below the waterline, which means the dry dock and not where the body was found - it was moved. Pell's own signet ring, gold, with his initials, was trodden into the mud at the foot of the dry dock ladder.",
+  vole: "The coroner does not believe Teague's certificate: on temperature and stiffening he puts the time of death at a quarter to nine, earlier than anybody allowed for. The Bell of Order was jammed with a folded subscription card in the striking train so it rang the wrong hour, and the alibi everyone accepted was built on that wrong hour - the card is from the Delgado Assembly Rooms. Vole maintains those clocks and the Bell on one unpaid contract, and the winding book gives him the access. He was burying a committee vote he had sold.",
+};
+
+/**
  * Plays the real cases against the real city, end to end.
  *
  * The linter proves a case is *theoretically* solvable by walking its
@@ -71,9 +85,8 @@ describe("case 00 - The Quiet Room", () => {
     const { state } = play(c, script);
     const final = applyAction(c, city, state, {
       type: "accuse",
-      culpritId: "s_vane",
-      motiveId: "m_ledger",
-      evidenceIds: ["c_lab_digitalis", "c_prescription", "c_ledger_debt"],
+      culpritName: "Dr. Vane",
+      argument: SOLVED.vane,
     });
     expect(final.ok).toBe(true);
     if (final.ok) {
@@ -112,9 +125,8 @@ describe("case 00 - The Quiet Room", () => {
 
     const closed = applyAction(c, city, state, {
       type: "accuse",
-      culpritId: "s_vane",
-      motiveId: "m_ledger",
-      evidenceIds: ["c_lab_digitalis", "c_prescription", "c_ledger_debt"],
+      culpritName: "Dr. Vane",
+      argument: SOLVED.vane,
     });
     expect(closed.ok).toBe(true);
     if (closed.ok) {
@@ -153,9 +165,8 @@ describe("case 00 - The Quiet Room", () => {
     const { state } = play(c, script);
     const wrong = applyAction(c, city, state, {
       type: "accuse",
-      culpritId: "s_sabine",
-      motiveId: "m_exposure",
-      evidenceIds: ["c_lab_digitalis"],
+      culpritName: "Sabine Roux",
+      argument: SOLVED.vane,
     });
     expect(wrong.ok).toBe(true);
     if (wrong.ok) expect(wrong.state.result?.solved).toBe(false);
@@ -188,9 +199,8 @@ describe("case 01 - Harbor Lights", () => {
 
     const final = applyAction(c, city, state, {
       type: "accuse",
-      culpritId: "s_pell",
-      motiveId: "m_manifest",
-      evidenceIds: ["c_lab_paint", "c_manifest_copy", "c_signet"],
+      culpritName: "Arthur Pell",
+      argument: SOLVED.pell,
     });
     expect(final.ok).toBe(true);
     if (final.ok) expect(final.state.result?.solved).toBe(true);
@@ -236,9 +246,8 @@ describe("case 02 - The Bell Does Not Lie", () => {
 
     const final = applyAction(c, city, state, {
       type: "accuse",
-      culpritId: "s_vole",
-      motiveId: "m_committee",
-      evidenceIds: ["c_doctor_estimate", "c_bell_jam", "c_maintenance_log"],
+      culpritName: "Cassian Vole",
+      argument: SOLVED.vole,
     });
     expect(final.ok).toBe(true);
     if (final.ok) expect(final.state.result?.solved).toBe(true);
@@ -259,12 +268,11 @@ describe("case 02 - The Bell Does Not Lie", () => {
 
   it("misdirects: four suspects each have a motive that goes nowhere", () => {
     const { state } = play(c, script);
-    for (const wrong of ["s_lyne", "s_teague", "s_marchmont", "s_kell"]) {
+    for (const wrong of ["Ivo Lyne", "Dr. Teague", "Marchmont", "Kell"]) {
       const attempt = applyAction(c, city, state, {
         type: "accuse",
-        culpritId: wrong,
-        motiveId: "m_committee",
-        evidenceIds: ["c_doctor_estimate"],
+        culpritName: wrong,
+        argument: SOLVED.vole,
       });
       // Only the first accusation lands - the rest are refused as closed, which
       // is itself the point: you get one attempt.

@@ -7,7 +7,6 @@
   "sessionMinutes": 45,
   "startsAt": "1984-03-09T09:00:00",
   "startLocationId": "loc_lm_blackthorn_security_company",
-
   "suspects": [
     {
       "id": "s_vane",
@@ -31,7 +30,6 @@
       "alibi": "At the table. Complained loudly throughout about the cold and the nonsense, which several sitters remember, because he would not stop."
     }
   ],
-
   "motives": [
     {
       "id": "m_ledger",
@@ -49,7 +47,6 @@
       "description": "A fraud only works while the mark believes. Ottoline Frayne had begun to ask sharper questions than a believer asks."
     }
   ],
-
   "clues": [
     {
       "id": "c_body",
@@ -91,7 +88,6 @@
       "body": "Ottoline Frayne kept her own books in a small hard hand. Under the heading DR. VANE — CONSULTATIONS she had gone back seven years and totalled what she had paid against the dates she could actually remember being ill. The two columns are three hundred and forty pounds apart. The last entry is dated the Tuesday. Beside it she has written: ask him Thursday.",
       "implicates": "s_vane"
     },
-
     {
       "id": "c_will",
       "type": "document",
@@ -137,7 +133,6 @@
       "body": "The certificate says heart failure and the coroner has accepted it, because a physician who was present signed it. But somebody in that office has pencilled in the margin, in a hand that is not the coroner's: no post-mortem requested by family. Attending phys. also certifying. Query."
     }
   ],
-
   "npcs": [
     {
       "id": "n_sabine",
@@ -149,19 +144,25 @@
           "id": "q_night",
           "text": "Take me through Thursday evening.",
           "answer": "\"Six sitters. Tea at eight, because a nervous room hears nothing. Lamp out at a quarter past.\" She lays it out like a recipe, unembarrassed. \"Eleven minutes in the dark. I am precise about that — less and they are not ready, more and somebody laughs. When the lamp came up she was as you found her.\"",
-          "grants": ["c_darkness"]
+          "grants": [
+            "c_darkness"
+          ]
         },
         {
           "id": "q_method",
           "text": "None of it is real, is it.",
           "answer": "\"Not a word.\" She says it the way another woman might admit to dyeing her hair. \"The voice, the draught, the cold hand on the shoulder. I learn what they want to hear before they arrive and I give it to them, and they go home comforted, and I am two guineas better off. I am a liar, Mr. Investigator. I am not a poisoner. Those are quite different trades.\"",
-          "grants": ["c_sabine_method"]
+          "grants": [
+            "c_sabine_method"
+          ]
         },
         {
           "id": "q_tea",
           "text": "Who handled the cups?",
           "answer": "She stops moving for the first time. \"I pour six and set them at the places. Then I am at the sideboard with my back to the room for a minute, perhaps two, while they settle themselves.\" A pause. \"Anyone at that table could have reached her cup. Anyone at all. I had not thought of it in those terms until this moment.\"",
-          "requires": ["c_lab_digitalis"],
+          "requires": [
+            "c_lab_digitalis"
+          ],
           "grants": []
         }
       ]
@@ -176,7 +177,9 @@
           "id": "q_aunt",
           "text": "You inherit. Let us start there.",
           "answer": "\"I do. Four hundred a year and a cold house, and I shan't pretend to be sorry about it.\" He meets your eye, which the guilty rarely manage this early. \"I held her hand for eleven minutes in the dark while that woman put on a voice. It was warm the whole time. Then the lamp came up and it wasn't. Make of that what you like.\"",
-          "grants": ["c_gilbert_story"]
+          "grants": [
+            "c_gilbert_story"
+          ]
         }
       ]
     },
@@ -190,19 +193,22 @@
           "id": "q_certificate",
           "text": "You certified a death you were present at.",
           "answer": "\"It is entirely permitted, and I have done it perhaps forty times.\" He is unruffled and he keeps his hands still, which is itself a decision. \"She had a weak heart for a decade. She was seized by a foolish entertainment in an overheated room. There is no mystery here except the one the solicitor is paying you to manufacture.\"",
-          "grants": ["c_coroner_note"]
+          "grants": [
+            "c_coroner_note"
+          ]
         },
         {
           "id": "q_dose",
           "text": "You doubled her digitalis on the Monday. Why?",
           "answer": "For the first time the hands move. \"Her symptoms had worsened. I adjusted the dose.\" — She was not seen at the practice that week. — \"I adjusted it on the basis of eleven years of knowing the woman.\" He stands, and the interview is over, and the answer to the only question that mattered is that he does not have one.",
-          "requires": ["c_prescription"],
+          "requires": [
+            "c_prescription"
+          ],
           "grants": []
         }
       ]
     }
   ],
-
   "locations": [
     {
       "cityLocationId": "loc_lm_blackthorn_security_company",
@@ -214,43 +220,59 @@
     {
       "cityLocationId": "loc_0269",
       "description": "85 Sodela Walk. Madame Roux takes the ground floor: a parlour with the curtains permanently drawn, a round table, six chairs, and a sash window that does not quite close. Ottoline Frayne's chair has not been moved. Gilbert Frayne is here too, waiting for somebody to release the house to him.",
-      "clues": ["c_body", "c_teacup", "c_threat_note"],
+      "clues": [
+        "c_body",
+        "c_teacup",
+        "c_threat_note"
+      ],
       "searchCost": 2
     },
     {
       "cityLocationId": "loc_0023",
       "description": "Petrakis Medical Clinic, where Dr. Vane keeps consulting rooms three days a week. Waiting chairs, a locked dispensary, and a prescription book on the desk that he has not thought to move, because he does not believe anyone will ask.",
-      "clues": ["c_prescription"],
+      "clues": [
+        "c_prescription"
+      ],
       "searchCost": 2
     },
     {
       "cityLocationId": "loc_0272",
       "description": "The Blue Dollar Apartments, where Ottoline Frayne actually lived — two doors from the seance she attended every Thursday. Her writing case is on the bureau and her account books are in it, kept in a hand so small and hard you need the lamp to read them.",
-      "clues": ["c_ledger_debt", "c_will"],
+      "clues": [
+        "c_ledger_debt",
+        "c_will"
+      ],
       "searchCost": 2
     },
     {
       "cityLocationId": "loc_0751",
       "description": "Marlowe Loan & Pawn. Wedding rings under glass, a broker who remembers every face, and a ledger he will let you see if you are pleasant about it.",
-      "clues": ["c_pawn_ticket"],
+      "clues": [
+        "c_pawn_ticket"
+      ],
       "searchCost": 2
     }
   ],
-
   "tutorial": [
     {
       "id": "t_travel",
       "verb": "TRAVEL",
       "title": "Get to the scene",
       "body": "The map is the board. Every gold pin is somewhere you can go, and there are over a thousand of them — most have nothing to do with this. Click a pin to read it, then DRIVE OVER to move the team there.\n\nGo to 85 Sodela Walk, in Cherwood. Travel costs hours, and hours are all you have.",
-      "done": { "type": "atLocation", "locationId": "loc_0269" }
+      "done": {
+        "type": "atLocation",
+        "locationId": "loc_0269"
+      }
     },
     {
       "id": "t_search",
       "verb": "SEARCH",
       "title": "Turn the room over",
       "body": "SEARCH the place you are standing in. It costs hours whether you find anything or not — that is the whole game, and it is why you cannot search all thousand pins.\n\nSearch the parlour.",
-      "done": { "type": "hasClue", "clueId": "c_body" }
+      "done": {
+        "type": "hasClue",
+        "clueId": "c_body"
+      }
     },
     {
       "id": "t_interview",
@@ -268,22 +290,78 @@
       "verb": "LAB",
       "title": "Send something away",
       "body": "Some evidence can go to the laboratory. It is the most expensive action in the game and you will rarely afford more than one or two, so choose carefully.\n\nYou found a cup that was never washed. Send it to the lab.",
-      "done": { "type": "labTested", "clueId": "c_teacup" }
+      "done": {
+        "type": "labTested",
+        "clueId": "c_teacup"
+      }
     },
     {
       "id": "t_accuse",
       "verb": "ACCUSE",
       "title": "Name them",
-      "body": "That is every action in the game: travel, search, interview, lab, accuse. The rest is yours.\n\nWhen you are ready, ACCUSE — you must name a person, a reason, and three pieces of evidence that prove it. You get one attempt. Nobody will tell you when you are ready.",
-      "done": { "type": "caseClosed" }
+      "body": "That is every action in the game: travel, search, interview, lab, accuse. The rest is yours.\n\nWhen you are ready, ACCUSE. There is no list to pick from — you name them, and then you write out what happened and what proves it, in your own words. Every separate thing you establish is worth something on its own. You get one attempt, and nobody will tell you when you are ready.",
+      "done": {
+        "type": "caseClosed"
+      }
     }
   ],
-
   "solution": {
     "culpritId": "s_vane",
     "motiveId": "m_ledger",
-    "requiredEvidence": ["c_lab_digitalis", "c_prescription", "c_ledger_debt"],
+    "requiredEvidence": [
+      "c_lab_digitalis",
+      "c_prescription",
+      "c_ledger_debt"
+    ],
     "epilogue": "Eleven years of consultations she never had, three hundred and forty pounds, and an old woman patient enough to go back through seven years of her own housekeeping to prove it. She wrote ask him Thursday in her account book on the Tuesday, and on the Thursday she sat down at a round table with him and put her hand in his.\n\nHe did not need the dark. That was the elegant part, and it is what nearly worked: the dark made everyone look at Sabine Roux, and Sabine Roux was a proven liar with a room full of people watching her lie. But the digitalis was in the cup before the lamp ever went out, and it was in the cup because Vane had spent the previous three days making sure Ottoline Frayne had a bottle at home that was strong enough to explain the dose if anybody ever checked. He wrote her a prescription she never asked for, so that her own medicine cabinet would testify for him.\n\nHe is struck off in the spring and hanged in the summer. Sabine Roux is fined nine pounds for obtaining money by deception, pays it in cash, and is sitting six people at the round table again by August. Gilbert Frayne gets the house, sells it inside a month, and is in debt again by the following spring.",
-    "failureEpilogue": "Dr. Vane attends the inquest, gives his evidence in a calm and professional manner, and is thanked by the coroner for his trouble. The prescription book stays on his desk for another week and then it does not. There is no post-mortem, because the family did not request one, because the family is a nephew who wanted the house and got it.\n\nSomewhere in the account books at the Blue Dollar Apartments there are two columns three hundred and forty pounds apart, and a line in a small hard hand that reads ask him Thursday, and nobody reads it again. Vane moves his practice to Cherwood the following year and does rather well there."
+    "failureEpilogue": "Dr. Vane attends the inquest, gives his evidence in a calm and professional manner, and is thanked by the coroner for his trouble. The prescription book stays on his desk for another week and then it does not. There is no post-mortem, because the family did not request one, because the family is a nephew who wanted the house and got it.\n\nSomewhere in the account books at the Blue Dollar Apartments there are two columns three hundred and forty pounds apart, and a line in a small hard hand that reads ask him Thursday, and nobody reads it again. Vane moves his practice to Cherwood the following year and does rather well there.",
+    "keyPoints": [
+      {
+        "id": "kp_money",
+        "claim": "Vane had been charging Ottoline Frayne for eleven years of consultations she never had, and she had gone back through her own account books and totalled it.",
+        "keywords": [
+          "account book",
+          "ledger",
+          "consultations",
+          "billing",
+          "charging",
+          "money",
+          "years",
+          "totalled",
+          "never had",
+          "fraud"
+        ]
+      },
+      {
+        "id": "kp_dose",
+        "claim": "She was poisoned with digitalis at several times a therapeutic dose, and it was already in the cup before the lamp went out - so the darkness and the seance had nothing to do with it.",
+        "keywords": [
+          "digitalis",
+          "dose",
+          "cup",
+          "tea",
+          "poison",
+          "before the lamp",
+          "dark",
+          "seance",
+          "overdose"
+        ]
+      },
+      {
+        "id": "kp_cover",
+        "claim": "Vane wrote her a prescription she never asked for three days beforehand, so that her own medicine cabinet would explain the dose if anybody ever checked.",
+        "keywords": [
+          "prescription",
+          "prescribed",
+          "medicine cabinet",
+          "bottle",
+          "cover",
+          "explain",
+          "three days",
+          "his own hand",
+          "doctor"
+        ]
+      }
+    ]
   }
 }

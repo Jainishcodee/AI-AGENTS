@@ -15,6 +15,17 @@
     "binding": "ASSETS"
   },
 
+  // Marks the written half of an accusation. A binding rather than an API call:
+  // no key to hold, no outbound request, and it runs in this worker.
+  //
+  // Optional by design. Locally and in the test suite there is no binding, and
+  // `lib/server/aiGrade.ts` falls back to keyword coverage and tells the player
+  // so in the verdict. The game is never unplayable because a model is not
+  // there - it is marked more bluntly, which is a different thing.
+  "ai": {
+    "binding": "AI"
+  },
+
   "observability": {
     "enabled": true
   }

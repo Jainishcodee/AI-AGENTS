@@ -45,6 +45,15 @@ export const MAP_COLORS = {
   boroughLabel: "#6f757d",
   landmarkLabel: "#9aa0a8",
 
+  // --- address chips ------------------------------------------------------
+  // Close in, every address is a disc carrying its category glyph. The disc has
+  // to be darker than the blocks it sits on so the glyph inside it reads, which
+  // is the opposite of the dots it replaces - those had to be brighter.
+  chip: "#0a0c0f",
+  chipEdge: "#4b525d",
+  chipEdgeVisited: "#2b2f36",
+  chipGlyph: "#c6ccd5",
+
   // --- atmosphere ---------------------------------------------------------
   // Not features of the city, but of the night it is sitting in. All three are
   // painted once per draw like everything else here - there is no animation

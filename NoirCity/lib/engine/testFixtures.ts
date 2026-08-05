@@ -89,6 +89,21 @@ const TOY_CASE = {
     culpritId: "s_guilty",
     motiveId: "m_money",
     requiredEvidence: ["c_open", "c_gated", "c_labresult"],
+    // Deliberately disjoint vocabularies, so a test argument can make one point
+    // without accidentally making another and the offline grader's arithmetic
+    // stays readable in the assertions.
+    keyPoints: [
+      {
+        id: "kp_money",
+        claim: "They were being paid to keep quiet, and the payments stopped.",
+        keywords: ["payment", "paid", "money", "quiet"],
+      },
+      {
+        id: "kp_time",
+        claim: "They were at the bar an hour before anybody says they arrived.",
+        keywords: ["hour", "early", "bar", "before"],
+      },
+    ],
     epilogue: "You got them.",
     failureEpilogue: "They walked.",
   },

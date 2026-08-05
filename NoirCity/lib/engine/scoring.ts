@@ -1,108 +1,117 @@
 import type { CaseIndex } from "./caseSchema";
 import type { GameState } from "./reducer";
+import { SCORE, fractionOf, matchSuspect, type Grade, type PointVerdict } from "./grade";
 
-export const SCORE = {
-  culprit: 50,
-  motive: 25,
-  perEvidence: 5,
-  /** Points per unused time unit, rewarding a tight investigation. */
-  perTimeUnitLeft: 1,
-  /** Deducted for each red herring submitted as proof. */
-  redHerringPenalty: 10,
-} as const;
+export { SCORE } from "./grade";
 
-/** Evidence slots on the accusation form. */
-export const EVIDENCE_SLOTS = 3;
+/** The longest case anybody should have to write. Guards the model call too. */
+export const ARGUMENT_LIMIT = 1500;
 
+/**
+ * What the player files.
+ *
+ * Two fields and no lists. The name is checked against the suspects because a
+ * name either is or is not one of them; the argument is written prose because
+ * "why, and what proves it" is not a thing you should be able to guess from
+ * three options - and being able to guess it was the problem. A player who has
+ * not worked out the motive could previously get it right one time in three by
+ * shrugging.
+ */
 export interface Accusation {
-  culpritId: string;
-  motiveId: string;
-  evidenceIds: string[];
+  /** As typed. Kept verbatim so the verdict can quote it back. */
+  culpritName: string;
+  /** The case, in the player's own words. */
+  argument: string;
 }
 
 export interface AccusationResult {
   accusation: Accusation;
+  /** The suspect the written name picked out, if it picked out exactly one. */
+  culpritId: string | null;
   culpritCorrect: boolean;
-  motiveCorrect: boolean;
-  /** Submitted evidence ids that are genuinely part of the proof. */
-  correctEvidenceIds: string[];
-  /** Submitted evidence ids that are red herrings. */
-  redHerringIds: string[];
+  /** Per key point: did the argument establish it? */
+  points: PointVerdict[];
+  /** 0-1 across the argument as a whole. */
+  argumentFraction: number;
+  argumentScore: number;
   timeBonus: number;
   score: number;
-  /** True only on a full solve: right person, right motive, all proof. */
+  /** Which grader marked it, so the verdict can say so. */
+  gradedBy: Grade["by"];
+  /** True only on a full solve: right person, and every point made. */
   solved: boolean;
   epilogue: string;
 }
 
-export type ScoreOutcome =
-  | { result: AccusationResult }
-  | { error: string };
+export type ScoreOutcome = { result: AccusationResult } | { error: string };
 
+/**
+ * Marks a filed accusation.
+ *
+ * `grade` is handed in rather than computed here because grading may involve a
+ * model, which means it may be async and may fail - neither of which belongs
+ * inside a pure scoring function that the reducer calls synchronously. The
+ * caller does the grading, this turns it into a result.
+ */
 export function scoreAccusation(
   caseIndex: CaseIndex,
   state: GameState,
   accusation: Accusation,
+  grade: Grade,
 ): ScoreOutcome {
   const { file } = caseIndex;
 
-  if (!caseIndex.suspects.has(accusation.culpritId)) {
-    return { error: "That is not one of the suspects." };
+  const name = accusation.culpritName.trim();
+  if (!name) {
+    return { error: "Name somebody." };
   }
-  if (!caseIndex.motives.has(accusation.motiveId)) {
-    return { error: "That is not one of the motives." };
+  if (accusation.argument.trim().length < 20) {
+    return { error: "Say why. An accusation without a reason is a guess." };
   }
-
-  const unique = Array.from(new Set(accusation.evidenceIds));
-  if (unique.length !== accusation.evidenceIds.length) {
-    return { error: "You cannot submit the same evidence twice." };
-  }
-  if (unique.length > EVIDENCE_SLOTS) {
-    return { error: `You may submit at most ${EVIDENCE_SLOTS} pieces of evidence.` };
-  }
-  for (const id of unique) {
-    if (!state.discoveredClues.includes(id)) {
-      return { error: "You cannot submit evidence you never found." };
-    }
+  if (accusation.argument.length > ARGUMENT_LIMIT) {
+    return { error: `Keep it under ${ARGUMENT_LIMIT} characters.` };
   }
 
-  const culpritCorrect = accusation.culpritId === file.solution.culpritId;
-  const motiveCorrect = accusation.motiveId === file.solution.motiveId;
+  const matched = matchSuspect(caseIndex, name);
+  if (!matched) {
+    // Deliberately not "that is not a suspect" - the player may have typed
+    // something that matches two of them, and saying which would be a hint.
+    return {
+      error: "Nobody on this case answers to that. Use the name as you have it.",
+    };
+  }
 
-  const correctEvidenceIds = unique.filter((id) =>
-    file.solution.requiredEvidence.includes(id),
-  );
-  const redHerringIds = unique.filter(
-    (id) => caseIndex.clues.get(id)?.isRedHerring ?? false,
-  );
+  const culpritCorrect = matched.id === file.solution.culpritId;
 
-  const timeBonus = culpritCorrect
-    ? state.timeRemaining * SCORE.perTimeUnitLeft
-    : 0;
+  // A wrong name makes the argument moot: it is an argument about somebody who
+  // did not do it, however well written. Marking it anyway would hand out most
+  // of the points for a confident, wrong case.
+  const points = culpritCorrect
+    ? grade.points
+    : grade.points.map((p) => ({ ...p, credit: 0 }));
+  const argumentFraction = culpritCorrect ? fractionOf(points) : 0;
+  const argumentScore = Math.round(argumentFraction * SCORE.argument);
+
+  const timeBonus = culpritCorrect ? state.timeRemaining * SCORE.perHourLeft : 0;
 
   const score = Math.max(
     0,
-    (culpritCorrect ? SCORE.culprit : 0) +
-      (motiveCorrect ? SCORE.motive : 0) +
-      correctEvidenceIds.length * SCORE.perEvidence +
-      timeBonus -
-      redHerringIds.length * SCORE.redHerringPenalty,
+    (culpritCorrect ? SCORE.culprit : 0) + argumentScore + timeBonus,
   );
 
-  const solved =
-    culpritCorrect &&
-    motiveCorrect &&
-    file.solution.requiredEvidence.every((id) => unique.includes(id));
+  const solved = culpritCorrect && points.every((p) => p.credit >= 0.999);
 
   return {
     result: {
-      accusation: { ...accusation, evidenceIds: unique },
+      accusation: { culpritName: name, argument: accusation.argument.trim() },
+      culpritId: matched.id,
       culpritCorrect,
-      motiveCorrect,
-      correctEvidenceIds,
-      redHerringIds,
+      points,
+      argumentFraction,
+      argumentScore,
       timeBonus,
       score,
+      gradedBy: grade.by,
       solved,
       epilogue: culpritCorrect
         ? file.solution.epilogue
