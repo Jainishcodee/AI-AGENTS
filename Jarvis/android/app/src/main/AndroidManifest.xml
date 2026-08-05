@@ -12,6 +12,8 @@
     <uses-permission android:name="android.permission.WAKE_LOCK"/>
     <uses-permission android:name="android.permission.VIBRATE"/>
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE"/>
+    <!-- Draws the water nudge over other apps. User-granted from Settings. -->
+    <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW"/>
 
     <application
         android:label="Jarvis"
@@ -43,6 +45,22 @@
                 <action android:name="android.intent.action.MY_PACKAGE_REPLACED"/>
                 <action android:name="android.intent.action.QUICKBOOT_POWERON"/>
                 <action android:name="com.htc.intent.action.QUICKBOOT_POWERON"/>
+            </intent-filter>
+        </receiver>
+
+        <!-- Water nudge: alarm -> overlay. The receiver also re-arms after a
+             reboot, since AlarmManager drops everything on restart. -->
+        <service
+            android:name=".water.WaterOverlayService"
+            android:exported="false"/>
+        <receiver
+            android:name=".water.WaterAlarmReceiver"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="com.larossatech.jarvis.WATER_NUDGE"/>
+                <action android:name="android.intent.action.BOOT_COMPLETED"/>
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED"/>
+                <action android:name="android.intent.action.QUICKBOOT_POWERON"/>
             </intent-filter>
         </receiver>
 
