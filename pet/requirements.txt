@@ -4,9 +4,17 @@ psutil>=5.9
 pyttsx3>=2.90
 python-dotenv>=1.0
 
-# Phase 2 — voice + local brain (uncomment when you get there)
-# SpeechRecognition>=3.10
-# ollama>=0.3
+# Phase 2 — offline voice input
+# faster-whisper downloads its model on first run (~150MB for base.en).
+faster-whisper>=1.0
+PyAudio>=0.2.14
+numpy>=1.24
 
-# Phase 3 — task automation
-# playwright>=1.40      # then: playwright install chromium
+# Phase 2 — local brain
+# No Python package: the pet talks to Ollama over plain HTTP and starts it on
+# demand. Install Ollama itself, then:  ollama pull phi4-mini
+
+# Phase 3 — web tasks
+# No browser download needed: Playwright drives your installed Brave via
+# executable_path, since Brave is Chromium.
+playwright>=1.40

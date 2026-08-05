@@ -24,9 +24,10 @@ def mascot_icon(px: int = 64) -> QIcon:
 
 
 class Tray(QSystemTrayIcon):
-    def __init__(self, window, nudges, app) -> None:
+    def __init__(self, window, nudges, app, ears=None) -> None:
         super().__init__(mascot_icon(), app)
         self._window = window
+        self._ears = ears
         self.setToolTip(config.PET_NAME)
 
         menu = QMenu()
@@ -36,6 +37,13 @@ class Tray(QSystemTrayIcon):
         self._add(menu, "Motivate me", nudges.quote_now)
         self._add(menu, "Battery status", nudges.battery_now)
         menu.addSeparator()
+
+        if self._ears is not None:
+            self._ears_action = QAction(f'Listen for "{config.WAKE_WORD}"', menu)
+            self._ears_action.setCheckable(True)
+            self._ears_action.setChecked(True)
+            self._ears_action.toggled.connect(self._toggle_ears)
+            menu.addAction(self._ears_action)
 
         self._voice_action = QAction("Voice (speak out loud)", menu)
         self._voice_action.setCheckable(True)
@@ -61,6 +69,12 @@ class Tray(QSystemTrayIcon):
     def _toggle_voice(self, on: bool) -> None:
         config.SPEAK = on
         bus.say_here.emit("out loud again." if on else "going quiet.", "happy")
+
+    def _toggle_ears(self, on: bool) -> None:
+        # Mute rather than stop: tearing down the model means a slow reload,
+        # and you usually want the mic back within a minute.
+        self._ears.set_muted(not on)
+        bus.say_here.emit("ears on." if on else "not listening.", "happy")
 
     def _on_activate(self, reason) -> None:
         if reason == QSystemTrayIcon.ActivationReason.Trigger:

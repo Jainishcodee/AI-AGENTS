@@ -1,0 +1,98 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Internship Application</title>
+<!--
+  Stands in for a real Google Form. Uses the same ARIA roles and attributes
+  Google emits (role=listitem / heading / radio / checkbox / listbox), because
+  those are what gform.py keys on. Class names are deliberately absent — if a
+  test passes only because of a class name, it isn't testing the right thing.
+-->
+<style>
+  body { font: 14px system-ui; max-width: 640px; margin: 24px auto; }
+  div[role="listitem"] { border: 1px solid #ddd; border-radius: 8px;
+                         padding: 12px 16px; margin-bottom: 14px; }
+  div[role="heading"] { font-weight: 600; margin-bottom: 8px; }
+  input[type="text"], textarea { width: 100%; padding: 6px; }
+  [role="radio"], [role="checkbox"], [role="option"] {
+      padding: 3px 0; cursor: pointer; }
+  [aria-checked="true"]::before { content: "● "; }
+  [aria-checked="false"]::before { content: "○ "; }
+  [role="button"] { display: inline-block; padding: 8px 18px;
+                    background: #1a73e8; color: #fff; border-radius: 4px;
+                    cursor: pointer; }
+</style>
+
+<div role="listitem">
+  <div role="heading" aria-level="3">What is your name? *</div>
+  <input type="text" aria-label="Your answer">
+</div>
+
+<div role="listitem">
+  <div role="heading" aria-level="3">Why do you want this role?</div>
+  <textarea aria-label="Your answer" rows="3"></textarea>
+</div>
+
+<div role="listitem">
+  <div role="heading" aria-level="3">Which year are you in? *</div>
+  <div role="radiogroup">
+    <div role="radio" aria-label="First year"  aria-checked="false">First year</div>
+    <div role="radio" aria-label="Second year" aria-checked="false">Second year</div>
+    <div role="radio" aria-label="Final year"  aria-checked="false">Final year</div>
+  </div>
+</div>
+
+<div role="listitem">
+  <div role="heading" aria-level="3">Which languages do you know?</div>
+  <div role="checkbox" aria-label="Python"     aria-checked="false">Python</div>
+  <div role="checkbox" aria-label="JavaScript" aria-checked="false">JavaScript</div>
+  <div role="checkbox" aria-label="Dart"       aria-checked="false">Dart</div>
+</div>
+
+<div role="listitem">
+  <div role="heading" aria-level="3">Preferred start date</div>
+  <div role="listbox" aria-label="Choose">
+    <div role="option" aria-label="Immediately" aria-selected="false">Immediately</div>
+    <div role="option" aria-label="Next month"  aria-selected="false">Next month</div>
+  </div>
+</div>
+
+<div role="button">Submit</div>
+
+<script>
+  // Google's own JS does this; the fixture needs it so clicks actually stick.
+  document.querySelectorAll('[role="radio"]').forEach(el => {
+    el.addEventListener('click', () => {
+      el.closest('[role="radiogroup"]')
+        .querySelectorAll('[role="radio"]')
+        .forEach(r => r.setAttribute('aria-checked', 'false'));
+      el.setAttribute('aria-checked', 'true');
+    });
+  });
+  document.querySelectorAll('[role="checkbox"]').forEach(el => {
+    el.addEventListener('click', () => {
+      el.setAttribute('aria-checked',
+        el.getAttribute('aria-checked') === 'true' ? 'false' : 'true');
+    });
+  });
+  document.querySelectorAll('[role="option"]').forEach(el => {
+    el.addEventListener('click', () => {
+      el.closest('[role="listbox"]')
+        .querySelectorAll('[role="option"]')
+        .forEach(o => o.setAttribute('aria-selected', 'false'));
+      el.setAttribute('aria-selected', 'true');
+    });
+  });
+  document.querySelector('[role="button"]')
+    .addEventListener('click', () => { window.__submitted = true; });
+
+  // Load with #prefill and the form arrives already filled. That's how the
+  // tests stand in for a human filling it in during a recording session.
+  if (location.hash === '#prefill') {
+    document.querySelector('input[type="text"]').value = 'Yash';
+    document.querySelector('textarea').value = 'I build AI assistants.';
+    document.querySelector('[role="radio"][aria-label="Final year"]').click();
+    document.querySelector('[role="checkbox"][aria-label="Python"]').click();
+    document.querySelector('[role="checkbox"][aria-label="Dart"]').click();
+    document.querySelector('[role="option"][aria-label="Immediately"]').click();
+  }
+</script>

@@ -9,11 +9,18 @@ from pathlib import Path
 
 from PySide6.QtCore import QObject, QPoint
 
+import config
+from core import brain
+from core.brain import Brain
 from core.events import bus
-from shell.ask import CommandBar, Picker
+from core.recipes import book
+from shell.ask import Approval, CommandBar, Confirm, Picker, Waiting
 from skills import apps
+from skills.webtask import FormTask, today
 
 OPEN_VERBS = ("open", "launch", "start", "run", "fire up", "boot up", "boot")
+FILL_VERBS = ("fill out", "fill in", "fill", "do the", "do my", "submit")
+TEACH_VERBS = ("teach", "learn", "remember")
 FILLER_PREFIX = ("the", "my", "up")
 FILLER_SUFFIX = ("for me", "please", "now", "app", "application")
 
@@ -42,10 +49,64 @@ def parse_open(text: str) -> str | None:
     return t.strip()
 
 
+def parse_fill(text: str) -> str | None:
+    """'fill out my internship form' -> 'internship form'."""
+    t = " ".join(text.lower().split())
+    for verb in sorted(FILL_VERBS, key=len, reverse=True):
+        if t.startswith(verb + " "):
+            t = t[len(verb) + 1:]
+            break
+    else:
+        return None
+    for w in ("the", "my", "a"):
+        if t.startswith(w + " "):
+            t = t[len(w) + 1:]
+    for w in ("for me", "please", "now"):
+        if t.endswith(" " + w):
+            t = t[:-(len(w) + 1)]
+    return t.strip()
+
+
+def parse_teach(text: str) -> tuple[str, str] | None:
+    """'teach internship form https://…' -> (name, url).
+
+    The URL is required and must be typed — dictating one never ends well.
+    """
+    t = " ".join(text.split())
+    low = t.lower()
+    for verb in sorted(TEACH_VERBS, key=len, reverse=True):
+        if low.startswith(verb + " "):
+            t = t[len(verb) + 1:]
+            break
+    else:
+        return None
+
+    parts = t.split()
+    urls = [w for w in parts if w.startswith(("http://", "https://"))]
+    if not urls:
+        return None
+    url = urls[0]
+    name = " ".join(w for w in parts if w != url).strip(" '\"")
+    return (name, url) if name else None
+
+
 class Commander(QObject):
     def __init__(self, window) -> None:
         super().__init__(window)
         self._window = window
+        self._asked = ""
+        self._form_name = ""
+        self._pending_url = ""
+        self._brain = Brain()
+        self._brain.parsed.connect(self._on_parsed)
+
+        self._task = FormTask(self)
+        self._task.opened.connect(self._on_form_opened)
+        self._task.recorded.connect(self._on_form_recorded)
+        self._task.awaiting_approval.connect(self._on_form_awaiting)
+        self._task.done.connect(lambda m: bus.say_here.emit(m, "happy"))
+        self._task.failed.connect(lambda m: bus.say_here.emit(m, "alert"))
+
         bus.command.connect(self.prompt)
 
     def _anchor(self) -> QPoint:
@@ -58,15 +119,105 @@ class Commander(QObject):
             self.handle(text)
 
     def handle(self, text: str) -> None:
+        """Plain parsing first — it's instant and cannot invent anything.
+
+        Only when that fails do we wake the model, and whatever it concludes
+        needs a click before it happens.
+        """
         target = parse_open(text)
-        if target is None:
+        if target is not None:
+            if target:
+                self.open_app(target)
+            else:
+                bus.say_here.emit("open what?", "think")
+            return
+
+        taught = parse_teach(text)
+        if taught is not None:
+            self.teach_form(*taught)
+            return
+
+        form = parse_fill(text)
+        if form is not None:
+            if form:
+                self.fill_form(form)
+            else:
+                bus.say_here.emit("fill what?", "think")
+            return
+
+        if not brain.available():
             bus.say_here.emit(
-                "I only know how to open apps so far — try \"open brave\".", "think")
+                'try "open brave", or "fill <form name>".', "think")
             return
-        if not target:
-            bus.say_here.emit("open what?", "think")
+
+        self._asked = text
+        bus.say_here.emit("thinking…", "think")
+        self._brain.parse_async(text)
+
+    def _on_parsed(self, text: str, intent) -> None:
+        if intent is None:
+            bus.say_here.emit("couldn't reach my local brain just now.", "alert")
             return
-        self.open_app(target)
+
+        if not intent.actionable:
+            # Deliberately blunt. The model's "chat"/"question" answers are not
+            # something the pet can carry out, and pretending otherwise is how
+            # you end up with invented tasks.
+            bus.say_here.emit("I heard you, but that's not something I can do yet.",
+                              "think")
+            return
+
+        if config.CONFIRM_MODEL_ACTIONS:
+            proposal = f"Open {intent.target}?"
+            if not Confirm.ask(text, proposal, self._anchor(), self._window):
+                bus.say_here.emit("okay, dropped it.", "happy")
+                return
+        self.open_app(intent.target)
+
+    # --- web forms ---
+
+    def teach_form(self, name: str, url: str) -> None:
+        bus.say_here.emit(f"opening {name} — fill it in and I'll watch.", "think")
+        self._form_name = name
+        self._pending_url = url          # needed when the recording comes back
+        self._task.record(name, url)
+
+    def fill_form(self, name: str) -> None:
+        recipe = book.form_for(name)
+        if recipe is None:
+            # Never guess at a form. Teaching one needs a URL, which has to be
+            # typed rather than dictated.
+            known = ", ".join(book.known_forms()) or "none yet"
+            bus.say_here.emit(
+                f"I've not been taught \"{name}\". Teach me with: "
+                f"teach {name} <url>.  I know: {known}", "think")
+            return
+        self._form_name = name
+        bus.say_here.emit(f"filling {name} — I'll stop before submitting.", "think")
+        self._task.replay(name, recipe)
+
+    def _on_form_opened(self, url: str, questions) -> None:
+        name = self._form_name
+        ok = Waiting.show_for(name, questions, self._anchor(), self._window)
+        self._task.release(ok)
+
+    def _on_form_recorded(self, name: str, answers: dict) -> None:
+        book.learn_form(name, self._pending_url or "", answers, today())
+        bus.say_here.emit(f"learned {name} — {len(answers)} answers. "
+                          f'Say "fill {name}" next time.', "happy")
+
+    def _on_form_awaiting(self, name: str, filled, skipped) -> None:
+        ok = Approval.ask(name, filled, skipped, self._anchor(), self._window)
+        self._task.release(ok)
+
+    # --- voice ---
+
+    def on_wake(self) -> None:
+        bus.say_here.emit("yes?", "happy")
+
+    def on_heard(self, text: str) -> None:
+        if text.strip():
+            self.handle(text)
 
     # --- the app-opening skill ---
 

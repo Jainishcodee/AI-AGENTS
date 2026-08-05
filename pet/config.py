@@ -46,6 +46,37 @@ WALK_SPEED = _float("WALK_SPEED", 70.0)        # pixels per second
 IDLE_WANDER_SEC = _float("IDLE_WANDER_SEC", 25.0)   # how often it strolls somewhere new
 SLEEP_AFTER_MIN = _float("SLEEP_AFTER_MIN", 8.0)    # naps if you don't touch it
 
+# --- Ears (offline voice input) ---
+VOICE_INPUT = _bool("VOICE_INPUT", True)
+WAKE_WORD = os.getenv("WAKE_WORD", "").strip().lower() or PET_NAME.lower()
+MIC_INDEX = _int("MIC_INDEX", -1)              # -1 = system default
+# faster-whisper size. tiny.en is ~3x faster; base.en is noticeably more
+# accurate on Indian-accented English, which is what matters here.
+WHISPER_MODEL = os.getenv("WHISPER_MODEL", "base.en").strip()
+# CPU on purpose: the GPU's 4GB is already holding phi4-mini, and fighting over
+# it makes both slower than running whisper int8 on the CPU.
+WHISPER_DEVICE = os.getenv("WHISPER_DEVICE", "cpu").strip()
+
+# Voice activity detection. The noise floor is measured at startup; speech is
+# anything this many times louder.
+VAD_SENSITIVITY = _float("VAD_SENSITIVITY", 2.6)
+VAD_SILENCE_SEC = _float("VAD_SILENCE_SEC", 0.8)    # end of utterance
+VAD_MAX_SEC = _float("VAD_MAX_SEC", 12.0)           # hard cap on one utterance
+VAD_MIN_SEC = _float("VAD_MIN_SEC", 0.35)           # ignore coughs and clicks
+# After the wake word alone, how long to wait for the actual instruction.
+FOLLOWUP_SEC = _float("FOLLOWUP_SEC", 8.0)
+
+# --- Brain (local LLM, fallback only) ---
+BRAIN_ENABLED = _bool("BRAIN_ENABLED", True)
+OLLAMA_HOST = os.getenv("OLLAMA_HOST", "http://127.0.0.1:11434").strip().rstrip("/")
+OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "phi4-mini").strip()
+OLLAMA_TIMEOUT = _float("OLLAMA_TIMEOUT", 30.0)
+
+# Anything the *model* interpreted needs a click before it happens — it will
+# happily invent a task from a sentence that wasn't a request. Plain-parsed
+# commands ("open brave") skip this and run instantly.
+CONFIRM_MODEL_ACTIONS = _bool("CONFIRM_MODEL_ACTIONS", True)
+
 # --- Browser (used from Phase 3 for recorded web tasks) ---
 # Brave, Chrome and Edge are all Chromium, so Playwright drives any of them via
 # executable_path — no bundled browser download needed. Brave first, because
@@ -72,6 +103,10 @@ BROWSER_PATH = os.getenv("BROWSER_PATH", "").strip() or _find_browser()
 # Recorded web tasks run in their own profile dir, so the pet never has to
 # borrow (or lock) the browser window you're actually using. You sign in once.
 BROWSER_PROFILE = str(ROOT / "browser_profile")
+
+# Headed by default and deliberately so: you're meant to watch a form get
+# filled, and you can't approve what you can't see. Tests flip this.
+BROWSER_HEADLESS = _bool("BROWSER_HEADLESS", False)
 
 # --- Nudges ---
 WATER_INTERVAL_MIN = _float("WATER_INTERVAL_MIN", 45.0)

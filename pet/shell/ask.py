@@ -9,6 +9,7 @@ Both are frameless and dark, to match the speech bubble rather than look like
 a stray Windows dialog.
 """
 from PySide6.QtCore import QPoint, Qt
+from PySide6.QtGui import QColor
 from PySide6.QtWidgets import (QCheckBox, QDialog, QHBoxLayout, QLabel,
                                QLineEdit, QListWidget, QListWidgetItem,
                                QPushButton, QVBoxLayout)
@@ -74,11 +75,12 @@ class CommandBar(_Frameless):
         lay.addWidget(QLabel(f"What do you need, boss?"))
         self.edit = QLineEdit()
         self.edit.setPlaceholderText("open brave")
-        self.edit.setMinimumWidth(340)
+        self.edit.setMinimumWidth(400)
         self.edit.returnPressed.connect(self.accept)
         lay.addWidget(self.edit)
 
-        hint = QLabel("I can open apps so far.  Esc to cancel.")
+        hint = QLabel("open <app>  ·  fill <form>  ·  teach <form> <url>"
+                      "\nEsc to cancel.")
         hint.setObjectName("hint")
         lay.addWidget(hint)
 
@@ -90,6 +92,170 @@ class CommandBar(_Frameless):
         if dlg.exec() == QDialog.DialogCode.Accepted:
             return dlg.edit.text().strip() or None
         return None
+
+
+class Confirm(_Frameless):
+    """'I think you meant this — shall I?'
+
+    Shown for anything the *model* interpreted rather than the plain parser.
+    The model will invent a task from a sentence that wasn't a request, so it
+    never gets to act on its own conclusion.
+    """
+
+    def __init__(self, heard: str, proposal: str, parent=None) -> None:
+        super().__init__(parent)
+        lay = QVBoxLayout(self)
+        lay.setContentsMargins(16, 14, 16, 14)
+        lay.setSpacing(4)
+
+        said = QLabel(f"You said: “{heard}”")
+        said.setObjectName("hint")
+        said.setWordWrap(True)
+        said.setMaximumWidth(380)
+        lay.addWidget(said)
+
+        prop = QLabel(proposal)
+        prop.setWordWrap(True)
+        prop.setMaximumWidth(380)
+        prop.setStyleSheet("font-size: 15px; padding: 6px 0 2px;")
+        lay.addWidget(prop)
+
+        why = QLabel("I worked this out rather than being told it, so I'll ask first.")
+        why.setObjectName("hint")
+        why.setWordWrap(True)
+        why.setMaximumWidth(380)
+        lay.addWidget(why)
+
+        row = QHBoxLayout()
+        row.addStretch(1)
+        no = QPushButton("No")
+        no.clicked.connect(self.reject)
+        row.addWidget(no)
+        yes = QPushButton("Do it")
+        yes.setObjectName("primary")
+        yes.setDefault(True)
+        yes.clicked.connect(self.accept)
+        row.addWidget(yes)
+        lay.addLayout(row)
+
+    @staticmethod
+    def ask(heard: str, proposal: str, anchor: QPoint, parent=None) -> bool:
+        dlg = Confirm(heard, proposal, parent)
+        dlg.place_above(anchor)
+        return dlg.exec() == QDialog.DialogCode.Accepted
+
+
+class Waiting(_Frameless):
+    """Up while YOU fill the form in Brave.
+
+    The pet has deliberately stepped back here — this is the teaching session,
+    and the whole point is that it watches rather than attempts.
+    """
+
+    def __init__(self, name: str, questions, parent=None) -> None:
+        super().__init__(parent)
+        lay = QVBoxLayout(self)
+        lay.setContentsMargins(16, 14, 16, 14)
+        lay.setSpacing(8)
+
+        head = QLabel(f"Fill in “{name}” in Brave — I'm watching.")
+        head.setStyleSheet("font-size: 15px;")
+        head.setWordWrap(True)
+        head.setMaximumWidth(400)
+        lay.addWidget(head)
+
+        listing = QListWidget()
+        listing.setMinimumWidth(400)
+        listing.setMaximumHeight(200)
+        for q in questions:
+            listing.addItem(QListWidgetItem(str(q)))
+        listing.setSelectionMode(QListWidget.SelectionMode.NoSelection)
+        lay.addWidget(listing)
+
+        hint = QLabel("Don't submit it. Click below when the answers are in, "
+                      "and I'll remember them for next time.")
+        hint.setObjectName("hint")
+        hint.setWordWrap(True)
+        hint.setMaximumWidth(400)
+        lay.addWidget(hint)
+
+        row = QHBoxLayout()
+        row.addStretch(1)
+        cancel = QPushButton("Forget it")
+        cancel.clicked.connect(self.reject)
+        row.addWidget(cancel)
+        ok = QPushButton("I've filled it in")
+        ok.setObjectName("primary")
+        ok.setDefault(True)
+        ok.clicked.connect(self.accept)
+        row.addWidget(ok)
+        lay.addLayout(row)
+
+    @staticmethod
+    def show_for(name: str, questions, anchor: QPoint, parent=None) -> bool:
+        dlg = Waiting(name, questions, parent)
+        dlg.place_above(anchor)
+        return dlg.exec() == QDialog.DialogCode.Accepted
+
+
+class Approval(_Frameless):
+    """The last gate before something irreversible happens."""
+
+    def __init__(self, name: str, filled: list, skipped: list, parent=None) -> None:
+        super().__init__(parent)
+        lay = QVBoxLayout(self)
+        lay.setContentsMargins(16, 14, 16, 14)
+        lay.setSpacing(8)
+
+        head = QLabel(f"“{name}” is filled in. Submit it?")
+        head.setStyleSheet("font-size: 15px;")
+        head.setWordWrap(True)
+        head.setMaximumWidth(400)
+        lay.addWidget(head)
+
+        listing = QListWidget()
+        listing.setMinimumWidth(400)
+        listing.setMaximumHeight(200)
+        for t in filled:
+            listing.addItem(QListWidgetItem(f"✓  {t}"))
+        for s in skipped:
+            item = QListWidgetItem(f"!  {s}")
+            item.setForeground(QColor("#E0A03C"))
+            listing.addItem(item)
+        listing.setSelectionMode(QListWidget.SelectionMode.NoSelection)
+        lay.addWidget(listing)
+
+        if skipped:
+            warn = QLabel(f"{len(skipped)} field(s) I couldn't fill — check "
+                          f"them in Brave before submitting.")
+            warn.setWordWrap(True)
+            warn.setMaximumWidth(400)
+            warn.setStyleSheet("color: #E0A03C; font-size: 12px;")
+            lay.addWidget(warn)
+        else:
+            hint = QLabel("Have a look in Brave first. Nothing has been sent.")
+            hint.setObjectName("hint")
+            lay.addWidget(hint)
+
+        row = QHBoxLayout()
+        row.addStretch(1)
+        no = QPushButton("Don't submit")
+        no.clicked.connect(self.reject)
+        row.addWidget(no)
+        yes = QPushButton("Submit it")
+        yes.setObjectName("primary")
+        # Deliberately NOT the default button: submitting is irreversible, and
+        # a stray Enter shouldn't do it.
+        yes.clicked.connect(self.accept)
+        row.addWidget(yes)
+        lay.addLayout(row)
+
+    @staticmethod
+    def ask(name: str, filled: list, skipped: list, anchor: QPoint,
+            parent=None) -> bool:
+        dlg = Approval(name, filled, skipped, parent)
+        dlg.place_above(anchor)
+        return dlg.exec() == QDialog.DialogCode.Accepted
 
 
 class Picker(_Frameless):
