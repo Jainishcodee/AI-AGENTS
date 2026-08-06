@@ -29,6 +29,7 @@ game is complete and shippable with none of this done.
 Establishing shot for a detective case titled "The Quiet Room". Six people sat in the dark at 85 Sodela Walk on Thursday evening to speak with the dead. Wide cinematic framing, 21:9. 1984 film noir, black and white, heavy 35mm grain, deep shadow, single hard light source, no text, no watermark, no people facing camera
 ```
 
+
 ### `harbor-lights`
 
 *Harbor Lights*

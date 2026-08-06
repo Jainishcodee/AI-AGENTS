@@ -88,14 +88,20 @@ class Settings(BaseSettings):
         default="gemini:gemini-2.5-flash", validation_alias="COUNCIL_MODEL_REASONING"
     )
     route_synthesis: str = Field(
-        default="gemini:gemini-2.5-pro", validation_alias="COUNCIL_MODEL_SYNTHESIS"
+        default="gemini:gemini-2.5-flash", validation_alias="COUNCIL_MODEL_SYNTHESIS"
     )
     route_fallback: str | None = Field(
         default=None, validation_alias="COUNCIL_MODEL_FALLBACK"
     )
 
     # ---------------------------------------------------------------- limits --
-    max_concurrency: int = Field(default=4, ge=1, le=32, validation_alias="COUNCIL_MAX_CONCURRENCY")
+    max_concurrency: int = Field(default=3, ge=1, le=32, validation_alias="COUNCIL_MAX_CONCURRENCY")
+    max_rpm: int = Field(
+        default=8, ge=0, le=10_000, validation_alias="COUNCIL_MAX_RPM"
+    )
+    """Requests per minute, across all providers. 0 disables pacing.
+
+    This, not concurrency, is what free tiers actually meter."""
     request_timeout_s: float = Field(
         default=120.0, gt=0, validation_alias="COUNCIL_REQUEST_TIMEOUT_S"
     )

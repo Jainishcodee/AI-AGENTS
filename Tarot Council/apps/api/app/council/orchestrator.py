@@ -474,14 +474,14 @@ class Council:
         synthesis: Synthesis, deliberation: Deliberation
     ) -> Synthesis:
         """Rules cheap enough to enforce in code rather than trust to the prompt."""
-        followed = [
-            r
-            for r in deliberation.runs
-            if r.conclusion
-            and any(m.module == r.module for m in synthesis.minority_opinions) is False
-        ]
+        dissenting = {m.module for m in synthesis.minority_opinions}
         ceiling = max(
-            (r.conclusion.confidence.score for r in followed if r.conclusion), default=None
+            (
+                r.conclusion.confidence.score
+                for r in deliberation.runs
+                if r.conclusion and r.module not in dissenting
+            ),
+            default=None,
         )
         if ceiling is not None and synthesis.confidence.score > ceiling:
             synthesis.confidence.score = ceiling

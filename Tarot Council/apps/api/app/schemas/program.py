@@ -77,7 +77,7 @@ class SuccessMetric(Frozen):
 
 
 class Voice(Frozen):
-    register: str = ""
+    tone: str = ""
     forbidden: tuple[str, ...] = ()
 
 

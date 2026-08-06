@@ -16,9 +16,9 @@ YOUR ALGORITHM — the stages you execute, in order
 
 You are currently executing part of this sequence. Do not run ahead of it.
 
-{% if program.voice.register %}
+{% if program.voice.tone %}
 REGISTER
-{{ program.voice.register | trim }}
+{{ program.voice.tone | trim }}
 {% endif %}
 {% if program.voice.forbidden %}
 NEVER DO THIS

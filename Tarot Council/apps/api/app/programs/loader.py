@@ -232,7 +232,7 @@ def preset(name: str) -> Preset:
         others = tuple(m for m in sorted(programs()) if m != module)
         return Preset(
             id=name,
-            name=f"Solo — {module}",
+            name=f"Solo - {module}",
             description=f"{module} runs its full program; the others critique only.",
             primary=(module,),
             critic=others,

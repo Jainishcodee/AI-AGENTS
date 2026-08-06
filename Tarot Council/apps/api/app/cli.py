@@ -21,7 +21,35 @@ from .schemas.council import Deliberation, DeliberationRequest
 DIM = "\033[2m"
 BOLD = "\033[1m"
 RESET = "\033[0m"
-RULE = "─" * 78
+
+
+def _force_utf8() -> bool:
+    """Windows consoles default to cp1252, which cannot encode the glyphs below.
+
+    Reconfiguring is enough on Python 3.7+; if it fails (a redirected non-UTF-8
+    stream) we fall back to ASCII rather than crashing at the last line of output.
+    """
+    ok = True
+    for stream in (sys.stdout, sys.stderr):
+        try:
+            stream.reconfigure(encoding="utf-8", errors="replace")  # type: ignore[union-attr]
+        except (AttributeError, ValueError, OSError):
+            ok = False
+    return ok
+
+
+UNICODE_OK = _force_utf8()
+RULE = ("─" if UNICODE_OK else "-") * 78
+GLYPH = {
+    "ok": "✓" if UNICODE_OK else "+",
+    "bad": "!" ,
+    "gone": "✗" if UNICODE_OK else "x",
+    "arrow": "▸" if UNICODE_OK else ">",
+    "swords": "⚔" if UNICODE_OK else "*",
+    "cycle": "↻" if UNICODE_OK else "~",
+    "dot": "·" if UNICODE_OK else "-",
+    "to": "→" if UNICODE_OK else "->",
+}
 
 
 def _supports_colour() -> bool:
@@ -102,10 +130,12 @@ async def _run(args: argparse.Namespace) -> int:
 def _progress(event) -> None:
     p = event.payload
     if event.type == "stage_started":
-        print(_c(f"\n▸ {p.get('label', p.get('phase'))}", BOLD), file=sys.stderr)
+        print(
+            _c(f"\n{GLYPH['arrow']} {p.get('label', p.get('phase'))}", BOLD), file=sys.stderr
+        )
     elif event.type == "artifact_complete":
         print(
-            _c(f"  ✓ {p['module']:<13} {p['stage_id']:<16} {p['artifact']['kind']}", DIM),
+            _c(f"  {GLYPH['ok']} {p['module']:<13} {p['stage_id']:<16} {p['artifact']['kind']}", DIM),
             file=sys.stderr,
         )
     elif event.type == "artifact_invalid":
@@ -115,14 +145,14 @@ def _progress(event) -> None:
             file=sys.stderr,
         )
     elif event.type == "module_abstained":
-        print(_c(f"  ✗ {p['module']} abstained: {p.get('reason', '')[:80]}", DIM), file=sys.stderr)
+        print(_c(f"  {GLYPH['gone']} {p['module']} abstained: {p.get('reason', '')[:80]}", DIM), file=sys.stderr)
     elif event.type == "critique_complete":
-        print(_c(f"  ⚔ {p['module']:<13} {len(p['critiques'])} critiques", DIM), file=sys.stderr)
+        print(_c(f"  {GLYPH['swords']} {p['module']:<13} {len(p['critiques'])} critiques", DIM), file=sys.stderr)
     elif event.type == "revision_complete":
         r = p["revision"]
         print(
             _c(
-                f"  ↻ {r['module']:<13} {r['delta'][:60]} "
+                f"  {GLYPH['cycle']} {r['module']:<13} {r['delta'][:60]} "
                 f"(confidence {r['confidence']['score']})",
                 DIM,
             ),
@@ -159,7 +189,7 @@ def _report(d: Deliberation) -> None:
         for artifact in run.artifacts:
             if artifact.kind == "Conclusion":
                 continue
-            print(_c(f"  · {artifact.title or artifact.stage_id} → {artifact.kind}", DIM))
+            print(_c(f"  {GLYPH['dot']} {artifact.title or artifact.stage_id} {GLYPH['to']} {artifact.kind}", DIM))
         if run.conclusion:
             c = run.conclusion
             print()
@@ -180,7 +210,7 @@ def _report(d: Deliberation) -> None:
                 ref += f"#{critique.target_ref.row_id}]" if critique.target_ref.row_id else "]"
             print(
                 _wrap(
-                    f"{critique.critic} → {critique.target}{ref} "
+                    f"{critique.critic} {GLYPH['to']} {critique.target}{ref} "
                     f"({critique.kind}/{critique.severity}): {critique.statement}"
                 )
             )
@@ -196,12 +226,12 @@ def _report(d: Deliberation) -> None:
     if s.consensus:
         print(_c("\nCONSENSUS", BOLD))
         for point in s.consensus:
-            print(_wrap(f"· {point.point} ({', '.join(point.modules)})"))
+            print(_wrap(f"{GLYPH['dot']} {point.point} ({', '.join(point.modules)})"))
 
     if s.disagreements:
         print(_c("\nDISAGREEMENTS", BOLD))
         for disagreement in s.disagreements:
-            print(_wrap(f"· {disagreement.issue}"))
+            print(_wrap(f"{GLYPH['dot']} {disagreement.issue}"))
             for position in disagreement.positions:
                 print(_wrap(f"  {position.module}: {position.position}", indent="    "))
             print(_wrap(f"  resolves if: {disagreement.what_would_resolve_it}", indent="    "))
@@ -210,7 +240,7 @@ def _report(d: Deliberation) -> None:
         print(_c("\nBIASES THAT FIRED", BOLD))
         for fired in s.blind_spots_fired:
             mark = "corrected" if fired.corrected else "uncorrected"
-            print(_wrap(f"· {fired.module}/{fired.bias_id} ({mark}): {fired.evidence}"))
+            print(_wrap(f"{GLYPH['dot']} {fired.module}/{fired.bias_id} ({mark}): {fired.evidence}"))
 
     print(_c("\nWHAT THE COUNCIL DID NOT EXAMINE", BOLD))
     print(_wrap(s.council_blind_spot))
@@ -235,7 +265,7 @@ def _report(d: Deliberation) -> None:
     if s.minority_opinions:
         print(_c("\nMINORITY OPINIONS", BOLD))
         for minority in s.minority_opinions:
-            print(_wrap(f"· {minority.module}: {minority.position}"))
+            print(_wrap(f"{GLYPH['dot']} {minority.module}: {minority.position}"))
             print(_wrap(f"  right if: {minority.when_it_would_be_right}", indent="    "))
 
     if s.alternative_strategy:

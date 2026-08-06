@@ -281,9 +281,31 @@ def citable_refs(run: ModuleRun) -> set[str]:
             if not isinstance(value, list):
                 continue
             for row in value:
-                if isinstance(row, dict) and isinstance(row.get("id"), str):
-                    refs.add(f"{base}#{row['id']}")
+                if isinstance(row, dict):
+                    key = _row_key(row)
+                    if key is not None:
+                        refs.add(f"{base}#{key}")
     return refs
+
+
+ROW_KEYS = ("id", "option_id", "actor_id", "person_id", "order")
+"""Not every artifact keys its rows on `id`.
+
+A sequence step is identified by `order`, a harm row by `option_id`, a profile by
+`person_id`. Recognising all of them is what stops the terminal stage from being
+told a real row is uncitable — which showed up immediately in live runs as a wasted
+repair call.
+"""
+
+
+def _row_key(row: dict[str, object]) -> str | None:
+    for key in ROW_KEYS:
+        value = row.get(key)
+        if isinstance(value, str) and value.strip():
+            return value
+        if isinstance(value, int) and not isinstance(value, bool):
+            return str(value)
+    return None
 
 
 def as_json_model(model: type[BaseModel]) -> type[BaseModel]:

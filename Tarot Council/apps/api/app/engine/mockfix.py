@@ -328,29 +328,32 @@ def fix_sequence(data: dict[str, Any], prompt: str) -> dict[str, Any]:
 # ══════════════════════════════════════════════════════════════ psychologist ══
 
 
+_DEFAULT_CAST: list[dict[str, Any]] = [
+    {
+        "id": "me",
+        "label": "me",
+        "relationship_to_user": "self",
+        "is_user": True,
+        "inferred": False,
+    },
+    {
+        "id": "other",
+        "label": "the other person",
+        "relationship_to_user": "counterpart",
+        "is_user": False,
+        "inferred": True,
+    },
+]
+
+
 def fix_person_list(data: dict[str, Any], prompt: str) -> dict[str, Any]:
-    data["people"] = [
-        {
-            "id": "me",
-            "label": "me",
-            "relationship_to_user": "self",
-            "is_user": True,
-            "inferred": False,
-        },
-        {
-            "id": "other",
-            "label": "the other person",
-            "relationship_to_user": "counterpart",
-            "is_user": False,
-            "inferred": True,
-        },
-    ]
+    data["people"] = [dict(p) for p in _DEFAULT_CAST]
     return data
 
 
 def fix_profiles(data: dict[str, Any], prompt: str) -> dict[str, Any]:
     person_list = priors(prompt).get("PersonList") or {}
-    people = person_list.get("people") or [{"id": "me", "inferred": False}]
+    people = person_list.get("people") or _DEFAULT_CAST
     data["profiles"] = [
         {
             "person_id": p["id"],
@@ -524,7 +527,132 @@ def fix_conclusion(data: dict[str, Any], prompt: str) -> dict[str, Any]:
     return data
 
 
+# ═══════════════════════════════════════════════════════ council-level calls ══
+
+_MODULE_HEADER = re.compile(r"^MODULE:?\s+(?P<module>[a-z_]+)", re.MULTILINE)
+
+
+def fix_critiques(data: dict[str, Any], prompt: str) -> dict[str, Any]:
+    """Aim the synthesised critiques at modules that actually appear in the prompt.
+
+    Without this the placeholder `target` never matches a running module and every
+    critique is silently dropped — which would make the debate stage untestable.
+    """
+    targets = _MODULE_HEADER.findall(prompt)
+    if not targets:
+        data["critiques"] = []
+        return data
+    kinds = ["missing_factor", "unsupported", "bias_fired", "strong_agreement"]
+    data["critiques"] = [
+        {
+            "target": target,
+            "target_ref": None,
+            "kind": kinds[i % len(kinds)],
+            "statement": f"[mock] critique of {target}",
+            "severity": 3,
+            "bias_id": None,
+        }
+        for i, target in enumerate(dict.fromkeys(targets))
+    ]
+    # `bias_fired` requires a bias id; take the first one listed for that target.
+    for critique in data["critiques"]:
+        if critique["kind"] == "bias_fired":
+            match = re.search(
+                rf"MODULE:?\s+{critique['target']}\b.*?- `(?P<bias>[a-z_]+)`",
+                prompt,
+                re.DOTALL,
+            )
+            if match:
+                critique["bias_id"] = match.group("bias")
+            else:
+                critique["kind"] = "missing_factor"
+    return data
+
+
+def fix_revision(data: dict[str, Any], prompt: str) -> dict[str, Any]:
+    data["stance"] = "Take the mock action within the next two weeks."
+    data["delta"] = "[mock] unchanged after review"
+    confidence = data.get("confidence") or {}
+    confidence["score"] = 0.6
+    confidence["basis"] = "[mock] basis after critique"
+    confidence["falsifier"] = "[mock] the observation that would flip this."
+    data["confidence"] = confidence
+    data["accepted"] = []
+    data["rejected"] = []
+    return data
+
+
+def fix_synthesis(data: dict[str, Any], prompt: str) -> dict[str, Any]:
+    modules = list(dict.fromkeys(_MODULE_HEADER.findall(prompt)))
+    data["debate_summary"] = "[mock] the council disagreed about tempo versus evidence."
+    data["council_blind_spot"] = (
+        "[mock] no module examined whether the user actually wants the thing they are "
+        "optimising for."
+    )
+    data["consensus"] = [
+        {"point": "[mock] a point all modules supported", "modules": modules, "supported_by": []}
+    ]
+    data["disagreements"] = []
+    data["blind_spots_fired"] = []
+    data["minority_opinions"] = (
+        [
+            {
+                "module": modules[-1],
+                "position": "[mock] the dissenting position",
+                "when_it_would_be_right": "[mock] if the stated savings figure is wrong",
+            }
+        ]
+        if modules
+        else []
+    )
+    recommendation = data.get("recommendation") or {}
+    recommendation["action"] = "[mock] the recommended course of action"
+    recommendation["first_action"] = "[mock] one concrete step in the next 48 hours"
+    data["recommendation"] = recommendation
+    confidence = data.get("confidence") or {}
+    confidence["score"] = 0.55
+    confidence["basis"] = "[mock] synthesis basis"
+    confidence["falsifier"] = "[mock] what would overturn the recommendation."
+    data["confidence"] = confidence
+    data["expected_outcome"] = {
+        "statement": "[mock] a falsifiable prediction about the next 90 days",
+        "check_in_days": 90,
+        "measurable_by": "[mock] how it would be measured",
+    }
+    data["long_term_prediction"] = [
+        {"horizon": h, "prediction": f"[mock] prediction at {h}", "confidence": 0.5}
+        for h in ("3mo", "1y", "5y")
+    ]
+    data["information_to_gather"] = ["[mock] the highest-value unknown"]
+    data["alternative_strategy"] = {
+        "action": "[mock] the second-best path",
+        "trigger": "[mock] switch if this happens",
+    }
+    return data
+
+
+def fix_intake(data: dict[str, Any], prompt: str) -> dict[str, Any]:
+    q = question(prompt)
+    data["normalised"] = f"[mock] {' '.join(q.split()[:12])}"
+    data["domains"] = ["career"]
+    data["options"] = [
+        {"id": "opt1", "label": "[mock] act", "description": "[mock] take the action"},
+        {"id": "opt2", "label": "[mock] wait", "description": "[mock] hold position"},
+    ]
+    data["actors"] = ["my manager"]
+    data["constraints"] = ["[mock] a stated constraint"]
+    data["current_state"] = "[mock] what the user is doing now"
+    data["stated_values"] = ["[mock] a value the user named"]
+    data["missing_inputs"] = ["[mock] something the user did not supply"]
+    data["is_decision"] = True
+    return data
+
+
 FIXUPS: dict[str, Fixup] = {
+    "IntakeResult": fix_intake,
+    "CritiqueList": fix_critiques,
+    "RevisionDraft": fix_revision,
+    "Synthesis": fix_synthesis,
     "EvidenceLedger": fix_evidence_ledger,
     "EvidenceGaps": fix_evidence_gaps,
     "ProbabilityTree": fix_probability_tree,

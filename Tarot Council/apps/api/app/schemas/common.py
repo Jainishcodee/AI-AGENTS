@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
-from typing import Literal
+from typing import Any, Literal, get_args
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
+
+_MISSING = object()
 
 # Module ids are plain strings, not a Literal, because Phase 5 lets users author
 # modules. `BUILTIN_MODULES` is for display ordering and defaults only — the
@@ -66,6 +68,30 @@ class Strict(BaseModel):
     """
 
     model_config = ConfigDict(extra="ignore", str_strip_whitespace=True)
+
+    @model_validator(mode="before")
+    @classmethod
+    def _null_means_absent(cls, data: Any) -> Any:
+        """Treat an explicit `null` as "not supplied" for non-nullable optionals.
+
+        Models emit `"calibration_note": null` for "nothing to say here" constantly.
+        Failing validation for that, and spending a repair call on it, is the wrong
+        trade: the field has a default and the intent is unambiguous. Fields that are
+        genuinely `X | None` keep their null.
+        """
+        if not isinstance(data, dict):
+            return data
+        cleaned: dict[str, Any] | None = None
+        for name, field in cls.model_fields.items():
+            if data.get(name, _MISSING) is not None or field.is_required():
+                continue
+            annotation = field.annotation
+            if type(None) in get_args(annotation):
+                continue  # declared nullable — null is meaningful
+            if cleaned is None:
+                cleaned = dict(data)
+            cleaned[name] = field.get_default(call_default_factory=True)
+        return cleaned if cleaned is not None else data
 
 
 class Confidence(Strict):

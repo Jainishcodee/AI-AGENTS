@@ -268,6 +268,13 @@ class MockProvider:
                 and isinstance(data.get(name), dict)
             ):
                 data[name] = self._apply(annotation, data[name], prompt)
+                # Append each fixed sibling as a synthetic prior block so a later
+                # stage in the same batch can read what an earlier one produced —
+                # exactly as it would across separate calls.
+                prompt += (
+                    f'\n<prior stage="{name}" kind="{annotation.__name__}">\n'
+                    f"{json.dumps(data[name])}\n</prior>"
+                )
         return data
 
     async def complete(self, request: LLMRequest, model: str) -> LLMResponse:
