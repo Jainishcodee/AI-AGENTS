@@ -48,16 +48,17 @@
             </intent-filter>
         </receiver>
 
-        <!-- Water nudge: alarm -> overlay. The receiver also re-arms after a
-             reboot, since AlarmManager drops everything on restart. -->
+        <!-- Nudges (water, eyes): alarm -> overlay. The receiver also re-arms
+             after a reboot, since AlarmManager drops everything on restart. -->
         <service
-            android:name=".water.WaterOverlayService"
+            android:name=".nudge.NudgeOverlayService"
             android:exported="false"/>
         <receiver
-            android:name=".water.WaterAlarmReceiver"
+            android:name=".nudge.NudgeAlarmReceiver"
             android:exported="false">
             <intent-filter>
                 <action android:name="com.larossatech.jarvis.WATER_NUDGE"/>
+                <action android:name="com.larossatech.jarvis.EYES_NUDGE"/>
                 <action android:name="android.intent.action.BOOT_COMPLETED"/>
                 <action android:name="android.intent.action.MY_PACKAGE_REPLACED"/>
                 <action android:name="android.intent.action.QUICKBOOT_POWERON"/>

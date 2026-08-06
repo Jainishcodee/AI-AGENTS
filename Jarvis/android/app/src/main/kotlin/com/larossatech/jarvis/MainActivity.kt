@@ -4,15 +4,17 @@ import android.content.Intent
 import android.net.Uri
 import android.os.Build
 import android.provider.Settings
-import com.larossatech.jarvis.water.WaterAlarmReceiver
-import com.larossatech.jarvis.water.WaterPrefs
-import com.larossatech.jarvis.water.WaterScheduler
+import com.larossatech.jarvis.nudge.NudgeAlarmReceiver
+import com.larossatech.jarvis.nudge.NudgeKind
+import com.larossatech.jarvis.nudge.NudgePrefs
+import com.larossatech.jarvis.nudge.NudgeScheduler
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
 
 class MainActivity : FlutterActivity() {
 
+    // Named for the first nudge that used it; carries both kinds now.
     private val channel = "com.larossatech.jarvis/water"
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
@@ -20,6 +22,8 @@ class MainActivity : FlutterActivity() {
 
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, channel)
             .setMethodCallHandler { call, result ->
+                val kind = NudgeKind.from(call.argument<String>("kind"))
+
                 when (call.method) {
                     "canDrawOverlays" -> result.success(Settings.canDrawOverlays(this))
 
@@ -37,8 +41,8 @@ class MainActivity : FlutterActivity() {
 
                     "canScheduleExactAlarms" -> {
                         val ok = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                            val am = getSystemService(android.app.AlarmManager::class.java)
-                            am.canScheduleExactAlarms()
+                            getSystemService(android.app.AlarmManager::class.java)
+                                .canScheduleExactAlarms()
                         } else true
                         result.success(ok)
                     }
@@ -53,19 +57,20 @@ class MainActivity : FlutterActivity() {
                         result.success(null)
                     }
 
-                    "getSettings" -> result.success(settingsMap())
+                    "getSettings" -> result.success(settingsMap(kind))
 
                     "saveSettings" -> {
-                        WaterPrefs.save(
+                        NudgePrefs.save(
                             this,
+                            kind,
                             enabled = call.argument<Boolean>("enabled") ?: false,
-                            intervalMin = call.argument<Int>("intervalMin") ?: WaterPrefs.DEF_INTERVAL,
-                            startMin = call.argument<Int>("startMin") ?: WaterPrefs.DEF_START,
-                            endMin = call.argument<Int>("endMin") ?: WaterPrefs.DEF_END,
-                            targetMl = call.argument<Int>("targetMl") ?: WaterPrefs.DEF_TARGET,
+                            intervalMin = call.argument<Int>("intervalMin") ?: kind.defIntervalMin,
+                            startMin = call.argument<Int>("startMin") ?: kind.defStartMin,
+                            endMin = call.argument<Int>("endMin") ?: kind.defEndMin,
+                            amount = call.argument<Int>("amount") ?: kind.defAmount,
                         )
-                        WaterScheduler.sync(this)
-                        result.success(settingsMap())
+                        NudgeScheduler.sync(this, kind)
+                        result.success(settingsMap(kind))
                     }
 
                     // Lets the settings screen prove the overlay works without
@@ -74,7 +79,7 @@ class MainActivity : FlutterActivity() {
                         if (!Settings.canDrawOverlays(this)) {
                             result.success(false)
                         } else {
-                            WaterAlarmReceiver.showOverlay(applicationContext)
+                            NudgeAlarmReceiver.showOverlay(applicationContext, kind)
                             result.success(true)
                         }
                     }
@@ -84,15 +89,16 @@ class MainActivity : FlutterActivity() {
             }
     }
 
-    private fun settingsMap(): Map<String, Any> = mapOf(
-        "enabled" to WaterPrefs.enabled(this),
-        "intervalMin" to WaterPrefs.intervalMin(this),
-        "startMin" to WaterPrefs.startMin(this),
-        "endMin" to WaterPrefs.endMin(this),
-        "targetMl" to WaterPrefs.targetMl(this),
-        "perNudgeMl" to WaterPrefs.perNudgeMl(this),
-        "nudgesPerDay" to WaterPrefs.nudgesPerDay(this),
-        "countToday" to WaterPrefs.countToday(this),
-        "nextFireAt" to WaterScheduler.nextFireAt(this, System.currentTimeMillis()),
+    private fun settingsMap(k: NudgeKind): Map<String, Any> = mapOf(
+        "kind" to k.key,
+        "enabled" to NudgePrefs.enabled(this, k),
+        "intervalMin" to NudgePrefs.intervalMin(this, k),
+        "startMin" to NudgePrefs.startMin(this, k),
+        "endMin" to NudgePrefs.endMin(this, k),
+        "amount" to NudgePrefs.amount(this, k),
+        "perNudge" to NudgePrefs.perNudge(this, k),
+        "nudgesPerDay" to NudgePrefs.nudgesPerDay(this, k),
+        "countToday" to NudgePrefs.countToday(this, k),
+        "nextFireAt" to NudgeScheduler.nextFireAt(this, k, System.currentTimeMillis()),
     )
 }

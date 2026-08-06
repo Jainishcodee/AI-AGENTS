@@ -4,10 +4,11 @@ import 'package:flutter/material.dart';
 
 import '../models/reel_card.dart';
 import '../services/deck_db.dart';
-import '../widgets/card_bits.dart';
+import '../widgets/pirate_bits.dart';
+import '../widgets/wanted_poster.dart';
 import 'facts_screen.dart' show showFactSheet;
 
-/// Everything that came out of your saved reels, searchable.
+/// Everything that came out of your saved reels, as a wall of posters.
 ///
 /// Search covers the spoken content too, so a reel whose caption never used
 /// the words you remember can still be found by them.
@@ -51,7 +52,7 @@ class _LibraryScreenState extends State<LibraryScreen> {
 
   Future<void> _run() async {
     final q = _controller.text;
-    // With no query and no filters, show the whole shelf rather than nothing.
+    // With no query and no filters, show the whole wall rather than nothing.
     final bare = q.trim().isEmpty && _domain == null && _kind == null;
     final results = bare
         ? await widget.deck.allCards()
@@ -73,17 +74,44 @@ class _LibraryScreenState extends State<LibraryScreen> {
     return Column(
       children: [
         Padding(
-          padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+          padding: const EdgeInsets.fromLTRB(16, 10, 16, 0),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const ScreenHeader(
-                eyebrow: 'LIBRARY',
-                title: 'Everything you saved.',
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  const Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        PosterLabel('THE ARCHIVE', colour: kStraw, size: 10),
+                        SizedBox(height: 5),
+                        Text(
+                          'Everything you saved.',
+                          style: TextStyle(
+                            fontSize: 22,
+                            fontWeight: FontWeight.w800,
+                            letterSpacing: -0.3,
+                            color: kParchment,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  Text(
+                    '${_results.length}',
+                    style: TextStyle(
+                      fontSize: 24,
+                      fontWeight: FontWeight.w900,
+                      color: kStraw.withValues(alpha: 0.35),
+                    ),
+                  ),
+                ],
               ),
-              const SizedBox(height: 14),
-              _SearchField(controller: _controller, onChanged: _onTyped),
               const SizedBox(height: 12),
+              _SearchField(controller: _controller, onChanged: _onTyped),
+              const SizedBox(height: 11),
               _FilterRow(
                 domains: _domains,
                 domain: _domain,
@@ -97,31 +125,67 @@ class _LibraryScreenState extends State<LibraryScreen> {
                   _run();
                 },
               ),
-              const SizedBox(height: 10),
+              const SizedBox(height: 12),
             ],
           ),
         ),
         Expanded(
           child: _loading
-              ? const Center(child: CircularProgressIndicator(color: kTask))
+              ? const Center(child: CircularProgressIndicator(color: kStraw))
               : _results.isEmpty
-                  ? EmptyState(
-                      icon: Icons.search_off,
-                      title: 'Nothing matches',
-                      body: _controller.text.trim().isEmpty
-                          ? 'Import a deck to fill your library.'
-                          : 'Try a different word, or clear the filters.',
-                    )
-                  : ListView.separated(
-                      padding: const EdgeInsets.fromLTRB(16, 4, 16, 28),
+                  ? _empty()
+                  : GridView.builder(
+                      padding: const EdgeInsets.fromLTRB(16, 2, 16, 28),
+                      gridDelegate:
+                          const SliverGridDelegateWithFixedCrossAxisCount(
+                        crossAxisCount: 2,
+                        mainAxisSpacing: 14,
+                        crossAxisSpacing: 14,
+                        childAspectRatio: 0.66,
+                      ),
                       itemCount: _results.length,
-                      separatorBuilder: (_, __) => const SizedBox(height: 10),
-                      itemBuilder: (_, i) => _ResultRow(card: _results[i]),
+                      itemBuilder: (context, i) => MiniPoster(
+                        card: _results[i],
+                        onTap: () => showFactSheet(context, _results[i]),
+                      ),
                     ),
         ),
       ],
     );
   }
+
+  Widget _empty() => Center(
+        child: Padding(
+          padding: const EdgeInsets.all(34),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(Icons.search_off,
+                  size: 42, color: kParchmentDim.withValues(alpha: 0.3)),
+              const SizedBox(height: 14),
+              const Text(
+                'Nothing matches',
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w700,
+                  color: kParchment,
+                ),
+              ),
+              const SizedBox(height: 6),
+              Text(
+                _controller.text.trim().isEmpty
+                    ? 'Import a deck to fill the archive.'
+                    : 'Try a different word, or clear the filters.',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontSize: 13,
+                  color: kParchmentDim.withValues(alpha: 0.6),
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
 }
 
 class _SearchField extends StatelessWidget {
@@ -134,35 +198,31 @@ class _SearchField extends StatelessWidget {
     return TextField(
       controller: controller,
       onChanged: onChanged,
-      textInputAction: TextInputAction.search,
-      style: const TextStyle(color: Colors.white, fontSize: 15),
+      style: const TextStyle(color: kParchment, fontSize: 14.5),
+      cursorColor: kStraw,
       decoration: InputDecoration(
-        hintText: 'Search decisions, fitness, anything you saved',
-        hintStyle: TextStyle(color: Colors.white.withOpacity(0.3), fontSize: 14),
-        prefixIcon: Icon(Icons.search, color: Colors.white.withOpacity(0.35), size: 20),
-        suffixIcon: controller.text.isEmpty
-            ? null
-            : IconButton(
-                icon: Icon(Icons.close, color: Colors.white.withOpacity(0.35), size: 18),
-                onPressed: () {
-                  controller.clear();
-                  onChanged('');
-                },
-              ),
+        hintText: 'Search the archive…',
+        hintStyle: TextStyle(
+          color: kParchmentDim.withValues(alpha: 0.5),
+          fontSize: 14,
+        ),
+        prefixIcon: Icon(Icons.search,
+            size: 19, color: kParchmentDim.withValues(alpha: 0.6)),
+        isDense: true,
+        contentPadding: const EdgeInsets.symmetric(vertical: 12, horizontal: 14),
         filled: true,
-        fillColor: kSurface,
-        contentPadding: const EdgeInsets.symmetric(vertical: 0, horizontal: 14),
+        fillColor: kDeck,
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
-          borderSide: BorderSide(color: Colors.white.withOpacity(0.08)),
+          borderSide: BorderSide(color: kStrawDeep.withValues(alpha: 0.35)),
         ),
         enabledBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
-          borderSide: BorderSide(color: Colors.white.withOpacity(0.08)),
+          borderSide: BorderSide(color: kStrawDeep.withValues(alpha: 0.35)),
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
-          borderSide: BorderSide(color: kTask.withOpacity(0.6)),
+          borderSide: BorderSide(color: kStraw.withValues(alpha: 0.7)),
         ),
       ),
     );
@@ -177,6 +237,7 @@ class _FilterRow extends StatelessWidget {
     required this.onDomain,
     required this.onKind,
   });
+
   final List<(String, int)> domains;
   final String? domain;
   final CardKind? kind;
@@ -190,134 +251,49 @@ class _FilterRow extends StatelessWidget {
       child: ListView(
         scrollDirection: Axis.horizontal,
         children: [
-          _chip('Tasks', kind == CardKind.task, kTask,
+          _chip('All', domain == null && kind == null, () {
+            onKind(null);
+            onDomain(null);
+          }),
+          _chip('Wanted', kind == CardKind.task,
               () => onKind(kind == CardKind.task ? null : CardKind.task)),
-          _chip('Facts', kind == CardKind.fact, kFact,
+          _chip('Log', kind == CardKind.fact,
               () => onKind(kind == CardKind.fact ? null : CardKind.fact)),
-          Container(
-            width: 1,
-            margin: const EdgeInsets.symmetric(horizontal: 6, vertical: 7),
-            color: Colors.white.withOpacity(0.1),
+          Padding(
+            padding: const EdgeInsets.only(right: 8, top: 6, bottom: 6),
+            child: Container(width: 1, color: kStrawDeep.withValues(alpha: 0.3)),
           ),
           for (final (d, n) in domains)
-            _chip('$d  $n', domain == d, Colors.white70,
-                () => onDomain(domain == d ? null : d)),
+            _chip('$d  $n', domain == d, () => onDomain(domain == d ? null : d)),
         ],
       ),
     );
   }
 
-  Widget _chip(String label, bool on, Color tone, VoidCallback tap) => Padding(
-        padding: const EdgeInsets.only(right: 7),
+  Widget _chip(String label, bool on, VoidCallback tap) => Padding(
+        padding: const EdgeInsets.only(right: 8),
         child: GestureDetector(
           onTap: tap,
           child: Container(
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
             decoration: BoxDecoration(
-              color: on ? tone.withOpacity(0.18) : kSurface,
+              color: on ? kStraw.withValues(alpha: 0.20) : Colors.transparent,
               borderRadius: BorderRadius.circular(999),
               border: Border.all(
-                color: on ? tone.withOpacity(0.6) : Colors.white.withOpacity(0.09),
+                color: on
+                    ? kStraw.withValues(alpha: 0.7)
+                    : kStrawDeep.withValues(alpha: 0.35),
               ),
             ),
             child: Text(
               label,
               style: TextStyle(
                 fontSize: 11.5,
-                fontWeight: on ? FontWeight.w600 : FontWeight.w400,
-                color: on ? tone : Colors.white.withOpacity(0.55),
+                fontWeight: on ? FontWeight.w700 : FontWeight.w400,
+                color: on ? kStraw : kParchmentDim.withValues(alpha: 0.75),
               ),
             ),
           ),
         ),
       );
-}
-
-class _ResultRow extends StatelessWidget {
-  const _ResultRow({required this.card});
-  final ReelCard card;
-
-  @override
-  Widget build(BuildContext context) {
-    final accent = accentFor(card);
-    final headline = card.isTask
-        ? card.title
-        : (card.claim.isNotEmpty ? card.claim : card.title);
-    return GestureDetector(
-      onTap: () => showFactSheet(context, card),
-      child: Container(
-        decoration: BoxDecoration(
-          color: kSurface,
-          borderRadius: BorderRadius.circular(14),
-          border: Border(
-            left: BorderSide(color: accent, width: 3),
-            top: BorderSide(color: Colors.white.withOpacity(0.07)),
-            right: BorderSide(color: Colors.white.withOpacity(0.07)),
-            bottom: BorderSide(color: Colors.white.withOpacity(0.07)),
-          ),
-        ),
-        padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Pill(text: card.isTask ? 'TASK' : 'FACT', color: accent),
-                const SizedBox(width: 7),
-                Pill(
-                  text: card.domain.toUpperCase(),
-                  color: Colors.white.withOpacity(0.32),
-                ),
-                if (card.isTask && card.isDone) ...[
-                  const SizedBox(width: 7),
-                  Icon(Icons.check_circle, size: 14, color: accent.withOpacity(0.8)),
-                ],
-              ],
-            ),
-            const SizedBox(height: 9),
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                if (card.thumb.isNotEmpty) ...[
-                  CardThumb(card: card),
-                  const SizedBox(width: 12),
-                ],
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        headline,
-                        maxLines: 3,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          fontSize: 14.5,
-                          height: 1.32,
-                          fontWeight: FontWeight.w500,
-                          color: Colors.white,
-                        ),
-                      ),
-                      if (card.summary.isNotEmpty) ...[
-                        const SizedBox(height: 6),
-                        Text(
-                          card.summary,
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
-                            fontSize: 12.5,
-                            height: 1.4,
-                            color: Colors.white.withOpacity(0.5),
-                          ),
-                        ),
-                      ],
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          ],
-        ),
-      ),
-    );
-  }
 }

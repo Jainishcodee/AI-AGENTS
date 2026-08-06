@@ -3,9 +3,10 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../models/reel_card.dart';
 import '../services/deck_db.dart';
-import '../widgets/card_bits.dart';
+import '../widgets/pirate_bits.dart';
+import '../widgets/wanted_poster.dart';
 
-/// One fact a day from the reels you saved, plus the whole shelf underneath.
+/// One page of the ship's log a day, plus every page you've filled.
 ///
 /// Rating a card useful pushes it further out rather than removing it, so the
 /// rules you care about keep coming back on a widening interval.
@@ -41,6 +42,8 @@ class _FactsScreenState extends State<FactsScreen> {
       _all = all;
       _domains = domains;
       _loading = false;
+      // A refresh can hand back a different card, so the rating UI resets with it.
+      _rated = false;
     });
   }
 
@@ -53,7 +56,7 @@ class _FactsScreenState extends State<FactsScreen> {
         behavior: SnackBarBehavior.floating,
         content: Text(useful
             ? 'Kept — this one comes back later.'
-            : 'Retired — you won\'t see this again.'),
+            : 'Struck from the log — you won\'t see it again.'),
         action: useful
             ? null
             : SnackBarAction(
@@ -76,201 +79,142 @@ class _FactsScreenState extends State<FactsScreen> {
   @override
   Widget build(BuildContext context) {
     if (_loading) {
-      return const Center(child: CircularProgressIndicator(color: kFact));
+      return const Center(child: CircularProgressIndicator(color: kStraw));
     }
     if (_today == null && _all.isEmpty) {
-      return const EmptyState(
-        icon: Icons.lightbulb_outline,
-        title: 'No facts yet',
-        body: 'Facts show up here once a deck with them is imported.',
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.all(36),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const StrawHat(size: 80),
+              const SizedBox(height: 18),
+              const Text(
+                'The log is empty',
+                style: TextStyle(
+                  fontSize: 17,
+                  fontWeight: FontWeight.w700,
+                  color: kParchment,
+                ),
+              ),
+              const SizedBox(height: 6),
+              Text(
+                'Facts show up here once a deck with them is imported.',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontSize: 13,
+                  height: 1.45,
+                  color: kParchmentDim.withValues(alpha: 0.65),
+                ),
+              ),
+            ],
+          ),
+        ),
       );
     }
 
     return RefreshIndicator(
-      color: kFact,
-      backgroundColor: kSurface,
+      color: kStraw,
+      backgroundColor: kDeck,
       onRefresh: _load,
       child: ListView(
-        padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
+        padding: const EdgeInsets.fromLTRB(0, 10, 0, 30),
         children: [
-          const ScreenHeader(
-            eyebrow: 'FACT OF THE DAY',
-            title: 'Something you saved,\nworth remembering.',
-          ),
-          const SizedBox(height: 18),
-          if (_today != null)
-            _HeroFact(
-              card: _today!,
-              rated: _rated,
-              onRate: (useful) => _rate(_today!, useful),
-            ),
-          const SizedBox(height: 28),
-          Row(
-            children: [
-              Text(
-                'ALL FACTS',
-                style: TextStyle(
-                  fontSize: 11,
-                  letterSpacing: 2.5,
-                  fontWeight: FontWeight.w700,
-                  color: Colors.white.withOpacity(0.45),
-                ),
-              ),
-              const SizedBox(width: 8),
-              Text(
-                '${_all.length}',
-                style: TextStyle(
-                  fontSize: 11,
-                  color: Colors.white.withOpacity(0.3),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 12),
-          _DomainRow(
-            domains: _domains,
-            selected: _domain,
-            onPick: _pickDomain,
-          ),
-          const SizedBox(height: 14),
-          for (final f in _all) ...[
-            _FactRow(card: f),
-            const SizedBox(height: 10),
-          ],
-        ],
-      ),
-    );
-  }
-}
-
-/// The day's card, given room to breathe: claim first, reasoning under it.
-class _HeroFact extends StatelessWidget {
-  const _HeroFact({
-    required this.card,
-    required this.rated,
-    required this.onRate,
-  });
-  final ReelCard card;
-  final bool rated;
-  final ValueChanged<bool> onRate;
-
-  @override
-  Widget build(BuildContext context) {
-    final claim = card.claim.isNotEmpty ? card.claim : card.title;
-    return Container(
-      decoration: BoxDecoration(
-        gradient: const LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [Color(0xFF15252A), kSurface],
-        ),
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: kFact.withOpacity(0.28)),
-      ),
-      padding: const EdgeInsets.fromLTRB(18, 18, 16, 10),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Pill(text: card.domain.toUpperCase(), color: kFact),
-              const Spacer(),
-              if (card.owner.isNotEmpty)
-                Text(
-                  '@${card.owner}',
-                  style: TextStyle(
-                    fontSize: 11,
-                    color: Colors.white.withOpacity(0.3),
-                  ),
-                ),
-            ],
-          ),
-          const SizedBox(height: 14),
-          CardBanner(card: card),
-          Text(
-            claim,
-            style: const TextStyle(
-              fontSize: 19,
-              height: 1.35,
-              fontWeight: FontWeight.w600,
-              color: Colors.white,
-            ),
-          ),
-          if (card.why.isNotEmpty) ...[
-            const SizedBox(height: 12),
-            Text(
-              card.why,
-              style: TextStyle(
-                fontSize: 13.5,
-                height: 1.45,
-                color: Colors.white.withOpacity(0.6),
-              ),
-            ),
-          ],
-          if (card.applicability.isNotEmpty) ...[
-            const SizedBox(height: 14),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
-              decoration: BoxDecoration(
-                color: kFact.withOpacity(0.09),
-                borderRadius: BorderRadius.circular(10),
-                border: Border(left: BorderSide(color: kFact.withOpacity(0.5), width: 2)),
-              ),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Icon(Icons.bolt, size: 15, color: kFact.withOpacity(0.85)),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      card.applicability,
-                      style: TextStyle(
-                        fontSize: 12.5,
-                        height: 1.4,
-                        color: kFact.withOpacity(0.85),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const PosterLabel("TODAY'S ENTRY", colour: kStraw, size: 10),
+                      const SizedBox(height: 5),
+                      const Text(
+                        'Something you saved,\nworth remembering.',
+                        style: TextStyle(
+                          fontSize: 22,
+                          fontWeight: FontWeight.w800,
+                          letterSpacing: -0.3,
+                          height: 1.18,
+                          color: kParchment,
+                        ),
                       ),
-                    ),
+                    ],
                   ),
-                ],
-              ),
-            ),
-          ],
-          const SizedBox(height: 8),
-          Row(
-            children: [
-              if (rated)
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
-                  child: Text(
-                    'Noted.',
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: Colors.white.withOpacity(0.35),
-                    ),
-                  ),
-                )
-              else ...[
-                CardAction(
-                  icon: Icons.bookmark_added_outlined,
-                  label: 'Useful',
-                  color: kFact,
-                  onTap: () => onRate(true),
                 ),
-                CardAction(
-                  icon: Icons.visibility_off_outlined,
-                  label: 'Not for me',
-                  onTap: () => onRate(false),
+                Text(
+                  '${_all.length}',
+                  style: TextStyle(
+                    fontSize: 26,
+                    fontWeight: FontWeight.w900,
+                    color: kStraw.withValues(alpha: 0.35),
+                  ),
                 ),
               ],
-              const Spacer(),
-              if (card.url.isNotEmpty)
-                CardAction(
-                  icon: Icons.play_circle_outline,
-                  label: 'Reel',
-                  onTap: () => launchUrl(Uri.parse(card.url),
+            ),
+          ),
+          const SizedBox(height: 12),
+          const Padding(
+            padding: EdgeInsets.symmetric(horizontal: 16),
+            child: PosterRule(),
+          ),
+          const SizedBox(height: 16),
+
+          if (_today != null)
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: SizedBox(
+                height: 330,
+                child: LogCard(
+                  card: _today!,
+                  rated: _rated,
+                  onRate: (useful) => _rate(_today!, useful),
+                  onOpenReel: () => launchUrl(Uri.parse(_today!.url),
                       mode: LaunchMode.externalApplication),
                 ),
-            ],
+              ),
+            ),
+
+          const SizedBox(height: 26),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: Row(
+              children: [
+                const PosterLabel('THE WHOLE LOG'),
+                const SizedBox(width: 8),
+                Text(
+                  '${_all.length}',
+                  style: TextStyle(
+                    fontSize: 10,
+                    color: kParchmentDim.withValues(alpha: 0.5),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 11),
+          _DomainRow(domains: _domains, selected: _domain, onPick: _pickDomain),
+          const SizedBox(height: 14),
+
+          // Sideways deck: browsing the log should feel like flipping pages.
+          SizedBox(
+            height: 210,
+            child: ListView.separated(
+              scrollDirection: Axis.horizontal,
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              itemCount: _all.length,
+              separatorBuilder: (_, _) => const SizedBox(width: 12),
+              itemBuilder: (context, i) => SizedBox(
+                width: 168,
+                child: GestureDetector(
+                  onTap: () => showFactSheet(context, _all[i]),
+                  child: LogCard(card: _all[i], compact: true),
+                ),
+              ),
+            ),
           ),
         ],
       ),
@@ -291,9 +235,10 @@ class _DomainRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return SizedBox(
-      height: 34,
+      height: 32,
       child: ListView(
         scrollDirection: Axis.horizontal,
+        padding: const EdgeInsets.symmetric(horizontal: 16),
         children: [
           _chip('All', selected == null, () => onPick(null)),
           for (final (d, n) in domains)
@@ -308,20 +253,22 @@ class _DomainRow extends StatelessWidget {
         child: GestureDetector(
           onTap: tap,
           child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 7),
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
             decoration: BoxDecoration(
-              color: on ? kFact.withOpacity(0.18) : kSurface,
+              color: on ? kStraw.withValues(alpha: 0.20) : Colors.transparent,
               borderRadius: BorderRadius.circular(999),
               border: Border.all(
-                color: on ? kFact.withOpacity(0.6) : Colors.white.withOpacity(0.09),
+                color: on
+                    ? kStraw.withValues(alpha: 0.7)
+                    : kStrawDeep.withValues(alpha: 0.35),
               ),
             ),
             child: Text(
               label,
               style: TextStyle(
-                fontSize: 12,
-                fontWeight: on ? FontWeight.w600 : FontWeight.w400,
-                color: on ? kFact : Colors.white.withOpacity(0.55),
+                fontSize: 11.5,
+                fontWeight: on ? FontWeight.w700 : FontWeight.w400,
+                color: on ? kStraw : kParchmentDim.withValues(alpha: 0.75),
               ),
             ),
           ),
@@ -329,209 +276,80 @@ class _DomainRow extends StatelessWidget {
       );
 }
 
-/// Collapsed row in the shelf; tapping opens the full card.
-class _FactRow extends StatelessWidget {
-  const _FactRow({required this.card});
-  final ReelCard card;
-
-  @override
-  Widget build(BuildContext context) {
-    final claim = card.claim.isNotEmpty ? card.claim : card.title;
-    return GestureDetector(
-      onTap: () => showFactSheet(context, card),
-      child: Container(
-        decoration: BoxDecoration(
-          color: kSurface,
-          borderRadius: BorderRadius.circular(14),
-          border: Border(
-            left: const BorderSide(color: kFact, width: 3),
-            top: BorderSide(color: Colors.white.withOpacity(0.07)),
-            right: BorderSide(color: Colors.white.withOpacity(0.07)),
-            bottom: BorderSide(color: Colors.white.withOpacity(0.07)),
-          ),
-        ),
-        padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              claim,
-              maxLines: 3,
-              overflow: TextOverflow.ellipsis,
-              style: const TextStyle(
-                fontSize: 14,
-                height: 1.35,
-                fontWeight: FontWeight.w500,
-                color: Colors.white,
-              ),
-            ),
-            const SizedBox(height: 8),
-            Row(
-              children: [
-                Pill(
-                  text: card.domain.toUpperCase(),
-                  color: Colors.white.withOpacity(0.35),
-                ),
-                const Spacer(),
-                if (card.owner.isNotEmpty)
-                  Text(
-                    '@${card.owner}',
-                    style: TextStyle(
-                      fontSize: 10.5,
-                      color: Colors.white.withOpacity(0.26),
-                    ),
-                  ),
-              ],
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-/// Full fact, opened from a list row. Shared with the Library screen.
+/// Full card, opened from a list row. Shared with the Library screen.
 Future<void> showFactSheet(BuildContext context, ReelCard card) {
   return showModalBottomSheet(
     context: context,
-    backgroundColor: kSurface,
+    backgroundColor: Colors.transparent,
     isScrollControlled: true,
-    shape: const RoundedRectangleBorder(
-      borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-    ),
     builder: (_) => DraggableScrollableSheet(
       expand: false,
-      initialChildSize: 0.6,
-      maxChildSize: 0.92,
-      builder: (_, controller) => ListView(
-        controller: controller,
-        padding: const EdgeInsets.fromLTRB(20, 14, 20, 28),
-        children: [
-          Center(
-            child: Container(
-              width: 38,
-              height: 4,
-              decoration: BoxDecoration(
-                color: Colors.white.withOpacity(0.18),
-                borderRadius: BorderRadius.circular(2),
-              ),
-            ),
-          ),
-          const SizedBox(height: 18),
-          Row(
-            children: [
-              Pill(
-                text: card.isTask ? 'TASK' : 'FACT',
-                color: accentFor(card),
-              ),
-              const SizedBox(width: 8),
-              Pill(
-                text: card.domain.toUpperCase(),
-                color: Colors.white.withOpacity(0.35),
-              ),
-            ],
-          ),
-          const SizedBox(height: 14),
-          Text(
-            card.claim.isNotEmpty ? card.claim : card.title,
-            style: const TextStyle(
-              fontSize: 19,
-              height: 1.35,
-              fontWeight: FontWeight.w600,
-              color: Colors.white,
-            ),
-          ),
-          if (card.summary.isNotEmpty) ...[
-            const SizedBox(height: 12),
-            Text(
-              card.summary,
-              style: TextStyle(
-                fontSize: 14,
-                height: 1.45,
-                color: Colors.white.withOpacity(0.65),
-              ),
-            ),
-          ],
-          if (card.why.isNotEmpty) ...[
-            const SizedBox(height: 16),
-            _sheetLabel('WHY'),
-            Text(
-              card.why,
-              style: TextStyle(
-                fontSize: 13.5,
-                height: 1.45,
-                color: Colors.white.withOpacity(0.6),
-              ),
-            ),
-          ],
-          if (card.applicability.isNotEmpty) ...[
-            const SizedBox(height: 16),
-            _sheetLabel('USE WHEN'),
-            Text(
-              card.applicability,
-              style: TextStyle(
-                fontSize: 13.5,
-                height: 1.45,
-                color: kFact.withOpacity(0.85),
-              ),
-            ),
-          ],
-          if (card.steps.isNotEmpty) ...[
-            const SizedBox(height: 16),
-            _sheetLabel('STEPS'),
-            for (final s in card.steps)
-              Padding(
-                padding: const EdgeInsets.only(bottom: 6),
-                child: Text(
-                  '·  $s',
-                  style: TextStyle(
-                    fontSize: 13.5,
-                    height: 1.4,
-                    color: Colors.white.withOpacity(0.6),
-                  ),
+      initialChildSize: 0.68,
+      maxChildSize: 0.94,
+      builder: (_, controller) => Container(
+        decoration: const BoxDecoration(
+          color: kDeck,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+        ),
+        child: ListView(
+          controller: controller,
+          padding: const EdgeInsets.fromLTRB(18, 12, 18, 26),
+          children: [
+            Center(
+              child: Container(
+                width: 38,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: kParchmentDim.withValues(alpha: 0.35),
+                  borderRadius: BorderRadius.circular(2),
                 ),
               ),
-          ],
-          if (card.evidence.isNotEmpty) ...[
+            ),
             const SizedBox(height: 16),
-            _sheetLabel('FROM THE REEL'),
-            Text(
-              '"${card.evidence}"',
-              style: TextStyle(
-                fontSize: 12.5,
-                height: 1.45,
-                fontStyle: FontStyle.italic,
-                color: Colors.white.withOpacity(0.4),
+            SizedBox(
+              height: 380,
+              child: LogCard(
+                card: card,
+                onOpenReel: card.url.isEmpty
+                    ? null
+                    : () => launchUrl(Uri.parse(card.url),
+                        mode: LaunchMode.externalApplication),
               ),
             ),
+            if (card.steps.isNotEmpty) ...[
+              const SizedBox(height: 18),
+              const PosterLabel('ORDERS'),
+              const SizedBox(height: 8),
+              for (final s in card.steps)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 6),
+                  child: Text(
+                    '·  $s',
+                    style: TextStyle(
+                      fontSize: 13,
+                      height: 1.4,
+                      color: kParchmentDim.withValues(alpha: 0.8),
+                    ),
+                  ),
+                ),
+            ],
+            if (card.evidence.isNotEmpty) ...[
+              const SizedBox(height: 18),
+              const PosterLabel('FROM THE REEL'),
+              const SizedBox(height: 8),
+              Text(
+                '"${card.evidence}"',
+                style: TextStyle(
+                  fontSize: 12.5,
+                  height: 1.45,
+                  fontStyle: FontStyle.italic,
+                  color: kParchmentDim.withValues(alpha: 0.55),
+                ),
+              ),
+            ],
           ],
-          const SizedBox(height: 20),
-          if (card.url.isNotEmpty)
-            Align(
-              alignment: Alignment.centerLeft,
-              child: CardAction(
-                icon: Icons.play_circle_outline,
-                label: 'Open the reel',
-                color: accentFor(card),
-                onTap: () => launchUrl(Uri.parse(card.url),
-                    mode: LaunchMode.externalApplication),
-              ),
-            ),
-        ],
+        ),
       ),
     ),
   );
 }
-
-Widget _sheetLabel(String s) => Padding(
-      padding: const EdgeInsets.only(bottom: 6),
-      child: Text(
-        s,
-        style: const TextStyle(
-          fontSize: 10,
-          letterSpacing: 1.6,
-          fontWeight: FontWeight.w700,
-          color: Color(0xFF7E6A74),
-        ),
-      ),
-    );

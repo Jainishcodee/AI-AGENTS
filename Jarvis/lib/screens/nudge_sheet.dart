@@ -1,42 +1,61 @@
 import 'package:flutter/material.dart';
 
-import '../services/water_service.dart';
-import '../widgets/card_bits.dart';
+import '../services/nudge_service.dart';
+import '../widgets/pirate_bits.dart';
 
-/// Settings for the water nudge.
+/// Settings for one nudge.
 ///
-/// The numbers here aren't arbitrary: the National Academies put adequate
-/// intake at 3.7 L/day of total water for men and 2.7 L for women, about a
-/// fifth of which comes from food — so the drinking-water target lands near
-/// 3.0 L and 2.2 L. Spread over waking hours that's roughly 200 ml an hour,
-/// comfortably under the ~1 L/hour the kidneys can clear.
-Future<void> showWaterSheet(BuildContext context, WaterService water) {
+/// Water: the National Academies put adequate intake at 3.7 L/day of total
+/// water for men and 2.7 L for women, about a fifth of which comes from food —
+/// so the drinking target lands near 3.0 L and 2.2 L, comfortably under the
+/// ~1 L/hour the kidneys can clear.
+///
+/// Eyes: the 20-20-20 rule is endorsed by the American Optometric Association,
+/// but the evidence for the exact numbers is thin — a 2023 trial found 20-second
+/// breaks every 20 minutes ineffective, and suggested longer ones. Hence the
+/// break length being settable up to two minutes.
+Future<void> showNudgeSheet(
+  BuildContext context,
+  NudgeService service,
+  NudgeKind kind,
+) {
   return showModalBottomSheet(
     context: context,
-    backgroundColor: kSurface,
+    backgroundColor: kDeck,
     isScrollControlled: true,
     shape: const RoundedRectangleBorder(
       borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
     ),
-    builder: (_) => _WaterSheet(water: water),
+    builder: (_) => _NudgeSheet(service: service, kind: kind),
   );
 }
 
-const _kWater = Color(0xFF4FC3F7);
+Color accentForKind(NudgeKind k) => switch (k) {
+      NudgeKind.water => const Color(0xFF4FC3F7),
+      NudgeKind.eyes => const Color(0xFFFFB347),
+    };
 
-class _WaterSheet extends StatefulWidget {
-  const _WaterSheet({required this.water});
-  final WaterService water;
+IconData iconForKind(NudgeKind k, {required bool on}) => switch (k) {
+      NudgeKind.water => on ? Icons.water_drop : Icons.water_drop_outlined,
+      NudgeKind.eyes => on ? Icons.visibility : Icons.visibility_outlined,
+    };
+
+class _NudgeSheet extends StatefulWidget {
+  const _NudgeSheet({required this.service, required this.kind});
+  final NudgeService service;
+  final NudgeKind kind;
 
   @override
-  State<_WaterSheet> createState() => _WaterSheetState();
+  State<_NudgeSheet> createState() => _NudgeSheetState();
 }
 
-class _WaterSheetState extends State<_WaterSheet> {
-  WaterSettings _s = WaterSettings.empty;
+class _NudgeSheetState extends State<_NudgeSheet> {
+  late NudgeSettings _s = NudgeSettings.defaultsFor(widget.kind);
   bool _loading = true;
   bool _canOverlay = false;
   bool _canExact = true;
+
+  Color get _accent => accentForKind(widget.kind);
 
   @override
   void initState() {
@@ -45,37 +64,30 @@ class _WaterSheetState extends State<_WaterSheet> {
   }
 
   Future<void> _load() async {
-    final s = await widget.water.getSettings();
-    final overlay = await widget.water.canDrawOverlays();
-    final exact = await widget.water.canScheduleExactAlarms();
+    final s = await widget.service.getSettings(widget.kind);
+    final overlay = await widget.service.canDrawOverlays();
+    final exact = await widget.service.canScheduleExactAlarms();
     if (!mounted) return;
     setState(() {
-      _s = s ?? WaterSettings.empty;
+      _s = s ?? NudgeSettings.defaultsFor(widget.kind);
       _canOverlay = overlay;
       _canExact = exact;
       _loading = false;
     });
   }
 
-  Future<void> _push(WaterSettings next) async {
+  Future<void> _push(NudgeSettings next) async {
     setState(() => _s = next);
-    final saved = await widget.water.save(
-      enabled: next.enabled,
-      intervalMin: next.intervalMin,
-      startMin: next.startMin,
-      endMin: next.endMin,
-      targetMl: next.targetMl,
-    );
+    final saved = await widget.service.save(next);
     if (!mounted || saved == null) return;
     setState(() => _s = saved);
   }
 
   Future<void> _toggle(bool on) async {
     if (on && !_canOverlay) {
-      await widget.water.requestOverlayPermission();
-      // The grant happens in Settings, so re-check when we're resumed.
+      await widget.service.requestOverlayPermission();
       if (!mounted) return;
-      final ok = await widget.water.canDrawOverlays();
+      final ok = await widget.service.canDrawOverlays();
       if (!mounted) return;
       setState(() => _canOverlay = ok);
       if (!ok) return;
@@ -105,9 +117,9 @@ class _WaterSheetState extends State<_WaterSheet> {
   @override
   Widget build(BuildContext context) {
     if (_loading) {
-      return const SizedBox(
+      return SizedBox(
         height: 260,
-        child: Center(child: CircularProgressIndicator(color: _kWater)),
+        child: Center(child: CircularProgressIndicator(color: _accent)),
       );
     }
 
@@ -121,7 +133,7 @@ class _WaterSheetState extends State<_WaterSheet> {
               width: 38,
               height: 4,
               decoration: BoxDecoration(
-                color: Colors.white.withValues(alpha: 0.18),
+                color: kParchmentDim.withValues(alpha: 0.35),
                 borderRadius: BorderRadius.circular(2),
               ),
             ),
@@ -129,33 +141,32 @@ class _WaterSheetState extends State<_WaterSheet> {
           const SizedBox(height: 18),
           Row(
             children: [
-              const Icon(Icons.water_drop, color: _kWater, size: 20),
+              Icon(iconForKind(widget.kind, on: true), color: _accent, size: 20),
               const SizedBox(width: 9),
-              const Expanded(
+              Expanded(
                 child: Text(
-                  'Water nudge',
-                  style: TextStyle(
+                  '${widget.kind.label} nudge',
+                  style: const TextStyle(
                     fontSize: 18,
                     fontWeight: FontWeight.w700,
-                    color: Colors.white,
+                    color: kParchment,
                   ),
                 ),
               ),
               Switch(
                 value: _s.enabled,
-                activeThumbColor: _kWater,
+                activeThumbColor: _accent,
                 onChanged: _toggle,
               ),
             ],
           ),
           const SizedBox(height: 4),
           Text(
-            'Jarvis slides in over whatever you\'re doing and drinks, so you '
-            'remember to as well.',
+            widget.kind.blurb,
             style: TextStyle(
               fontSize: 13,
               height: 1.4,
-              color: Colors.white.withValues(alpha: 0.55),
+              color: kParchmentDim.withValues(alpha: 0.8),
             ),
           ),
           const SizedBox(height: 18),
@@ -166,8 +177,8 @@ class _WaterSheetState extends State<_WaterSheet> {
               text: 'Needs "display over other apps" permission.',
               action: 'Grant',
               onTap: () async {
-                await widget.water.requestOverlayPermission();
-                final ok = await widget.water.canDrawOverlays();
+                await widget.service.requestOverlayPermission();
+                final ok = await widget.service.canDrawOverlays();
                 if (mounted) setState(() => _canOverlay = ok);
               },
             ),
@@ -177,33 +188,31 @@ class _WaterSheetState extends State<_WaterSheet> {
               text: 'Without exact alarms the timing drifts by a few minutes.',
               action: 'Fix',
               onTap: () async {
-                await widget.water.requestExactAlarmPermission();
-                final ok = await widget.water.canScheduleExactAlarms();
+                await widget.service.requestExactAlarmPermission();
+                final ok = await widget.service.canScheduleExactAlarms();
                 if (mounted) setState(() => _canExact = ok);
               },
             ),
 
           _label('EVERY'),
           _Chips<int>(
-            values: const [30, 45, 60, 90],
+            values: widget.kind.intervalChoices,
             selected: _s.intervalMin,
+            accent: _accent,
             labelFor: (v) => '$v min',
-            noteFor: (v) => v == 45 ? 'suggested' : null,
+            noteFor: (v) => v == widget.kind.suggestedInterval ? 'suggested' : null,
             onPick: (v) => _push(_s.copyWith(intervalMin: v)),
           ),
           const SizedBox(height: 18),
 
-          _label('DAILY TARGET'),
+          _label(widget.kind.amountTitle),
           _Chips<int>(
-            values: const [2200, 2600, 3000, 3500],
-            selected: _s.targetMl,
-            labelFor: (v) => '${(v / 1000).toStringAsFixed(1)} L',
-            noteFor: (v) => switch (v) {
-              2200 => 'women',
-              3000 => 'men',
-              _ => null,
-            },
-            onPick: (v) => _push(_s.copyWith(targetMl: v)),
+            values: widget.kind.amountChoices,
+            selected: _s.amount,
+            accent: _accent,
+            labelFor: widget.kind.amountLabel,
+            noteFor: widget.kind.amountNote,
+            onPick: (v) => _push(_s.copyWith(amount: v)),
           ),
           const SizedBox(height: 18),
 
@@ -215,7 +224,7 @@ class _WaterSheetState extends State<_WaterSheet> {
               decoration: BoxDecoration(
                 color: Colors.white.withValues(alpha: 0.05),
                 borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: Colors.white.withValues(alpha: 0.09)),
+                border: Border.all(color: kStrawDeep.withValues(alpha: 0.3)),
               ),
               child: Row(
                 children: [
@@ -223,13 +232,13 @@ class _WaterSheetState extends State<_WaterSheet> {
                     _s.windowLabel,
                     style: const TextStyle(
                       fontSize: 15,
-                      color: Colors.white,
+                      color: kParchment,
                       fontFeatures: [FontFeature.tabularFigures()],
                     ),
                   ),
                   const Spacer(),
                   Icon(Icons.edit_outlined,
-                      size: 17, color: Colors.white.withValues(alpha: 0.4)),
+                      size: 17, color: kParchmentDim.withValues(alpha: 0.5)),
                 ],
               ),
             ),
@@ -239,37 +248,26 @@ class _WaterSheetState extends State<_WaterSheet> {
           Container(
             padding: const EdgeInsets.all(14),
             decoration: BoxDecoration(
-              color: _kWater.withValues(alpha: 0.08),
+              color: _accent.withValues(alpha: 0.08),
               borderRadius: BorderRadius.circular(12),
               border: Border(
-                left: BorderSide(color: _kWater.withValues(alpha: 0.5), width: 2),
+                left: BorderSide(color: _accent.withValues(alpha: 0.5), width: 2),
               ),
             ),
             child: Text(
-              'That works out to about ${_s.perNudgeMl} ml a time, '
-              '${_s.nudgesPerDay} times across ${_s.windowLabel}.'
-              '${_s.enabled ? '\n${_s.countToday} done today.' : ''}',
-              style: const TextStyle(
-                fontSize: 13,
-                height: 1.45,
-                color: _kWater,
-              ),
+              _summary(),
+              style: TextStyle(fontSize: 13, height: 1.45, color: _accent),
             ),
           ),
           const SizedBox(height: 14),
 
           Align(
             alignment: Alignment.centerLeft,
-            child: CardAction(
-              icon: Icons.play_circle_outline,
-              label: 'Show it now',
-              color: _kWater,
-              onTap: () async {
-                // Resolve both before the await so the closure never touches a
-                // BuildContext that the sheet may have popped out from under.
+            child: TextButton.icon(
+              onPressed: () async {
                 final messenger = ScaffoldMessenger.of(context);
                 final navigator = Navigator.of(context);
-                final ok = await widget.water.preview();
+                final ok = await widget.service.preview(widget.kind);
                 if (!mounted) return;
                 if (ok) {
                   navigator.pop();
@@ -282,11 +280,26 @@ class _WaterSheetState extends State<_WaterSheet> {
                   );
                 }
               },
+              icon: const Icon(Icons.play_circle_outline, size: 17),
+              label: const Text('Show it now', style: TextStyle(fontSize: 12.5)),
+              style: TextButton.styleFrom(foregroundColor: _accent),
             ),
           ),
         ],
       ),
     );
+  }
+
+  String _summary() {
+    final done = _s.enabled ? '\n${_s.countToday} done today.' : '';
+    return switch (widget.kind) {
+      NudgeKind.water =>
+        'About ${_s.perNudge} ml a time, ${_s.nudgesPerDay} times across '
+            '${_s.windowLabel}.$done',
+      NudgeKind.eyes =>
+        'A ${_s.perNudge}-second look away every ${_s.intervalMin} minutes '
+            'across ${_s.windowLabel} — up to ${_s.nudgesPerDay} a day.$done',
+    };
   }
 
   Widget _label(String s) => Padding(
@@ -297,7 +310,7 @@ class _WaterSheetState extends State<_WaterSheet> {
             fontSize: 10,
             letterSpacing: 1.8,
             fontWeight: FontWeight.w700,
-            color: Colors.white.withValues(alpha: 0.4),
+            color: kParchmentDim.withValues(alpha: 0.55),
           ),
         ),
       );
@@ -309,11 +322,13 @@ class _Chips<T> extends StatelessWidget {
     required this.selected,
     required this.labelFor,
     required this.onPick,
+    required this.accent,
     this.noteFor,
   });
 
   final List<T> values;
   final T selected;
+  final Color accent;
   final String Function(T) labelFor;
   final String? Function(T)? noteFor;
   final ValueChanged<T> onPick;
@@ -331,13 +346,13 @@ class _Chips<T> extends StatelessWidget {
               padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
               decoration: BoxDecoration(
                 color: v == selected
-                    ? _kWater.withValues(alpha: 0.18)
+                    ? accent.withValues(alpha: 0.18)
                     : Colors.white.withValues(alpha: 0.05),
                 borderRadius: BorderRadius.circular(999),
                 border: Border.all(
                   color: v == selected
-                      ? _kWater.withValues(alpha: 0.6)
-                      : Colors.white.withValues(alpha: 0.09),
+                      ? accent.withValues(alpha: 0.6)
+                      : kStrawDeep.withValues(alpha: 0.3),
                 ),
               ),
               child: Row(
@@ -349,8 +364,8 @@ class _Chips<T> extends StatelessWidget {
                       fontSize: 13,
                       fontWeight: v == selected ? FontWeight.w700 : FontWeight.w400,
                       color: v == selected
-                          ? _kWater
-                          : Colors.white.withValues(alpha: 0.6),
+                          ? accent
+                          : kParchmentDim.withValues(alpha: 0.75),
                     ),
                   ),
                   if (noteFor?.call(v) != null) ...[
@@ -359,8 +374,8 @@ class _Chips<T> extends StatelessWidget {
                       noteFor!.call(v)!,
                       style: TextStyle(
                         fontSize: 10,
-                        color: (v == selected ? _kWater : Colors.white)
-                            .withValues(alpha: 0.45),
+                        color: (v == selected ? accent : kParchmentDim)
+                            .withValues(alpha: 0.55),
                       ),
                     ),
                   ],

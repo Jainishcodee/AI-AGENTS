@@ -1,4 +1,4 @@
-package com.larossatech.jarvis.water
+package com.larossatech.jarvis.nudge
 
 import android.app.AlarmManager
 import android.app.PendingIntent
@@ -8,36 +8,40 @@ import android.os.Build
 import java.util.Calendar
 
 /**
- * Arms the next water nudge.
+ * Arms the next nudge of a given kind.
  *
- * One alarm at a time, re-armed after each fire, rather than a repeating alarm:
- * setRepeating can't be exact on modern Android, and re-arming is what lets the
- * interval or the waking window change without cancelling anything.
+ * One alarm at a time per kind, re-armed after each fire, rather than a
+ * repeating alarm: setRepeating can't be exact on modern Android, and re-arming
+ * is what lets the interval or window change without cancelling anything.
+ *
+ * The two kinds must not collide, so each carries its own action string *and*
+ * request code — extras alone don't distinguish PendingIntents.
  */
-object WaterScheduler {
-    private const val REQUEST = 7311
+object NudgeScheduler {
 
-    private fun pendingIntent(c: Context): PendingIntent {
-        val intent = Intent(c, WaterAlarmReceiver::class.java).setAction(WaterAlarmReceiver.ACTION_NUDGE)
+    private fun pendingIntent(c: Context, k: NudgeKind): PendingIntent {
+        val intent = Intent(c, NudgeAlarmReceiver::class.java)
+            .setAction(k.action)
+            .putExtra(NudgeAlarmReceiver.EXTRA_KIND, k.key)
         var flags = PendingIntent.FLAG_UPDATE_CURRENT
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) flags = flags or PendingIntent.FLAG_IMMUTABLE
-        return PendingIntent.getBroadcast(c.applicationContext, REQUEST, intent, flags)
+        return PendingIntent.getBroadcast(c.applicationContext, k.requestCode, intent, flags)
     }
 
-    fun cancel(c: Context) {
+    fun cancel(c: Context, k: NudgeKind) {
         val am = c.getSystemService(Context.ALARM_SERVICE) as AlarmManager
-        am.cancel(pendingIntent(c))
+        am.cancel(pendingIntent(c, k))
     }
 
-    /** Re-arms if enabled, cancels if not. Safe to call from anywhere, repeatedly. */
-    fun sync(c: Context) {
-        if (!WaterPrefs.enabled(c)) {
-            cancel(c)
+    /** Re-arms if enabled, cancels if not. Safe to call anywhere, repeatedly. */
+    fun sync(c: Context, k: NudgeKind) {
+        if (!NudgePrefs.enabled(c, k)) {
+            cancel(c, k)
             return
         }
-        val at = nextFireAt(c, System.currentTimeMillis())
+        val at = nextFireAt(c, k, System.currentTimeMillis())
         val am = c.getSystemService(Context.ALARM_SERVICE) as AlarmManager
-        val pi = pendingIntent(c)
+        val pi = pendingIntent(c, k)
 
         val exact = Build.VERSION.SDK_INT < Build.VERSION_CODES.S || am.canScheduleExactAlarms()
         if (exact) {
@@ -48,19 +52,18 @@ object WaterScheduler {
         }
     }
 
-    /**
-     * Next nudge at [from] + interval, pushed to the start of the window if that
-     * lands outside waking hours. Exposed for the settings screen's "next at" line.
-     */
-    fun nextFireAt(c: Context, from: Long): Long {
-        val interval = WaterPrefs.intervalMin(c) * 60_000L
-        val candidate = from + interval
-        return clampIntoWindow(c, candidate)
-    }
+    fun syncAll(c: Context) = NudgeKind.entries.forEach { sync(c, it) }
 
-    private fun clampIntoWindow(c: Context, at: Long): Long {
-        val start = WaterPrefs.startMin(c)
-        val end = WaterPrefs.endMin(c)
+    /**
+     * Next nudge at [from] + interval, pushed to the start of the window if
+     * that lands outside waking hours.
+     */
+    fun nextFireAt(c: Context, k: NudgeKind, from: Long): Long =
+        clampIntoWindow(c, k, from + NudgePrefs.intervalMin(c, k) * 60_000L)
+
+    private fun clampIntoWindow(c: Context, k: NudgeKind, at: Long): Long {
+        val start = NudgePrefs.startMin(c, k)
+        val end = NudgePrefs.endMin(c, k)
         if (start == end) return at // 24h window, nothing to clamp
 
         val cal = Calendar.getInstance().apply { timeInMillis = at }
@@ -70,7 +73,6 @@ object WaterScheduler {
                      else minute >= start || minute < end // window crosses midnight
         if (inside) return at
 
-        // Outside the window: jump to the next window opening.
         val open = Calendar.getInstance().apply {
             timeInMillis = at
             set(Calendar.HOUR_OF_DAY, start / 60)

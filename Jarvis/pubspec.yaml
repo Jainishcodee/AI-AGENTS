@@ -1,5 +1,5 @@
 name: jarvis
-description: "Voice-activated personal assistant with animated Claude-mascot."
+description: "Voice-activated personal assistant with animated klein-mascot."
 publish_to: 'none'
 version: 1.0.0+1
 
@@ -36,5 +36,7 @@ flutter:
   assets:
     - .env
     - assets/deck.json
+    # Gehrman Sparrow, the home-screen mascot.
+    - assets/mascot/
     # Populated by reelflow/media.py; cards without a cover just render without one.
     - assets/thumbs/
