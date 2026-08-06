@@ -12,7 +12,7 @@ from PySide6.QtCore import QPoint, Qt
 from PySide6.QtGui import QColor
 from PySide6.QtWidgets import (QCheckBox, QDialog, QHBoxLayout, QLabel,
                                QLineEdit, QListWidget, QListWidgetItem,
-                               QPushButton, QVBoxLayout)
+                               QPlainTextEdit, QPushButton, QVBoxLayout)
 
 import config
 
@@ -256,6 +256,157 @@ class Approval(_Frameless):
         dlg = Approval(name, filled, skipped, parent)
         dlg.place_above(anchor)
         return dlg.exec() == QDialog.DialogCode.Accepted
+
+
+class FillIn(_Frameless):
+    """Asks you for each blank in a template, rather than inventing them."""
+
+    def __init__(self, title: str, fields: list[str], parent=None) -> None:
+        super().__init__(parent)
+        lay = QVBoxLayout(self)
+        lay.setContentsMargins(16, 14, 16, 14)
+        lay.setSpacing(8)
+
+        head = QLabel(title)
+        head.setStyleSheet("font-size: 15px;")
+        head.setWordWrap(True)
+        head.setMaximumWidth(400)
+        lay.addWidget(head)
+
+        self.edits: dict[str, QLineEdit] = {}
+        for f in fields:
+            lbl = QLabel(f)
+            lbl.setObjectName("hint")
+            lay.addWidget(lbl)
+            e = QLineEdit()
+            e.setMinimumWidth(380)
+            e.setPlaceholderText(f)
+            lay.addWidget(e)
+            self.edits[f] = e
+
+        row = QHBoxLayout()
+        row.addStretch(1)
+        cancel = QPushButton("Cancel")
+        cancel.clicked.connect(self.reject)
+        row.addWidget(cancel)
+        ok = QPushButton("Next")
+        ok.setObjectName("primary")
+        ok.setDefault(True)
+        ok.clicked.connect(self.accept)
+        row.addWidget(ok)
+        lay.addLayout(row)
+
+    @staticmethod
+    def ask(title: str, fields: list[str], anchor: QPoint,
+            parent=None) -> dict | None:
+        if not fields:
+            return {}
+        dlg = FillIn(title, fields, parent)
+        dlg.place_above(anchor)
+        if dlg.edits:
+            next(iter(dlg.edits.values())).setFocus()
+        if dlg.exec() != QDialog.DialogCode.Accepted:
+            return None
+        return {f: e.text().strip() for f, e in dlg.edits.items()}
+
+
+class MailApproval(_Frameless):
+    """The whole email, exactly as it will arrive, before anything is sent."""
+
+    def __init__(self, draft, parent=None) -> None:
+        super().__init__(parent)
+        lay = QVBoxLayout(self)
+        lay.setContentsMargins(16, 14, 16, 14)
+        lay.setSpacing(8)
+
+        head = QLabel(f"Send this to {draft.to}?")
+        head.setStyleSheet("font-size: 15px;")
+        head.setWordWrap(True)
+        head.setMaximumWidth(460)
+        lay.addWidget(head)
+
+        view = QPlainTextEdit(draft.preview())
+        view.setReadOnly(True)
+        view.setMinimumSize(460, 240)
+        lay.addWidget(view)
+
+        warn = QLabel("Read it. This goes to a real person and can't be recalled.")
+        warn.setObjectName("hint")
+        warn.setWordWrap(True)
+        lay.addWidget(warn)
+
+        row = QHBoxLayout()
+        row.addStretch(1)
+        no = QPushButton("Don't send")
+        no.clicked.connect(self.reject)
+        row.addWidget(no)
+        yes = QPushButton("Send it")
+        yes.setObjectName("primary")
+        # Not the default button: a stray Enter must not send an email.
+        yes.clicked.connect(self.accept)
+        row.addWidget(yes)
+        lay.addLayout(row)
+
+    @staticmethod
+    def ask(draft, anchor: QPoint, parent=None) -> bool:
+        dlg = MailApproval(draft, parent)
+        dlg.place_above(anchor)
+        return dlg.exec() == QDialog.DialogCode.Accepted
+
+
+class Compose(_Frameless):
+    """Writing a template once. Use {name}-style blanks for the per-send bits."""
+
+    def __init__(self, name: str, template: dict | None = None, parent=None) -> None:
+        super().__init__(parent)
+        template = template or {}
+        lay = QVBoxLayout(self)
+        lay.setContentsMargins(16, 14, 16, 14)
+        lay.setSpacing(8)
+
+        head = QLabel(f"Template “{name}”")
+        head.setStyleSheet("font-size: 15px;")
+        lay.addWidget(head)
+
+        hint = QLabel("Put {name}, {company}, {role} wherever it changes per "
+                      "person — I'll ask you for those each time.")
+        hint.setObjectName("hint")
+        hint.setWordWrap(True)
+        hint.setMaximumWidth(460)
+        lay.addWidget(hint)
+
+        lay.addWidget(QLabel("Subject"))
+        self.subject = QLineEdit(template.get("subject", ""))
+        self.subject.setMinimumWidth(460)
+        lay.addWidget(self.subject)
+
+        lay.addWidget(QLabel("Body"))
+        self.body = QPlainTextEdit(template.get("body", ""))
+        self.body.setMinimumSize(460, 220)
+        lay.addWidget(self.body)
+
+        row = QHBoxLayout()
+        row.addStretch(1)
+        cancel = QPushButton("Cancel")
+        cancel.clicked.connect(self.reject)
+        row.addWidget(cancel)
+        ok = QPushButton("Save template")
+        ok.setObjectName("primary")
+        ok.clicked.connect(self.accept)
+        row.addWidget(ok)
+        lay.addLayout(row)
+
+    @staticmethod
+    def ask(name: str, anchor: QPoint, template: dict | None = None,
+            parent=None) -> tuple[str, str] | None:
+        dlg = Compose(name, template, parent)
+        dlg.place_above(anchor)
+        dlg.subject.setFocus()
+        if dlg.exec() != QDialog.DialogCode.Accepted:
+            return None
+        subject = dlg.subject.text().strip()
+        body = dlg.body.toPlainText().strip()
+        return (subject, body) if (subject and body) else None
 
 
 class Picker(_Frameless):

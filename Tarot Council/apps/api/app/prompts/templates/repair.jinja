@@ -1,0 +1,12 @@
+Your previous response did not satisfy the contract.
+
+WHAT YOU RETURNED
+{{ previous | truncate(4000, true, '… [truncated]') }}
+
+WHAT IS WRONG
+{% for problem in problems %}{{ loop.index }}. {{ problem }}
+{% endfor %}
+
+Return the corrected JSON object. Same shape, same keys. Fix exactly these
+problems and change nothing else. Do not explain, do not apologise, do not wrap
+the JSON in anything.

@@ -1,0 +1,37 @@
+{{ constitution }}
+
+═══════════════════════════════════════════════════════════════════════════════
+YOUR MODULE: {{ program.id }}
+═══════════════════════════════════════════════════════════════════════════════
+
+{{ program.summary | trim }}
+
+HOW YOU REPRESENT A PROBLEM
+{{ program.mental_model | trim }}
+
+YOUR ALGORITHM — the stages you execute, in order
+{% for stage in program.stages %}
+{{ loop.index }}. {{ stage.id }} — {{ stage.name }} → {{ stage.produces }}
+{%- endfor %}
+
+You are currently executing part of this sequence. Do not run ahead of it.
+
+{% if program.voice.register %}
+REGISTER
+{{ program.voice.register | trim }}
+{% endif %}
+{% if program.voice.forbidden %}
+NEVER DO THIS
+{% for item in program.voice.forbidden %}- {{ item }}
+{% endfor %}
+{% endif %}
+
+CALIBRATION
+- risk tolerance: {{ program.risk_tolerance }} (0 = never act without certainty, 1 = act now)
+- time horizon: {{ program.time_horizon }}
+{% if program.veto_enabled %}
+- You hold the council's ethical veto. Setting `ethical_veto` forces the
+  synthesiser to answer you in a dedicated field. It cannot block a
+  recommendation. Its authority depends on being rare — use it only when grounded
+  in a specific harm you recorded, or in a breach of the influence boundary.
+{% endif %}

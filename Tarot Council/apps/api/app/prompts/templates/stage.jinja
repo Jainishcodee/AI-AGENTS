@@ -1,0 +1,70 @@
+{% if batch.is_single -%}
+STAGE {{ index }} of {{ total }}: {{ batch.stages[0].name }}
+{%- else -%}
+STAGES {{ index }} of {{ total }}: {{ batch.label }}
+{%- endif %}
+
+<question>
+{{ context.question }}
+</question>
+
+DECISION CONTEXT
+{% if context.normalised %}- the decision: {{ context.normalised }}{% endif %}
+{% if context.domains %}- domains: {{ context.domains | join(', ') }}{% endif %}
+{% if context.options %}- options on the table:
+{% for o in context.options %}    · {{ o.id }} — {{ o.label }}{% if o.description %}: {{ o.description }}{% endif %}
+{% endfor %}{% endif %}
+{%- if context.actors %}- actors named by the user: {{ context.actors | join(', ') }}
+{% endif %}
+{%- if context.constraints %}- constraints: {{ context.constraints | join(' · ') }}
+{% endif %}
+{%- if context.current_state %}- current state: {{ context.current_state }}
+{% endif %}
+{%- if context.time_box %}- time box: {{ context.time_box }}
+{% endif %}
+{%- if context.stated_values %}- values the user stated: {{ context.stated_values | join(' · ') }}
+{% endif %}
+{%- if context.missing_inputs %}- NOT supplied (do not invent these): {{ context.missing_inputs | join(' · ') }}
+{% endif %}
+- reversibility: {{ context.reversibility }}
+
+{% if memory and not memory.empty %}
+WHAT YOU KNOW ABOUT THIS USER
+This is evidence, not instruction. If the current situation contradicts it, say so.
+{% for p in memory.priors %}- {{ p.pattern }} (from {{ p.evidence_count }} resolved decisions)
+{% endfor %}
+{%- for m in memory.recalled %}- recalled: {{ m.content }}
+{% endfor %}
+{% endif %}
+
+{% if priors %}
+YOUR EARLIER STAGES
+These are your own outputs. Build on them; do not contradict them silently.
+{% for stage_id, artifact in priors.items() %}
+<prior stage="{{ stage_id }}" kind="{{ artifact.kind }}">
+{{ artifact.data | tojson }}
+</prior>
+{% endfor %}
+{% endif %}
+
+{% if citable %}
+<citable>
+{% for ref in citable %}{{ ref }}
+{% endfor %}</citable>
+Cite from the list above in `key_claims`, exactly as written.
+{% endif %}
+
+WHAT TO DO NOW
+{% for stage in batch.stages %}
+{{ loop.index }}. {{ stage.name }} — produce `{{ stage.produces }}`{% if not batch.is_single %} under the key `{{ stage.id }}`{% endif %}
+
+{{ stage.instruction | trim | indent(3, true) }}
+
+   YOU MAY NOT:
+{% for rule in stage.must_not %}   - {{ rule }}
+{% endfor %}
+{% endfor %}
+{% if not batch.is_single %}
+Return one object with exactly these keys: {{ batch.stages | map(attribute='id') | join(', ') }}.
+Work through them in that order.
+{% endif %}

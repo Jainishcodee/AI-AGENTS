@@ -14,8 +14,9 @@ from core import brain
 from core.brain import Brain
 from core.events import bus
 from core.recipes import book
-from shell.ask import Approval, CommandBar, Confirm, Picker, Waiting
-from skills import apps
+from shell.ask import (Approval, CommandBar, Compose, Confirm, FillIn,
+                       MailApproval, Picker, Waiting)
+from skills import apps, mail
 from skills.webtask import FormTask, today
 
 OPEN_VERBS = ("open", "launch", "start", "run", "fire up", "boot up", "boot")
@@ -67,6 +68,39 @@ def parse_fill(text: str) -> str | None:
     return t.strip()
 
 
+def parse_mail(text: str) -> tuple[str, str] | None:
+    """'mail cold outreach to priya@acme.com' -> ('cold outreach', 'priya@acme.com').
+
+    The address must be typed, never dictated — a misheard character sends your
+    email to a stranger.
+    """
+    t = " ".join(text.split())
+    low = t.lower()
+    for verb in ("email", "mail", "send"):
+        if low.startswith(verb + " "):
+            t = t[len(verb) + 1:]
+            break
+    else:
+        return None
+
+    parts = t.rsplit(" to ", 1)
+    if len(parts) != 2:
+        return None
+    name, to = parts[0].strip(" '\""), parts[1].strip(" '\"<>")
+    return (name, to) if name and to else None
+
+
+def parse_write(text: str) -> str | None:
+    """'write template cold outreach' / 'new template x' -> the template name."""
+    t = " ".join(text.split())
+    low = t.lower()
+    for verb in ("write template", "new template", "compose template",
+                 "edit template", "template"):
+        if low.startswith(verb + " "):
+            return t[len(verb) + 1:].strip(" '\"")
+    return None
+
+
 def parse_teach(text: str) -> tuple[str, str] | None:
     """'teach internship form https://…' -> (name, url).
 
@@ -107,6 +141,11 @@ class Commander(QObject):
         self._task.done.connect(lambda m: bus.say_here.emit(m, "happy"))
         self._task.failed.connect(lambda m: bus.say_here.emit(m, "alert"))
 
+        self._mail = mail.MailTask(self)
+        self._mail.awaiting_approval.connect(self._on_mail_awaiting)
+        self._mail.done.connect(lambda m: bus.say_here.emit(m, "happy"))
+        self._mail.failed.connect(lambda m: bus.say_here.emit(m, "alert"))
+
         bus.command.connect(self.prompt)
 
     def _anchor(self) -> QPoint:
@@ -135,6 +174,16 @@ class Commander(QObject):
         taught = parse_teach(text)
         if taught is not None:
             self.teach_form(*taught)
+            return
+
+        tmpl = parse_write(text)
+        if tmpl:
+            self.write_template(tmpl)
+            return
+
+        addressed = parse_mail(text)
+        if addressed is not None:
+            self.send_mail(*addressed)
             return
 
         form = parse_fill(text)
@@ -209,6 +258,52 @@ class Commander(QObject):
     def _on_form_awaiting(self, name: str, filled, skipped) -> None:
         ok = Approval.ask(name, filled, skipped, self._anchor(), self._window)
         self._task.release(ok)
+
+    # --- cold mail ---
+
+    def write_template(self, name: str) -> None:
+        existing = book.mail_for(name)
+        written = Compose.ask(name, self._anchor(), existing, self._window)
+        if written is None:
+            bus.say_here.emit("left it as it was.", "happy")
+            return
+        subject, body = written
+        book.learn_mail(name, subject, body)
+        blanks = sorted(set(mail.placeholders(subject)) | set(mail.placeholders(body)))
+        bus.say_here.emit(
+            f"saved \"{name}\"" + (f" — I'll ask you for {', '.join(blanks)}."
+                                   if blanks else "."), "happy")
+
+    def send_mail(self, name: str, to: str) -> None:
+        template = book.mail_for(name)
+        if template is None:
+            known = ", ".join(book.known_mail()) or "none yet"
+            bus.say_here.emit(
+                f"no template called \"{name}\". Write one with: "
+                f"template {name}.  I know: {known}", "think")
+            return
+
+        ready, why = config.mail_ready()
+        if not ready:
+            # Say this before asking you to fill in blanks, not after.
+            bus.say_here.emit(why, "alert")
+            return
+
+        blanks = sorted((set(mail.placeholders(template.get("subject", "")))
+                         | set(mail.placeholders(template.get("body", ""))))
+                        - {"to"})
+        values = FillIn.ask(f"Sending “{name}” to {to}", blanks,
+                            self._anchor(), self._window)
+        if values is None:
+            bus.say_here.emit("okay, dropped it.", "happy")
+            return
+
+        values["to"] = to
+        self._mail.compose(name, template, values)
+
+    def _on_mail_awaiting(self, name: str, draft) -> None:
+        ok = MailApproval.ask(draft, self._anchor(), self._window)
+        self._mail.release(ok)
 
     # --- voice ---
 

@@ -147,6 +147,35 @@ unclickable.
 Originals live in `art/source/` — the cut is lossy and you'll want to redo it
 with a different `--tol` sooner or later.
 
+## Cold mail — templates you write once
+
+```
+template cold outreach              # write it, with {name}-style blanks
+mail cold outreach to priya@acme.com
+```
+
+Writing the template opens an editor. Put `{name}`, `{company}`, `{role}`
+wherever the text changes per person; the pet asks you for those each time and
+never invents them. Then it shows you the finished email in full and waits for
+a click.
+
+**Deliberately not model-written.** A cold email goes to a real person under
+your name. The wording should be yours, decided once when you're thinking
+clearly — not improvised per-send by a 3B model that has already been caught
+inventing things.
+
+Three hard refusals, all because the failure can't be undone:
+
+- an unfilled `{placeholder}` — `Hi {name},` going out is worse than not sending
+- an address that isn't a plausible email
+- more than `MAIL_DAILY_LIMIT` (default 20) in a day
+
+Gmail needs an **App Password**, not your account password: turn on 2FA, then
+[myaccount.google.com/apppasswords](https://myaccount.google.com/apppasswords),
+and put it in `.env` as `SMTP_APP_PASSWORD`. Leave it blank and the pet still
+drafts mail and shows it to you — it just refuses to send. Everything sent is
+appended to `sent_mail.jsonl`.
+
 ## Roadmap
 
 | Phase | What | State |
@@ -155,7 +184,7 @@ with a different `--tol` sooner or later.
 | 1.5 | Command bar, recipe book, opening Windows apps | **done** |
 | 2 | Offline voice + local brain as a gated fallback | **done** |
 | 3a | Google Forms: teach once in Brave, replay with approval | **done** |
-| 3b | Cold mail — Gmail SMTP, drafted then held for approval | not started |
+| 3b | Cold mail — templates, drafted then held for approval | **done** |
 | 4 | Phone — largely covered by OpenClaw's existing WhatsApp link | |
 
 Browser work uses **Brave** (auto-detected into `config.BROWSER_PATH`). It's

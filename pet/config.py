@@ -66,6 +66,28 @@ VAD_MIN_SEC = _float("VAD_MIN_SEC", 0.35)           # ignore coughs and clicks
 # After the wake word alone, how long to wait for the actual instruction.
 FOLLOWUP_SEC = _float("FOLLOWUP_SEC", 8.0)
 
+# --- Mail ---
+# Gmail needs an App Password, not your account password: enable 2FA, then
+# myaccount.google.com/apppasswords. Leave blank and the pet will draft mail
+# and show it to you, but refuse to send.
+SMTP_HOST = os.getenv("SMTP_HOST", "smtp.gmail.com").strip()
+SMTP_PORT = _int("SMTP_PORT", 587)
+SMTP_EMAIL = os.getenv("SMTP_EMAIL", "").strip()
+SMTP_APP_PASSWORD = os.getenv("SMTP_APP_PASSWORD", "").strip()
+MAIL_FROM_NAME = os.getenv("MAIL_FROM_NAME", "").strip()
+# A hard daily ceiling. Cold mail that misfires in a loop burns a real sending
+# reputation, and Gmail itself cuts you off around 500/day.
+MAIL_DAILY_LIMIT = _int("MAIL_DAILY_LIMIT", 20)
+
+
+def mail_ready() -> tuple[bool, str]:
+    if not SMTP_EMAIL:
+        return False, "no SMTP_EMAIL in .env — I can draft, but not send."
+    if not SMTP_APP_PASSWORD:
+        return False, "no SMTP_APP_PASSWORD in .env (Gmail needs an App Password)."
+    return True, ""
+
+
 # --- Brain (local LLM, fallback only) ---
 BRAIN_ENABLED = _bool("BRAIN_ENABLED", True)
 OLLAMA_HOST = os.getenv("OLLAMA_HOST", "http://127.0.0.1:11434").strip().rstrip("/")

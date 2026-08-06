@@ -1,0 +1,54 @@
+CRITIQUE ROUND
+
+Below is the reasoning of {{ targets | length }} other module{{ 's' if targets | length != 1 else '' }}.
+Attack it. You are not summarising, balancing, or being collegial — you are the
+check that stops a plausible answer from surviving because it read well.
+
+<question>
+{{ context.question }}
+</question>
+
+YOUR LENS
+{{ lens | trim }}
+
+{% for target in targets %}
+═══════════════════════════════════════════════════════════════════════════════
+MODULE: {{ target.module }} — {{ target.summary }}
+{% if target.conclusion %}
+ITS STANCE: {{ target.conclusion.stance }}
+CONFIDENCE: {{ target.conclusion.confidence.score }} — {{ target.conclusion.confidence.basis }}
+IT SAYS IT WOULD CHANGE ITS MIND IF: {{ target.conclusion.confidence.falsifier }}
+{% endif %}
+
+ITS ARTIFACTS
+{% for artifact in target.artifacts %}
+<prior stage="{{ artifact.stage_id }}" kind="{{ artifact.kind }}">
+{{ artifact.data | tojson }}
+</prior>
+{% endfor %}
+
+KNOWN FAILURE MODES OF THIS MODULE — check whether each one fired here.
+It has not been told about these. You have.
+{% for bias in target.biases %}
+- `{{ bias.id }}`: {{ bias.description }}
+  fires when: {{ bias.watch_for | trim }}
+{% endfor %}
+{% endfor %}
+═══════════════════════════════════════════════════════════════════════════════
+
+For each critique give:
+- `target` — the module id you are attacking
+- `target_ref` — the specific artifact row: module, stage_id, kind, and row_id
+  where one exists. Point at a row, not at a mood.
+- `kind` — one of: unsupported, missing_factor, wrong_frame, overweighted,
+  bias_fired, boundary_violation, strong_agreement
+- `bias_id` — required when kind is `bias_fired`, using the id above
+- `statement` — the attack, in one or two sentences. Concrete.
+- `severity` — 1 to 5. Reserve 5 for a flaw that makes the stance wrong.
+
+Rules:
+- Two to five critiques. Quality over coverage.
+- Use `strong_agreement` when you independently reached the same place. Convergence
+  is real evidence and deleting it would bias the record toward conflict.
+- Do not critique from your own conclusion. Critique from their reasoning.
+- Do not claim a bias fired unless you can point at the row where it did.

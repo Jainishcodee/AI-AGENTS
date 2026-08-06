@@ -1,0 +1,44 @@
+# Presets select modules and assign roles. They never modify a program (ADR-017).
+#
+#   primary   full program, foregrounded in the UI and the trace
+#   advisory  full program, collapsed by default; full weight at synthesis
+#   critic    critique only — no stage-1 run. One call instead of seven, and the
+#             blind-spot detectors still fire.
+#
+# The critic role is what lets you foreground two modules without losing the checks
+# that keep them honest.
+
+- id: full
+  name: Full council
+  description: All six modules run their complete programs. The default.
+  primary: [analyst, tactician, strategist, psychologist, optimizer, ethicist]
+
+- id: strategy
+  name: Strategy & power
+  description: >
+    For decisions dominated by other people's interests and moves. Tactician and
+    strategist in full; the rest keep them honest.
+  primary: [tactician, strategist]
+  advisory: [analyst]
+  critic: [psychologist, ethicist, optimizer]
+
+- id: people
+  name: People & relationships
+  description: For decisions where the hard part is a person, not a plan.
+  primary: [psychologist, strategist]
+  advisory: [ethicist]
+  critic: [analyst, tactician, optimizer]
+
+- id: execution
+  name: Execution & throughput
+  description: For decisions about effort, sequencing, and what to stop doing.
+  primary: [optimizer, analyst]
+  advisory: [tactician]
+  critic: [psychologist, ethicist, strategist]
+
+- id: life
+  name: Life & values
+  description: For irreversible personal decisions measured in years.
+  primary: [ethicist, psychologist]
+  advisory: [analyst]
+  critic: [tactician, strategist, optimizer]

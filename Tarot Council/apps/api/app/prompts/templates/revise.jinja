@@ -1,0 +1,40 @@
+REVISION ROUND
+
+{{ critiques | length }} critique{{ 's' if critiques | length != 1 else '' }} were made of your reasoning. Answer each one.
+
+<question>
+{{ context.question }}
+</question>
+
+YOUR STANCE
+{{ conclusion.stance }}
+
+YOUR CONFIDENCE
+{{ conclusion.confidence.score }} — {{ conclusion.confidence.basis }}
+You said you would change your mind if: {{ conclusion.confidence.falsifier }}
+
+CRITIQUES
+{% for c in critiques %}
+{{ loop.index }}. from `{{ c.critic }}` [{{ c.kind }}, severity {{ c.severity }}]{% if c.target_ref %} → {{ c.target_ref.kind }}{% if c.target_ref.row_id %}#{{ c.target_ref.row_id }}{% endif %}{% endif %}
+
+   {{ c.statement }}
+{% endfor %}
+
+Put every critique in exactly one of two lists.
+
+`accepted` — it landed. Give `from_module`, `what` it was, and
+`how_it_changes_my_view`. If you accept something, your stance or confidence must
+actually move; accepting a critique and changing nothing is not accepting it.
+
+`rejected` — it did not land. Give `from_module`, `what` it was, and
+`why_rejected` on the merits. "That is outside my remit" is a valid reason: you are
+one module of six, and defending your own axis is your job. Rejected critiques are
+shown to the synthesiser, so a disagreement you hold is not lost.
+
+Then:
+- `stance` — revised, or restate the original if it survived.
+- `confidence` — updated score, basis, and falsifier. Confidence may go up if a
+  critique failed against evidence, not merely because you defended it.
+- `delta` — one sentence on what changed. "unchanged" is a legitimate answer.
+
+Do not become agreeable. A module that folds under every critique adds nothing.

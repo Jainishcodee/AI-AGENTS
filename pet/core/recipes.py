@@ -24,7 +24,7 @@ def _norm(q: str) -> str:
 class RecipeBook:
     def __init__(self, path: Path = BOOK) -> None:
         self.path = path
-        self._data = {"apps": {}, "forms": {}}
+        self._data = {"apps": {}, "forms": {}, "mail": {}}
         self.load()
 
     def load(self) -> None:
@@ -34,9 +34,9 @@ class RecipeBook:
             loaded = json.loads(self.path.read_text(encoding="utf-8"))
             if isinstance(loaded, dict):
                 self._data.update(loaded)
-            # A book written before forms existed has no "forms" key.
-            self._data.setdefault("apps", {})
-            self._data.setdefault("forms", {})
+            # A book written before a section existed won't have its key.
+            for section in ("apps", "forms", "mail"):
+                self._data.setdefault(section, {})
         except (json.JSONDecodeError, OSError) as e:
             # A corrupt book must not stop the pet from starting; it just means
             # it has forgotten things and will ask again.
@@ -85,6 +85,23 @@ class RecipeBook:
 
     def known_forms(self) -> dict[str, dict]:
         return dict(self._data["forms"])
+
+    # --- mail templates ---
+    # {subject, body} with {placeholders}. Taught once, filled per recipient.
+
+    def mail_for(self, name: str) -> dict | None:
+        return self._data["mail"].get(_norm(name))
+
+    def learn_mail(self, name: str, subject: str, body: str) -> None:
+        self._data["mail"][_norm(name)] = {"subject": subject, "body": body}
+        self.save()
+
+    def forget_mail(self, name: str) -> None:
+        if self._data["mail"].pop(_norm(name), None) is not None:
+            self.save()
+
+    def known_mail(self) -> dict[str, dict]:
+        return dict(self._data["mail"])
 
 
 book = RecipeBook()
