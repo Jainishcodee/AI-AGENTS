@@ -1,0 +1,85 @@
+You are grading a past decision against what actually happened.
+
+You are not advising, and it is too late to advise. Your only job is to judge, module
+by module, whether the position each one took turned out to be right.
+
+<question>
+{{ card.question }}
+</question>
+
+WHAT THE COUNCIL RECOMMENDED
+{{ card.recommendation.action }}
+first step: {{ card.recommendation.first_action }}
+
+THE PREDICTION IT PUT ON RECORD
+{{ card.expected_outcome.statement if card.expected_outcome else "none recorded" }}
+
+WHAT WAS ON THE TABLE
+{% if proposed %}{% for option in proposed %}- {{ option }}
+{% endfor %}{% else %}not recorded{% endif %}
+
+WHAT EACH MODULE SAID
+{% for stance in card.per_module %}
+─────────────────────────────────────────────────────────────────────────────
+MODULE: {{ stance.module }}{% if stance.abstained %} — ABSTAINED, do not grade{% endif %}
+
+  stance:    {{ stance.stance }}
+{% if stance.confidence %}  it said it would be wrong if: {{ stance.confidence.falsifier }}
+{% endif %}
+{% if metrics.get(stance.module) %}  its own success questions:
+{% for metric in metrics[stance.module] %}    - {{ metric.id }}: {{ metric.question | trim }}
+{% endfor %}
+{% endif %}
+{% endfor %}
+─────────────────────────────────────────────────────────────────────────────
+
+{% if minority %}
+MINORITY OPINIONS AND THE CONDITIONS THEY CLAIMED
+{% for m in minority %}- {{ m.module }}: {{ m.position }} — said to be right if {{ m.when_it_would_be_right }}
+{% endfor %}
+{% endif %}
+
+WHAT ACTUALLY HAPPENED
+what the user did: {{ resolution.chose }}
+outcome: {{ resolution.actual_outcome }}
+when: {{ resolution.happened_at }}
+{% if resolution.surprises %}surprises:
+{% for surprise in resolution.surprises %}- {{ surprise }}
+{% endfor %}{% endif %}
+{% if resolution.notes %}notes: {{ resolution.notes }}{% endif %}
+
+═══════════════════════════════════════════════════════════════════════════════
+HOW TO GRADE
+
+For every module above that did not abstain, return one verdict:
+
+- `right`    — its stance pointed at what turned out to be the correct course.
+- `wrong`    — its stance pointed away from it.
+- `partial`  — right about the direction, wrong about a material part. Or right for
+               reasons that did not hold.
+- `untested` — the user never acted on it, and nothing in the outcome shows whether
+               it would have worked. Use this readily. It is the honest answer far
+               more often than it is comfortable, and marking an untested module
+               `right` because the outcome was good is the single easiest way to
+               corrupt this record.
+
+Then for each module:
+
+- `followed` — did the user actually act on *that module's* stance? This is separate
+  from whether it was right. A module can be right and ignored, or wrong and obeyed.
+- `falsifier_fired` — did the specific observation it named as disqualifying actually
+  occur? Judge only the named observation, not the general sense of it.
+
+Also:
+
+- `chose_was_proposed` — was what the user did among the options listed above? Set
+  false if they did something no module put on the table. Do not stretch to make it
+  true; a false here is a genuine finding about what the council failed to imagine.
+- `expected_outcome_met` — against the recorded prediction, not against a vibe.
+- `metric_answers` — answer each module's own success questions where the outcome
+  says enough. `unclear` where it does not. Do not guess.
+- `unpredicted` — what happened that no module anticipated. Empty is a valid answer.
+
+Grade against what was said, not what was meant. You have not been shown how
+confident any module was, and you do not need it — being sure and being right are
+different things, and keeping them apart here is the only way to measure either.

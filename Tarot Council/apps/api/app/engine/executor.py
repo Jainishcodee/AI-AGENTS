@@ -22,6 +22,7 @@ from ..schemas.artifacts import TERMINAL_KIND, Artifact, Conclusion, model_for
 from ..schemas.cards import AgentMemory
 from ..schemas.council import DecisionContext, ModuleRun
 from ..schemas.events import Event, ev
+from ..schemas.common import StageId
 from ..schemas.program import AgentProgram, Role
 from .invariants import InvariantContext, check, normalize
 from .planner import StageBatch, batch_model, plan
@@ -48,19 +49,47 @@ class Engine:
         role: Role = "primary",
         memory: AgentMemory | None = None,
         emit: Emit | None = None,
+        resume_from: StageId | None = None,
+        seed: ModuleRun | None = None,
     ) -> ModuleRun:
+        """Execute a program, optionally resuming partway through a previous run.
+
+        `resume_from` + `seed` is the capability ADR-011 was for: because every stage
+        is a separately validated artifact, re-running the strategist's leverage stage
+        against one new fact is a supported operation rather than a rebuild. Stages
+        before the resume point are copied from the seed; everything from it onward is
+        re-executed against the (possibly updated) context.
+        """
         memory = memory or AgentMemory()
         run = ModuleRun(module=program.id, program_version=program.version, role=role)
         system = renderer.system_prompt(program)
         batches = plan(program, depth)
 
-        for index, batch in enumerate(batches, start=1):
+        start = 0
+        if resume_from is not None:
+            start = _batch_index_of(batches, resume_from)
+            carried = {s.id for batch in batches[:start] for s in batch.stages}
+            if seed is not None:
+                run.artifacts = [a for a in seed.artifacts if a.stage_id in carried]
+            missing = carried - {a.stage_id for a in run.artifacts}
+            if missing:
+                raise ArtifactInvalid(
+                    program.id,
+                    [
+                        "cannot resume from "
+                        f"'{resume_from}': no prior artifact for "
+                        f"{', '.join(sorted(missing))}"
+                    ],
+                )
+            batches = batches[start:]
+
+        for index, batch in enumerate(batches, start=start + 1):
             try:
                 artifacts = await self._run_batch(
                     program,
                     batch,
                     index=index,
-                    total=len(batches),
+                    total=start + len(batches),
                     system=system,
                     context=context,
                     memory=memory,
@@ -265,6 +294,13 @@ class Engine:
             available[stage.id] = artifact
 
         return (artifacts, problems) if problems else (artifacts, [])
+
+
+def _batch_index_of(batches: list[StageBatch], stage_id: StageId) -> int:
+    for index, batch in enumerate(batches):
+        if stage_id in batch.produced_ids:
+            return index
+    raise ArtifactInvalid("resume", [f"no stage '{stage_id}' in this program"])
 
 
 def citable_refs(run: ModuleRun) -> set[str]:

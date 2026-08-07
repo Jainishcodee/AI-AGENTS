@@ -136,6 +136,15 @@ def create_app() -> Flask:
         _save_state(st)
         return jsonify(st)
 
+    # --------------------------------------------------------------- search
+    @app.get("/api/search")
+    def search_symbols():
+        from ..live.symbols import search
+
+        q = request.args.get("q", "")
+        limit = min(int(request.args.get("limit", 20)), 50)
+        return jsonify(_clean(search(q, limit)))
+
     # ---------------------------------------------------------------- chart
     @app.get("/api/candles")
     def candles():

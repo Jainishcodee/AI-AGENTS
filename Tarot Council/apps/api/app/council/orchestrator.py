@@ -11,7 +11,7 @@ from __future__ import annotations
 import asyncio
 import uuid
 from collections.abc import AsyncIterator, Awaitable, Callable
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta, timezone
 
 from pydantic import ValidationError
 
@@ -22,11 +22,15 @@ from ..engine.executor import Engine
 from ..engine.mockfix import build_fixups
 from ..llm.base import LLMRequest
 from ..llm.jsonio import extract_json
+from ..core.errors import ProgramInvalid
+from ..learning.extraction import extract as extract_memories
+from ..learning.grader import grade as grade_card
 from ..llm.registry import Router
 from ..memory.store import MemoryStore, build_store
 from ..programs import loader
 from ..prompts import renderer
-from ..schemas.cards import DecisionCard, ExpectedOutcome, ModuleStance
+from ..schemas.cards import DecisionCard, ExpectedOutcome, ModuleStance, Resolution
+from ..schemas.common import Verdict
 from ..schemas.council import (
     Critique,
     CritiqueList,
@@ -35,10 +39,12 @@ from ..schemas.council import (
     DeliberationRequest,
     IntakeResult,
     ModuleRun,
+    Rerun,
     Revision,
     RevisionDraft,
     Synthesis,
 )
+from ..schemas.common import ModuleId
 from ..schemas.events import Event, ev
 from ..schemas.program import AgentProgram
 from ..trace import builder as trace_builder
@@ -67,8 +73,177 @@ class Council:
         self._engine = Engine(self._router)
         self._store = store or build_store(self._settings.store, self._settings.store_dir)
 
+    @property
+    def store(self) -> MemoryStore:
+        return self._store
+
     async def aclose(self) -> None:
         await self._router.aclose()
+
+    # ------------------------------------------------------------- learning --
+
+    async def resolve(
+        self, card_id: str, resolution: Resolution, *, grade: bool = True
+    ) -> DecisionCard:
+        """Record the outcome, then score every module against it.
+
+        The resolution is saved *before* grading, so a grader failure never costs the
+        outcome the user took the trouble to write down. Re-grade with `grade()`.
+        """
+        card = await self._store.resolve_card(card_id, resolution)
+        if not grade:
+            return card
+        return await self.grade(card_id)
+
+    async def grade(self, card_id: str) -> DecisionCard:
+        card = await self._store.get_card(card_id)
+        if card is None:
+            raise KeyError(card_id)
+        if card.resolution is None:
+            raise CognitiveOSError(
+                f"card {card_id} has no resolution; record what happened before grading"
+            )
+        scoring = await grade_card(card, card.resolution, self._router)
+        graded = await self._store.attach_scoring(card_id, scoring)
+
+        # Extraction runs after grading so it can see which module was right. Its
+        # failure must never cost the resolution, which is the expensive artefact.
+        try:
+            memories = await extract_memories(graded, card.resolution, self._router)
+            for module in {m.module for m in memories}:
+                await self._store.remember(module, [m for m in memories if m.module == module])
+            if memories:
+                log.info("extracted %d memories from card %s", len(memories), card_id)
+        except Exception as exc:  # noqa: BLE001
+            log.warning("memory extraction failed for card %s: %s", card_id, exc)
+        return graded
+
+    # -------------------------------------------------------------- re-runs --
+
+    async def rerun_stage(
+        self,
+        deliberation_id: str,
+        *,
+        module: ModuleId,
+        from_stage: str,
+        facts: list[str] | None = None,
+        reason: str = "",
+    ) -> Deliberation:
+        """Re-run one module from one stage, then re-synthesise.
+
+        Produces a **new** deliberation derived from the original; the original is
+        never touched. Critiques *of* the re-run module are dropped — they targeted
+        artifacts that no longer exist — while critiques *by* it are kept, since its
+        reading of the others has not changed.
+        """
+        original = await self._store.get_deliberation(deliberation_id)
+        if original is None:
+            raise KeyError(deliberation_id)
+        seed = original.run_for(module)
+        if seed is None:
+            raise KeyError(f"deliberation {deliberation_id} has no run for {module}")
+
+        programs = loader.programs()
+        if module not in programs:
+            raise ProgramInvalid(f"unknown module '{module}'")
+
+        facts = facts or []
+        context = original.context.model_copy(
+            update={"constraints": [*original.context.constraints, *facts]}
+        )
+
+        fresh = await self._engine.run_program(
+            programs[module],
+            context=context,
+            depth=original.depth,  # type: ignore[arg-type]
+            role=seed.role,
+            memory=await self._store.agent_memory(module, context.question),
+            resume_from=from_stage,
+            seed=seed,
+        )
+
+        derived = original.model_copy(
+            deep=True,
+            update={
+                "id": uuid.uuid4().hex[:12],
+                "created_at": datetime.now(timezone.utc),
+                "derived_from": original.id,
+                "rerun": Rerun(
+                    kind="stage",
+                    module=module,
+                    from_stage=from_stage,
+                    added_facts=facts,
+                    reason=reason,
+                ),
+                "context": context,
+                "synthesis": None,
+            },
+        )
+        derived.runs = [fresh if r.module == module else r for r in derived.runs]
+        derived.critiques = [c for c in derived.critiques if c.target != module]
+        derived.revisions = [r for r in derived.revisions if r.module != module]
+        derived.usage.merge(fresh.usage)
+
+        async def noop(_event: Event) -> None:
+            return None
+
+        derived.synthesis = await self._synthesise(programs, derived, noop)
+        await self._finish(derived, programs)
+        return derived
+
+    async def refine(
+        self, deliberation_id: str, *, answers: list[str], reason: str = ""
+    ) -> Deliberation:
+        """Answer the open unknowns and deliberate again, knowing them.
+
+        Deliberately a full re-run rather than a surgical patch: once a load-bearing
+        unknown is resolved, every module's reasoning downstream of it is suspect, and
+        pretending otherwise would produce a record that is half-informed without
+        saying which half.
+        """
+        original = await self._store.get_deliberation(deliberation_id)
+        if original is None:
+            raise KeyError(deliberation_id)
+
+        notes = "\n".join(
+            [
+                "Answers to what the council could not previously determine:",
+                *(f"- {answer}" for answer in answers),
+            ]
+        )
+        request = DeliberationRequest(
+            question=original.question,
+            preset=original.preset,
+            depth=original.depth,  # type: ignore[arg-type]
+            context_notes=notes,
+        )
+        refined = await self.run(request)
+        refined.derived_from = original.id
+        refined.rerun = Rerun(kind="refine", added_facts=answers, reason=reason)
+        await self._store.save_deliberation(refined)
+        return refined
+
+    async def _finish(self, deliberation: Deliberation, programs) -> None:
+        """Persist a derived deliberation and its card."""
+        await self._store.save_deliberation(deliberation)
+        if deliberation.synthesis is not None:
+            card = self._make_card(deliberation, deliberation.synthesis)
+            await self._store.save_card(card)
+
+    async def override_verdict(
+        self, card_id: str, module: str, verdict: Verdict, justification: str = ""
+    ) -> DecisionCard:
+        card = await self._store.get_card(card_id)
+        if card is None or card.scoring is None:
+            raise KeyError(f"card {card_id} is not graded")
+        existing = card.scoring.verdict_for(module)
+        if existing is None:
+            raise KeyError(f"card {card_id} has no verdict for {module}")
+        existing.verdict = verdict
+        existing.overridden = True
+        if justification:
+            existing.justification = justification
+        return await self._store.attach_scoring(card_id, card.scoring)
 
     # ------------------------------------------------------------- streaming --
 
@@ -514,6 +689,7 @@ class Council:
             deliberation_id=deliberation.id,
             preset=deliberation.preset,
             depth=deliberation.depth,
+            domains=list(deliberation.context.domains),
             program_versions=deliberation.program_versions,
             recommendation=synthesis.recommendation,
             per_module=[
@@ -522,6 +698,7 @@ class Council:
                     stance=run.conclusion.stance if run.conclusion else "",
                     confidence=run.conclusion.confidence if run.conclusion else None,
                     abstained=run.abstained,
+                    role=run.role,
                 )
                 for run in deliberation.runs
             ],

@@ -42,6 +42,21 @@ to remember:
 | **Paper Journal** | `paper` — log trades, see your win rate with its confidence interval |
 | **Audit Tips** | `advisor` — score any service against random entry |
 
+### Symbol search
+
+The search box (top-left, or press `/`) reaches **every** listed stock — not just
+the watchlist. It layers two free sources:
+
+- **Yahoo's search endpoint** — real company names and global coverage, so
+  "tata motors" finds `TMCV.NS` and "apple" finds `AAPL`.
+- **Angel One's public scrip master** — 15,124 instruments (2,439 NSE equities,
+  12,711 BSE) plus curated indices. No credentials needed, and it keeps search
+  working offline, degraded to ticker-only matching (the dropdown says so).
+
+Exact ticker matches rank first, then prefix matches, then NSE over BSE over
+foreign listings. Arrow keys navigate, Enter selects, `+` adds to the watchlist,
+and picking a symbol pushes it into the Backtest, Predict and Inspect forms too.
+
 Charts use TradingView's own `lightweight-charts` (Apache 2.0), vendored locally
 so the dashboard runs fully offline. Long jobs run in the background and stream
 their console output into a panel, so the UI shows exactly what the CLI prints —

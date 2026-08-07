@@ -12,7 +12,7 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 
-from .common import Confidence, MemoryKind, ModuleId, Verdict
+from .common import Confidence, MemoryKind, ModuleId, Strict, Verdict
 from .council import Minority, Recommendation
 
 
@@ -32,6 +32,56 @@ class ModuleStance(BaseModel):
     stance: str
     confidence: Confidence | None = None
     abstained: bool = False
+    role: str = "primary"
+    """A module's accuracy in `critic` role is not comparable to `primary`
+    (ADR-017), so the role it held is recorded alongside the stance."""
+
+
+Verdict_ = Verdict  # re-export alias, keeps the import surface stable
+
+
+class ModuleVerdict(BaseModel):
+    """How one module's stance fared. Produced by the grader, overridable by hand."""
+
+    module: ModuleId
+    verdict: Verdict
+    justification: str = ""
+    followed: bool = False
+    """Did the user actually act on this module's stance? A module with a high hit
+    rate on the 10% of advice the user was willing to take is not performing well —
+    it is advising a different person."""
+    falsifier_fired: bool = False
+    """Did the specific observation the module named as disqualifying occur? The
+    fastest honest signal in the system: checkable in days, not months."""
+    overridden: bool = False
+    """True when a human replaced the grader's verdict."""
+
+
+class MetricAnswer(BaseModel):
+    """An answer to one of a module's own declared `success_metrics`."""
+
+    module: ModuleId
+    metric_id: str
+    answer: Literal["yes", "no", "unclear"]
+    evidence: str = ""
+
+
+class CardScoring(BaseModel):
+    graded_at: datetime = Field(default_factory=_now)
+    expected_outcome_met: Literal["yes", "no", "partial", "unclear"] = "unclear"
+    chose_was_proposed: bool = True
+    """False when the user did something no module put on the table — a direct
+    measurement of the council's option-generation blindness."""
+    module_verdicts: list[ModuleVerdict] = Field(default_factory=list)
+    metric_answers: list[MetricAnswer] = Field(default_factory=list)
+    unpredicted: list[str] = Field(default_factory=list)
+    grader_model: str = ""
+
+    def verdict_for(self, module: ModuleId) -> ModuleVerdict | None:
+        for verdict in self.module_verdicts:
+            if verdict.module == module:
+                return verdict
+        return None
 
 
 class Resolution(BaseModel):
@@ -55,6 +105,10 @@ class DecisionCard(BaseModel):
     deliberation_id: str
     preset: str
     depth: str
+    domains: list[str] = Field(default_factory=list)
+    """Carried from the intake so accuracy can be computed per domain — the
+    strategist may be strong on negotiation and weak on money, and one number
+    across both would hide it."""
     program_versions: dict[ModuleId, int] = Field(default_factory=dict)
 
     recommendation: Recommendation
@@ -63,11 +117,27 @@ class DecisionCard(BaseModel):
     minority_opinions: list[Minority] = Field(default_factory=list)
 
     resolution: Resolution | None = None
-    scoring: dict[ModuleId, Verdict] = Field(default_factory=dict)
+    scoring: CardScoring | None = None
 
     @property
     def resolved(self) -> bool:
         return self.resolution is not None
+
+    @property
+    def graded(self) -> bool:
+        return self.scoring is not None and bool(self.scoring.module_verdicts)
+
+    def is_due(self, today: date) -> bool:
+        return (
+            not self.resolved
+            and self.expected_outcome is not None
+            and self.expected_outcome.check_on <= today
+        )
+
+    def status(self, today: date) -> "CardStatus":
+        if self.resolved:
+            return "resolved"
+        return "due" if self.is_due(today) else "open"
 
 
 class Memory(BaseModel):
@@ -80,6 +150,24 @@ class Memory(BaseModel):
     salience: float = Field(default=0.5, ge=0.0, le=1.0)
     source_card_id: str | None = None
     created_at: datetime = Field(default_factory=_now)
+
+
+class MemoryDraft(Strict):
+    module: ModuleId
+    kind: MemoryKind
+    content: str
+    salience: float = Field(default=0.5, ge=0.0, le=1.0)
+
+
+class ExtractionResult(Strict):
+    """One call, six extraction rules.
+
+    Splitting into six calls would be more faithful to "six memories with six
+    biases", but the rules are distinct enough stated side by side that the extra
+    five calls buy little — and on a per-minute quota they cost a lot (ADR-020).
+    """
+
+    memories: list[MemoryDraft] = Field(default_factory=list)
 
 
 class Prior(BaseModel):
@@ -108,15 +196,65 @@ class ModuleScore(BaseModel):
     module: ModuleId
     domain: str | None = None
     n: int = 0
+    """Scored, non-`untested` decisions. Not the number of deliberations."""
     brier: float | None = None
+    """Mean squared error of stated confidence against outcome. Lower is better;
+    0.25 is what you get by always saying 50%."""
     hit_rate: float | None = None
+    mean_confidence: float | None = None
     execution_rate: float | None = None
+    falsifier_hit_rate: float | None = None
     horizon_days: int | None = None
+
+    @property
+    def overconfidence(self) -> float | None:
+        """Stated confidence minus what actually happened. Positive = overconfident."""
+        if self.mean_confidence is None or self.hit_rate is None:
+            return None
+        return round(self.mean_confidence - self.hit_rate, 3)
 
     @property
     def displayable(self) -> bool:
         """Nothing is shown below n=8. An early number is a lie of presentation."""
-        return self.n >= 8
+        return self.n >= MIN_N_TO_DISPLAY
 
+
+MIN_N_TO_DISPLAY = 8
+MIN_N_FOR_PRIOR = 3
+"""A prior needs three data points. Two is an anecdote, and an anecdote injected as
+a prior is how a system becomes confidently wrong about one specific person."""
 
 CardStatus = Literal["open", "due", "resolved"]
+
+
+# ─────────────────────────────────────────────────── what the grader returns ──
+
+
+class ModuleVerdictDraft(Strict):
+    module: ModuleId
+    verdict: Verdict
+    justification: str
+    followed: bool = False
+    falsifier_fired: bool = False
+
+
+class MetricAnswerDraft(Strict):
+    module: ModuleId
+    metric_id: str
+    answer: Literal["yes", "no", "unclear"]
+    evidence: str = ""
+
+
+class GraderResult(Strict):
+    """Judged blind: the grader is never shown any module's stated confidence.
+
+    Otherwise "this module was 85% sure" leaks into whether it is marked right, and
+    the Brier score becomes circular. Calibration is computed afterwards, in code,
+    from the confidence stored on the card (ADR-021).
+    """
+
+    expected_outcome_met: Literal["yes", "no", "partial", "unclear"]
+    chose_was_proposed: bool
+    module_verdicts: list[ModuleVerdictDraft] = Field(min_length=1)
+    metric_answers: list[MetricAnswerDraft] = Field(default_factory=list)
+    unpredicted: list[str] = Field(default_factory=list)

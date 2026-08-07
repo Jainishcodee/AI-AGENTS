@@ -14,6 +14,14 @@
     <span class="mark">SS</span>
     <span>StockSeer</span>
   </div>
+  <div class="search-wrap">
+    <input id="searchInput" class="search-input" type="search" autocomplete="off"
+           placeholder="Search any stock — RELIANCE, TATA MOTORS, AAPL, ^NSEI…"
+           aria-label="Search symbols" aria-expanded="false" role="combobox">
+    <kbd class="search-hint">/</kbd>
+    <div class="search-results" id="searchResults" role="listbox" hidden></div>
+  </div>
+
   <div class="ticker-strip" id="tickerStrip"></div>
   <div class="topbar-right">
     <span class="feed-badge" id="feedBadge">feed: …</span>

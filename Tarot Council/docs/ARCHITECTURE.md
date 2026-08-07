@@ -278,13 +278,20 @@ apps/api/app/
   council/      orchestrator: intake, fan-out, critique, revision, synthesis.
                 The only module that knows what a deliberation is.
   trace/        TraceGraph construction from AgentRun records. Pure functions.
-  memory/       MemoryStore protocol, per-module extraction rules, calibration.
+  learning/     grader (one blind LLM call) · scoring (pure arithmetic) · priors
+                (templated from real counts). See ADR-021.
+  memory/       MemoryStore protocol and implementations. Delegates computed views
+                — priors, scores — to learning/.
   api/          FastAPI routers. Thin: validate, call council, stream events.
-  cli.py        terminal client, so the engine is usable before any UI exists.
+  mcp/          JSON-RPC over stdio, stdlib only. Six tools, summarised for agents
+                rather than mirroring the HTTP surface.
+  cli.py        terminal client: ask · cards · resolve · grade · scores · priors ·
+                memories · rerun · refine.
 ```
 
 Dependencies point one way:
-`api → council → {engine, programs, prompts, memory, trace} → llm → schemas → core`.
+`api → council → {engine, programs, prompts, memory, trace, learning} → llm →
+schemas → core`, with `memory → learning` for the computed views.
 
 The two boundaries worth defending: **`engine/` must never import `programs/`**
 (it would stop being an interpreter and become a hardcoded pipeline), and

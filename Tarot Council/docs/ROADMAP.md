@@ -61,17 +61,38 @@ serve (ADR-018).
 
 ### 1b — Web client
 
-- [ ] Next.js + Tailwind, dark, typographic. No LOTM branding anywhere.
-- [ ] Live deliberation: six columns, stages filling in as artifacts validate
-- [ ] One renderer per artifact type — the graph as a graph, the tree as a tree
-- [ ] Thinking Trace: pannable layered map, every node clickable to its artifact
-- [ ] Debate view: critiques rendered as edges into the row they target
-- [ ] Synthesis: recommendation, disagreements, minority opinions with their
-      `when_it_would_be_right`, the veto response, and `council_blind_spot`
+- [x] Next.js 15 + Tailwind v4, dark, typographic. No LOTM branding anywhere.
+- [x] Same-origin proxy (`app/api/council/[...path]`) — no CORS on the streaming
+      POST, no API URL in the client bundle, one place for Phase 2 auth
+- [x] SSE-over-POST by hand (`EventSource` cannot POST) + a reducer over the typed
+      event stream; no state library, because the backend already emits the machine
+- [x] Live deliberation: module columns with a stage rail that fills as artifacts
+      validate, and shows which stages needed a repair
+- [x] A renderer per artifact type, registry-dispatched with a generic fallback —
+      the stakeholder graph as an authority-vs-influence scatter, the probability
+      tree as a tree with running joint probabilities, the nine dimensions as a
+      person-by-dimension matrix
+- [x] Debate view grouped by target, each critique showing the artifact row it
+      attacks, with `strong_agreement` rendered as agreement rather than as attack
+- [x] Synthesis: recommendation, unresolved disagreements, biases that fired,
+      `council_blind_spot` above the fold, minority opinions with their
+      `when_it_would_be_right`, the veto response, and the dated bet on record
+- [x] Thinking Trace: deterministic layered map from server-computed depth,
+      pan/zoom, click to isolate a node and its neighbours
+- [ ] Verified visually by a person (see below)
 
-**Exit criterion.** A non-technical person asks a real question and, unprompted,
-correctly identifies which module they disagree with and why. If they cannot, the
-trace has failed regardless of how it looks.
+**Verified:** `tsc --noEmit` clean, production build clean (126 kB first load),
+page server-renders, and a full deliberation streams through the proxy end to end —
+46 SSE frames in the correct order, 3 module runs × 7 artifacts, 14 routed
+critiques, 3 revisions, synthesis, a 42-node/75-edge/10-layer trace, and a Decision
+Card.
+
+**Not verified:** how it actually looks. There is no browser automation in this
+setup, so the rendering is confirmed only by types, build, and payload shape.
+
+**Exit criterion — not yet met.** A non-technical person asks a real question and,
+unprompted, correctly identifies which module they disagree with and why. That is a
+test with a person in it, and it has not been run.
 
 ---
 
@@ -91,33 +112,90 @@ facts — each recalling through its own extraction bias, both citing the card.
 
 ---
 
-## Phase 3 — Calibration (the defensible phase)
+## Phase 3 — Calibration (the defensible phase) ✅ *core built*
 
-- [ ] Resolution capture: `chose` as free text, `surprises` as a first-class field
-- [ ] Per-module Brier scores, per-domain hit rates, execution rates
-- [ ] Each module's own `success_metrics` computed from its spec
-- [ ] `Prior` generation: `evidence_count ≥ 3`, card-cited, injected as memory
-- [ ] Display honesty: nothing shown below n=8; horizon stated beside every number
-- [ ] Council health metrics: veto rate, `resolution.chose` outside all proposed
-      options (a direct measure of option-generation blindness)
+- [x] Resolution capture: `chose` as free text, `surprises` first-class
+      (`POST /cards/{id}/resolve`, `app.cli resolve`)
+- [x] Blind grader: verdict per module, `followed`, `falsifier_fired`,
+      `chose_was_proposed` — never shown any confidence score (ADR-021)
+- [x] `untested` as a first-class verdict, excluded from accuracy but counted
+      against execution rate
+- [x] Human override of any verdict (`PATCH /cards/{id}/verdict/{module}`)
+- [x] Per-module Brier scores, hit rates, execution rates, falsifier-fire rates,
+      and the same broken out per domain — computed in Python, never by a model
+- [x] Each module's own `success_metrics` answered from the outcome and tallied
+- [x] `Prior` generation with `evidence_count ≥ 3`, every prior citing its cards,
+      injected into stage 1 as arguable memory
+- [x] Prior rules: calibration gap, low execution, domain strength/weakness, a
+      module failing its own declared metric, off-menu choices, unpredicted events
+- [x] Display honesty: nothing shown below n=8 unless explicitly asked
+- [x] Cards carry status (`open` / `due` / `resolved`) driven by `check_on`
+- [x] Due-card reminders: `GET /reminders`, plus a one-line nudge the CLI prints
+      after any command when a check-in has come up. No daemon — a card schedules
+      its own follow-up; something just has to mention it.
+- [x] Memory extraction per module — six extraction rules, run at *resolution* (not
+      at deliberation time: before the outcome you only know what the user claimed,
+      afterwards you know which of it mattered). `learning/extraction.py`
+- [x] `recall()` is lexical overlap weighted by salience and recency, not
+      salience-only and not embeddings (ADR-023). `GET /memories/{module}` exposes it
+      so retrieval is inspectable rather than magic.
+- [ ] Web UI for the loop — resolution form, card list, scoreboard *(deferred with
+      the rest of the UI work)*
 
-**Exit criterion.** The UI can honestly state, from real recorded outcomes:
-*"strategist: 7 of 9 on negotiation decisions, 90-day horizon"* — and the
-tactician's prompt contains a prior it argues with.
+**Verified.** 21 tests covering the maths in both directions, plus an end-to-end
+test that deliberates four times, resolves and grades each, and asserts a computed
+prior with real counts arrives in the next run's stage-1 prompt. Live on the CLI:
+
+```
+module        domain             n    hit   conf   over   brier   exec
+strategist    negotiation        5   100%    55%  -0.45   0.203   100%
+```
+
+**Exit criterion — not yet met.** It needs real resolved decisions, and there is no
+shortcut: the loop is built, but ~8–10 genuinely resolved cards are required before
+any number here is a measurement rather than a rounding artefact.
 
 This is the phase nobody else can copy. The programs are an afternoon's work; the
 outcome corpus is not.
 
 ---
 
-## Phase 4 — Interface and reach
+## Phase 4 — Interface and reach *(in progress)*
 
-- [ ] LangGraph migration for cyclic debate and checkpointed resumption
-- [ ] Human-in-the-loop: interject mid-deliberation, answer a module's open gap
-- [ ] Stage re-run: "re-run the strategist's leverage stage with this new fact"
+- [x] **Stage re-run** — `POST /deliberations/{id}/rerun`, `app.cli rerun`. Re-runs
+      one module from one named stage with new facts, carrying every earlier artifact
+      untouched, then re-synthesises. This is what ADR-011 was for: because each
+      stage is a separately validated artifact, "re-run the strategist's leverage
+      stage knowing the investor's position" is an operation, not a rebuild. Tested
+      at `deep` depth by asserting the carried artifacts are byte-identical to the
+      seed and that no call was made for them.
+- [x] **Refinement** — `POST /deliberations/{id}/refine`, `app.cli refine`. Answer
+      the unknowns the council raised and deliberate again knowing them.
+- [x] **Derive, never mutate** — both produce a new deliberation with `derived_from`
+      and a `Rerun` record; the original is immutable (ADR-022).
+- [ ] Interject *mid-deliberation* (answer a module's gap while it is still running).
+      The two above cover the after-the-fact case; this needs the stream to accept
+      input, which is the first thing here that genuinely wants checkpointing.
+- [x] **MCP server** — `python -m app.mcp`. JSON-RPC over stdio on the standard
+      library only; MCP is newline-delimited JSON-RPC 2.0 and the four methods needed
+      are ~150 lines, against an SDK that would pin us to its release cycle. Six
+      tools: `consult`, `list_modules`, `get_deliberation`, `record_outcome`,
+      `track_record`, `pending_checkins`.
+
+      The tools are deliberately **not** a mirror of the HTTP API. `consult` returns
+      the recommendation, the disagreements, the minority opinions and the council's
+      blind spot — a summary an agent can act on — and hands back a `deliberation_id`
+      for the 40k-token transcript. Returning everything would blow the caller's
+      context and bury the part that matters. Tested at the wire level (a missing
+      `isError`, an answered notification, a schema that disagrees with its handler
+      are the mistakes that actually break clients).
 - [ ] Voice: per-module voices; the council as something you listen to
 - [ ] Mobile
-- [ ] MCP server: Cognitive OS as a tool other agents can consult
+- [ ] LangGraph migration — still deferred, and now for a concrete reason rather than
+      a general one. Stage re-run turned out **not** to need it: resumption fell out
+      of per-stage artifacts plus a batch index. LangGraph earns its dependency at
+      mid-deliberation interruption, where execution must pause, persist, and resume
+      across processes. Revisit there, not before (ADR-007).
 
 ---
 

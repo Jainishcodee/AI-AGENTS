@@ -248,12 +248,29 @@ class DeliberationRequest(BaseModel):
     Folded into the intake so modules do not have to ask for them."""
 
 
+class Rerun(Strict):
+    """Provenance for a derived deliberation.
+
+    Re-running never mutates the original. The reasoning record *is* the product, and
+    editing history in place would destroy the thing Decision Cards are scored
+    against (ADR-022).
+    """
+
+    kind: Literal["stage", "refine"]
+    module: ModuleId | None = None
+    from_stage: StageId | None = None
+    added_facts: list[str] = Field(default_factory=list)
+    reason: str = ""
+
+
 class Deliberation(BaseModel):
     id: str
     created_at: datetime = Field(default_factory=_now)
     question: str
     preset: str
     depth: str
+    derived_from: str | None = None
+    rerun: Rerun | None = None
     context: DecisionContext
     runs: list[ModuleRun] = Field(default_factory=list)
     critiques: list[Critique] = Field(default_factory=list)

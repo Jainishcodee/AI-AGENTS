@@ -12,11 +12,24 @@ as one shared index.
 from __future__ import annotations
 
 import json
+import re
+from datetime import date
 from pathlib import Path
 from typing import Protocol
 
 from ..core.logging import get_logger
-from ..schemas.cards import AgentMemory, DecisionCard, Memory, ModuleScore, Prior
+from ..learning.priors import for_module as priors_for_module
+from ..learning.scoring import all_scores
+from ..schemas.cards import (
+    AgentMemory,
+    CardScoring,
+    CardStatus,
+    DecisionCard,
+    Memory,
+    ModuleScore,
+    Prior,
+    Resolution,
+)
 from ..schemas.common import ModuleId
 from ..schemas.council import Deliberation
 
@@ -32,7 +45,9 @@ class MemoryStore(Protocol):
 
     async def get_card(self, card_id: str) -> DecisionCard | None: ...
 
-    async def list_cards(self, limit: int = 50) -> list[DecisionCard]: ...
+    async def list_cards(
+        self, limit: int = 50, status: CardStatus | None = None
+    ) -> list[DecisionCard]: ...
 
     async def recall(self, module: ModuleId, query: str, k: int = 5) -> list[Memory]: ...
 
@@ -65,27 +80,77 @@ class InMemoryStore:
     async def get_card(self, card_id: str) -> DecisionCard | None:
         return self._cards.get(card_id)
 
-    async def list_cards(self, limit: int = 50) -> list[DecisionCard]:
-        ordered = sorted(self._cards.values(), key=lambda c: c.created_at, reverse=True)
-        return ordered[:limit]
+    async def list_cards(
+        self, limit: int = 50, status: CardStatus | None = None
+    ) -> list[DecisionCard]:
+        today = date.today()
+        cards = list(self._cards.values())
+        if status is not None:
+            cards = [c for c in cards if c.status(today) == status]
+        # Due first, then newest. A card whose check-in date has passed is the only
+        # thing in here actively asking for attention, so it goes to the top.
+        cards.sort(key=lambda c: (c.status(today) != "due", -c.created_at.timestamp()))
+        return cards[:limit]
 
     async def recall(self, module: ModuleId, query: str, k: int = 5) -> list[Memory]:
-        # Phase 1: no embeddings. Salience order, which is honest about being a
-        # placeholder rather than pretending to be semantic search.
-        items = sorted(self._memories.get(module, []), key=lambda m: m.salience, reverse=True)
-        return items[:k]
+        """Lexical overlap, weighted by salience and recency.
+
+        Not embeddings, deliberately. At this corpus size — a heavy user produces a
+        few hundred memories a year — approximate nearest-neighbour search solves a
+        problem that does not exist, and semantic similarity actively misfires: two
+        unrelated decisions that share vocabulary surface as relevant. Overlap plus
+        salience is legible, debuggable, and good enough until there is a query it
+        demonstrably misses. pgvector arrives when that query exists, not before.
+        """
+        items = self._memories.get(module, [])
+        if not items:
+            return []
+        terms = _terms(query)
+        newest = max((m.created_at for m in items), default=None)
+
+        def rank(memory: Memory) -> float:
+            overlap = len(terms & _terms(memory.content))
+            score = overlap * 1.0 + memory.salience * 1.5
+            if newest is not None:
+                age_days = (newest - memory.created_at).total_seconds() / 86400
+                score += max(0.0, 1.0 - age_days / 365) * 0.5
+            return score
+
+        ranked = sorted(items, key=rank, reverse=True)
+        # A memory with no lexical overlap still surfaces if it is highly salient —
+        # "this user never puts anything in writing" is relevant to decisions that
+        # share no words with the one it came from.
+        return [m for m in ranked if _terms(m.content) & terms or m.salience >= 0.7][:k]
 
     async def remember(self, module: ModuleId, memories: list[Memory]) -> None:
         self._memories.setdefault(module, []).extend(memories)
 
     async def priors(self, module: ModuleId) -> list[Prior]:
-        # Priors require >= 3 resolved cards for this module (ADR-018). Until Phase 3
-        # computes them from real outcomes, there are none — and inventing plausible
-        # ones would poison the exact mechanism they exist to support.
-        return []
+        """Computed from graded cards on demand (ADR-018).
+
+        Recomputing per call rather than caching: the corpus is small, and a cached
+        prior that outlives the card it cites is worse than a cheap recount.
+        """
+        return priors_for_module(list(self._cards.values()), module)
 
     async def scores(self) -> list[ModuleScore]:
-        return []
+        return all_scores(list(self._cards.values()))
+
+    async def resolve_card(self, card_id: str, resolution: Resolution) -> DecisionCard:
+        card = self._cards.get(card_id)
+        if card is None:
+            raise KeyError(card_id)
+        card.resolution = resolution
+        await self.save_card(card)
+        return card
+
+    async def attach_scoring(self, card_id: str, card_scoring: CardScoring) -> DecisionCard:
+        card = self._cards.get(card_id)
+        if card is None:
+            raise KeyError(card_id)
+        card.scoring = card_scoring
+        await self.save_card(card)
+        return card
 
     async def agent_memory(self, module: ModuleId, query: str) -> AgentMemory:
         return AgentMemory(
@@ -102,6 +167,7 @@ class FileStore(InMemoryStore):
         self._root = root
         self._deliberation_dir = root / "deliberations"
         self._card_dir = root / "cards"
+        self._memory_file = root / "memories.json"
         for directory in (self._deliberation_dir, self._card_dir):
             directory.mkdir(parents=True, exist_ok=True)
         self._load()
@@ -121,6 +187,15 @@ class FileStore(InMemoryStore):
                 )
             except Exception as exc:  # noqa: BLE001
                 log.warning("skipping unreadable card %s: %s", path.name, exc)
+        if self._memory_file.is_file():
+            try:
+                raw = json.loads(self._memory_file.read_text(encoding="utf-8"))
+                self._memories = {
+                    module: [Memory.model_validate(item) for item in items]
+                    for module, items in raw.items()
+                }
+            except Exception as exc:  # noqa: BLE001
+                log.warning("skipping unreadable memories: %s", exc)
 
     async def save_deliberation(self, deliberation: Deliberation) -> None:
         await super().save_deliberation(deliberation)
@@ -129,6 +204,23 @@ class FileStore(InMemoryStore):
     async def save_card(self, card: DecisionCard) -> None:
         await super().save_card(card)
         self._write(self._card_dir / f"{card.id}.json", card)
+
+    async def remember(self, module: ModuleId, memories: list[Memory]) -> None:
+        await super().remember(module, memories)
+        self._write_memories()
+
+    def _write_memories(self) -> None:
+        self._memory_file.write_text(
+            json.dumps(
+                {
+                    module: [m.model_dump(mode="json") for m in items]
+                    for module, items in self._memories.items()
+                },
+                indent=2,
+                ensure_ascii=False,
+            ),
+            encoding="utf-8",
+        )
 
     @staticmethod
     def _write(path: Path, model: Deliberation | DecisionCard) -> None:
@@ -140,3 +232,18 @@ class FileStore(InMemoryStore):
 
 def build_store(kind: str, root: Path) -> MemoryStore:
     return FileStore(root) if kind == "file" else InMemoryStore()
+
+
+STOPWORDS = frozenset(
+    """a an and are as at be been but by can do does for from had has have how i if in
+    into is it its me my no not of on or our out should so than that the their them then
+    there they this to was we were what when which who will with would you your""".split()
+)
+
+
+def _terms(text: str) -> set[str]:
+    return {
+        token
+        for token in re.findall(r"[a-z0-9']+", text.lower())
+        if len(token) > 2 and token not in STOPWORDS
+    }

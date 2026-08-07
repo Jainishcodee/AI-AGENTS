@@ -211,15 +211,31 @@ every historical score.
 
 ## 5. Calibration and learned priors
 
-From resolved cards, computed per module **per user** (and separately per module
-globally, once there is enough data):
+Grading is split in two, and the split is what makes the numbers worth printing
+(ADR-021): **one LLM call judges what happened** — blind to every module's stated
+confidence — and **pure Python turns those judgements into arithmetic**.
+
+The grader returns, per module: a verdict (`right` / `wrong` / `partial` /
+`untested`), whether the user actually acted on that module's advice, and whether its
+falsifier fired. Plus, per card: whether what the user chose was even on the table.
+
+From those, computed per module **per user**:
 
 | Metric | Definition |
 |---|---|
-| **Brier score** | mean squared error of stated confidence vs. binary correctness |
-| **Hit rate** | share of `right` verdicts, by domain |
-| **Execution rate** | share of recommendations the user actually acted on |
-| **Metric-specific scores** | each module's own `success_metrics` from its spec |
+| **Brier score** | mean squared error of stated confidence vs. correctness (`right`=1, `partial`=0.5, `wrong`=0). `0.25` is what always-saying-50% scores. |
+| **Hit rate** | mean correctness over *tested* observations, overall and per domain |
+| **Overconfidence** | mean stated confidence minus hit rate. Positive = overclaiming. |
+| **Execution rate** | share of its advice the user actually acted on |
+| **Falsifier-fire rate** | how often the observation it named as disqualifying occurred |
+| **Metric-specific scores** | each module's own `success_metrics`, answered from the outcome and tallied |
+
+`untested` is excluded from accuracy but still counts against execution rate. A
+module whose advice was never taken has not been tested — but "you never took this"
+is itself a measurement, and dropping it would flatter the module.
+
+Any verdict can be overridden by hand (`overridden: true`). The user is the final
+judge of their own life; the grader is a labour-saving first pass.
 
 Two honesty rules on display: nothing is shown before **n ≥ 8** resolved cards for
 that module, and the horizon is stated alongside the number — the strategist's

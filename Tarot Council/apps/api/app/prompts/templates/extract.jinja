@@ -1,0 +1,44 @@
+A decision has resolved. Extract what is worth remembering about this user.
+
+Six modules will each recall from their own store, and each one cares about a
+different kind of thing. Extract for whichever of them applies — not everything is
+worth remembering, and an empty list for a module is a perfectly good answer.
+
+<question>
+{{ card.question }}
+</question>
+
+WHAT THE COUNCIL RECOMMENDED
+{{ card.recommendation.action }}
+
+WHAT HAPPENED
+did: {{ resolution.chose }}
+outcome: {{ resolution.actual_outcome }}
+{% if resolution.surprises %}surprises: {{ resolution.surprises | join(' · ') }}
+{% endif %}{% if resolution.notes %}notes: {{ resolution.notes }}{% endif %}
+
+{% if verdicts %}
+HOW EACH MODULE FARED
+{% for verdict in verdicts %}- {{ verdict.module }}: {{ verdict.verdict }}{% if verdict.justification %} — {{ verdict.justification }}{% endif %}
+{% endfor %}
+{% endif %}
+
+WHAT EACH MODULE REMEMBERS
+{% for module, kind in kinds.items() %}
+{{ module }} → kind `{{ kind }}`: {{ rules[kind] }}
+{% endfor %}
+
+RULES
+
+- A memory must be a **durable fact about this user or their world**, useful in a
+  future decision that is not this one. "They chose to stay" is a fact about this
+  decision and belongs on the card, not in memory. "Their manager makes commitments
+  verbally and does not put them in writing" is durable, and belongs here.
+- Write each one so it still makes sense read cold in six months, with no reference
+  to "this decision" or "the council".
+- Never invent a name. Use the role label the user used.
+- `salience` 0–1: how likely this is to matter again. Be strict — everything marked
+  important means nothing is.
+- At most three memories per module. Most decisions produce one or two in total.
+- If nothing durable was learned, return an empty list. That is the common case and
+  is not a failure.

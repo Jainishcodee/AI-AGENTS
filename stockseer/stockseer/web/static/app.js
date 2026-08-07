@@ -191,6 +191,108 @@ async function loadTickerStrip() {
   }
 }
 
+/* ------------------------------------------------------------------ search */
+const searchEl = $('#searchInput'), resultsEl = $('#searchResults');
+let searchTimer = null, searchHits = [], searchSel = -1;
+
+function closeSearch() {
+  resultsEl.hidden = true;
+  searchEl.setAttribute('aria-expanded', 'false');
+  searchSel = -1;
+}
+
+function renderSearch(data) {
+  searchHits = data.results || [];
+  searchSel = -1;
+  if (!searchHits.length) {
+    resultsEl.innerHTML = `<div class="sr-empty">No match.<br>
+      Try a ticker (RELIANCE), a company (Tata Motors), or an index (^NSEI).</div>`;
+  } else {
+    resultsEl.innerHTML = searchHits.map((r, i) => `
+      <div class="sr-item" data-i="${i}" role="option">
+        <span class="sr-sym">${r.symbol}</span>
+        <span class="sr-name">${r.name}</span>
+        <span class="sr-exch">${r.exchange || r.type}</span>
+        <button class="sr-add" data-add="${r.symbol}" title="Add to watchlist">+</button>
+      </div>`).join('') +
+      (data.source === 'local'
+        ? `<div class="sr-note">Offline index — searching by ticker only.</div>`
+        : '');
+    $$('.sr-item', resultsEl).forEach(el => el.onclick = ev => {
+      if (ev.target.dataset.add) {
+        const s = ev.target.dataset.add;
+        if (!state.watchlist.includes(s)) { state.watchlist.push(s); saveWatchlist(); }
+        ev.target.textContent = '✓';
+        return;
+      }
+      pickSymbol(searchHits[el.dataset.i].symbol);
+    });
+  }
+  resultsEl.hidden = false;
+  searchEl.setAttribute('aria-expanded', 'true');
+}
+
+/** Chart the symbol and push it into every panel that takes a ticker. */
+function pickSymbol(sym) {
+  state.symbol = sym;
+  searchEl.value = '';
+  closeSearch();
+  ['backtest', 'predict', 'inspect'].forEach(p => {
+    const f = $(`#form-${p} input[name=ticker]`);
+    if (f) f.value = sym;
+  });
+  $$('.nav-btn').forEach(x => x.classList.remove('active'));
+  $$('.panel').forEach(x => x.classList.remove('active'));
+  $('.nav-btn[data-panel="chart"]').classList.add('active');
+  $('#panel-chart').classList.add('active');
+  loadChart();
+}
+
+searchEl.oninput = () => {
+  clearTimeout(searchTimer);
+  const q = searchEl.value.trim();
+  if (q.length < 1) { closeSearch(); return; }
+  searchTimer = setTimeout(async () => {
+    try {
+      renderSearch(await (await fetch(`/api/search?q=${encodeURIComponent(q)}`)).json());
+    } catch {
+      resultsEl.innerHTML = `<div class="sr-empty">Search unavailable.</div>`;
+      resultsEl.hidden = false;
+    }
+  }, 220);
+};
+
+searchEl.onkeydown = e => {
+  if (e.key === 'Escape') { closeSearch(); searchEl.blur(); return; }
+  if (resultsEl.hidden || !searchHits.length) {
+    if (e.key === 'Enter' && searchEl.value.trim()) {
+      e.preventDefault();
+      pickSymbol(searchEl.value.trim().toUpperCase());   // let power users type it raw
+    }
+    return;
+  }
+  if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+    e.preventDefault();
+    searchSel = (searchSel + (e.key === 'ArrowDown' ? 1 : -1) + searchHits.length)
+      % searchHits.length;
+    $$('.sr-item', resultsEl).forEach((el, i) => el.classList.toggle('sel', i === searchSel));
+    $$('.sr-item', resultsEl)[searchSel]?.scrollIntoView({ block: 'nearest' });
+  } else if (e.key === 'Enter') {
+    e.preventDefault();
+    pickSymbol(searchHits[searchSel >= 0 ? searchSel : 0].symbol);
+  }
+};
+
+document.addEventListener('click', e => {
+  if (!e.target.closest('.search-wrap')) closeSearch();
+});
+document.addEventListener('keydown', e => {
+  if (e.key === '/' && document.activeElement !== searchEl &&
+      !/^(INPUT|SELECT|TEXTAREA)$/.test(document.activeElement.tagName)) {
+    e.preventDefault(); searchEl.focus();
+  }
+});
+
 /* -------------------------------------------------------------- job runner */
 function showConsole(title) {
   $('#console').hidden = false;

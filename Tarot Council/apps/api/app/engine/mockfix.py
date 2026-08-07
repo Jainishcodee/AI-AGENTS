@@ -648,8 +648,64 @@ def fix_intake(data: dict[str, Any], prompt: str) -> dict[str, Any]:
     return data
 
 
+_GRADABLE = re.compile(r"^MODULE:\s+(?P<module>[a-z_]+)(?P<rest>.*)$", re.MULTILINE)
+
+
+def fix_grader(data: dict[str, Any], prompt: str) -> dict[str, Any]:
+    """Grade every module the prompt lists, so the strict coverage check passes.
+
+    The grader refuses a partial council — an absent verdict would quietly drop a
+    module out of its own calibration history — so the mock has to be complete.
+    Verdicts alternate so the resulting scores are not degenerate.
+    """
+    modules = [
+        match.group("module")
+        for match in _GRADABLE.finditer(prompt)
+        if "ABSTAINED" not in match.group("rest")
+    ]
+    modules = list(dict.fromkeys(modules)) or ["analyst"]
+    verdicts = ["right", "partial", "wrong", "untested"]
+    data["module_verdicts"] = [
+        {
+            "module": module,
+            "verdict": verdicts[i % len(verdicts)],
+            "justification": f"[mock] how {module} fared",
+            "followed": i % 2 == 0,
+            "falsifier_fired": i % 3 == 0,
+        }
+        for i, module in enumerate(modules)
+    ]
+    data["metric_answers"] = []
+    data["expected_outcome_met"] = "partial"
+    data["chose_was_proposed"] = True
+    data["unpredicted"] = ["[mock] something nobody predicted"]
+    return data
+
+
+_EXTRACT_TARGET = re.compile(r"^(?P<module>[a-z_]+) → kind `(?P<kind>[a-z_]+)`", re.MULTILINE)
+
+
+def fix_extraction(data: dict[str, Any], prompt: str) -> dict[str, Any]:
+    """One memory per module listed, salient enough to be recalled by the next run."""
+    targets = _EXTRACT_TARGET.findall(prompt)
+    q = question(prompt)
+    subject = " ".join(q.split()[:6]) or "the situation"
+    data["memories"] = [
+        {
+            "module": module,
+            "kind": kind,
+            "content": f"[mock] durable {kind} learned about {subject}",
+            "salience": 0.8,
+        }
+        for module, kind in targets
+    ]
+    return data
+
+
 FIXUPS: dict[str, Fixup] = {
     "IntakeResult": fix_intake,
+    "GraderResult": fix_grader,
+    "ExtractionResult": fix_extraction,
     "CritiqueList": fix_critiques,
     "RevisionDraft": fix_revision,
     "Synthesis": fix_synthesis,

@@ -393,3 +393,119 @@ usable without a card on file.
 **Given up.** Wall-clock latency, deliberately. The alternative is a deliberation
 that reliably half-fails, which is worse than one that is slow.
 
+---
+
+## ADR-021 — The grader is blind to confidence; the arithmetic is not its job
+
+**Decision.** Grading a resolved decision is split in two:
+
+- `learning/grader.py` — one LLM call that judges **what happened**: a verdict per
+  module (`right` / `wrong` / `partial` / `untested`), whether the user acted on that
+  module's advice, whether its falsifier fired, and whether what they chose was even
+  on the table. It is shown every stance and every falsifier, and **never** any
+  module's confidence score.
+- `learning/scoring.py` — pure Python that turns those judgements into Brier scores,
+  hit rates and execution rates, using the confidence stored on the card.
+
+`learning/priors.py` then phrases patterns from those numbers using string templates.
+**No model ever writes a count.**
+
+**Why.** If the grader can see "the analyst was 90% confident", that leaks into
+whether the analyst is marked right, and the Brier score becomes a measurement of
+itself. Withholding confidence is what makes calibration mean anything — being sure
+and being right have to be measured independently or neither is measured.
+
+The second half matters as much. A sentence like *"your stated 80% has occurred 55%
+of the time"* is only worth injecting into a module's prompt if the two numbers are
+real. Computing them in Python and filling a template guarantees that; asking a model
+to summarise its own scoring would produce the same sentence with invented figures,
+and the entire calibration story would be theatre.
+
+Two supporting constraints:
+
+- **`untested` is a first-class verdict**, and the prompt pushes toward it. Marking a
+  module `right` because the outcome was good, when the user never took its advice,
+  is the easiest way to corrupt the corpus. Untested observations are excluded from
+  accuracy but still count against execution rate, because "you never took this" is
+  itself a measurement.
+- **The grader must cover every participating module or it fails.** A silently
+  missing verdict would drop that module out of its own history, which is worse than
+  a visible error.
+
+**Given up.** The grader cannot use confidence as a signal about how carefully a
+module reasoned, which is occasionally real information. Correct trade: it is
+indistinguishable from bias, and it is the one input that would invalidate the
+output. A human can override any verdict (`overridden: true`), which is the intended
+escape hatch — the user is the final judge of their own life.
+
+---
+
+## ADR-022 — Re-running derives a new deliberation; it never edits the old one
+
+**Decision.** `rerun_stage` (one module from one stage, with new facts) and `refine`
+(answer the open unknowns and deliberate again) both produce a **new** `Deliberation`
+carrying `derived_from` and a `Rerun` record. The original is immutable.
+
+On a stage re-run, critiques *of* the re-run module are dropped — they targeted
+artifacts that no longer exist — while critiques *by* it are kept, because its reading
+of the others did not change. Synthesis always re-runs.
+
+**Why.** The reasoning record is the product. It is what Decision Cards are scored
+against, what `program_versions` exists to make replayable, and what the Thinking
+Trace is a view of. Editing it in place would mean a card could be graded against a
+transcript that no longer matches the advice the user actually acted on — silently
+corrupting the one dataset that cannot be regenerated.
+
+Deriving instead also gives the history for free: a chain of `derived_from` links is a
+readable account of how the decision was refined as facts arrived, which is more
+useful than a single record that quietly improved.
+
+**Why `refine` is a full re-deliberation** rather than a surgical patch: once a
+load-bearing unknown is answered, every module's reasoning downstream of it is
+suspect. Patching only the stages that mentioned it would produce a record that is
+half-informed without saying which half.
+
+**Given up.** Storage — a refined decision costs a second full transcript — and the
+possibility of a cheap incremental update. Also more calls: a stage re-run is
+`(stages after the cut) + synthesis`, not one call. Accepted: the alternative is a
+mutable history, and a mutable history makes Phase 3 meaningless.
+
+---
+
+## ADR-023 — Lexical recall before vector recall
+
+**Decision.** `MemoryStore.recall` ranks by term overlap weighted by salience and
+recency. No embeddings. The pgvector column stays in the Phase 2 schema, unused until
+there is a demonstrated query that lexical filtering misses.
+
+**Why.** Three reasons, in order of weight:
+
+1. **The corpus is tiny.** A heavy user generates a few hundred memories a year.
+   Approximate nearest-neighbour search is a solution to a scale problem that does
+   not exist here, and at this size the whole relevant set can simply be filtered.
+2. **The useful keys are structured, not semantic.** "Decisions involving my manager",
+   "career decisions this year", "cards where the tactician was wrong" — those are
+   predicates, and predicates are more precise than cosine similarity. Semantic
+   search actively misfires on this data: two unrelated decisions that share
+   vocabulary surface as relevant.
+3. **The intelligence is in extraction, not retrieval.** What makes the psychologist's
+   recall feel like *that module* remembering is that it extracted emotional facts
+   under its own rule — six stores with six extraction biases (`learning/extraction.py`).
+   Swapping the ranking function would not change that; removing the extraction rules
+   would destroy it.
+
+Note also that **priors do not involve retrieval at all** — they are statistics
+computed over the whole corpus. The part of memory that actually changes reasoning was
+never a retrieval problem.
+
+**Where retrieval genuinely earns its place** is elsewhere: grounding the analyst's
+`BaseRateTable`, which currently must label unsourced statistics `guessed` with
+`applicability ≤ 0.5`. That is a real quality gap, and the existing invariant —
+`given` rows require a `source` — already shapes it correctly: retrieved facts enter
+as **sourced artifact rows**, not as context appended to a prompt.
+
+**Given up.** Recall misses paraphrases with no shared vocabulary. Mitigated by
+surfacing any memory with `salience ≥ 0.7` regardless of overlap, so a standing fact
+like "this user never gets anything in writing" reaches decisions that share no words
+with the one it came from.
+
