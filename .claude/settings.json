@@ -23,7 +23,8 @@
       "Bash(python -c \"import py_compile;py_compile.compile\\('distill.py',doraise=True\\);print\\('distill.py syntax OK'\\)\")",
       "Bash(cp data/distilled.json data/distilled_preclean.json)",
       "Bash(cp data/distilled.json data/distilled_final_backup.json)",
-      "Bash(break)"
+      "Bash(break)",
+      "PowerShell(Push-Location \"g:\\\\AI AGENTS\\\\Jarvis\"; $o = & \"C:\\\\flutter\\\\bin\\\\flutter.bat\" analyze 2>&1 | Out-String; Pop-Location; \"errors: \" + \\([regex]::Matches\\($o,\"error -\"\\)\\).Count; \"warnings: \" + \\([regex]::Matches\\($o,\"warning -\"\\)\\).Count; \"infos: \" + \\([regex]::Matches\\($o,\"info -\"\\)\\).Count; \"new-file mentions: \" + \\([regex]::Matches\\($o,\"fake_call|incoming_call\"\\)\\).Count)"
     ]
   }
 }

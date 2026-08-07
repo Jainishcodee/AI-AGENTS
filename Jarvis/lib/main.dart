@@ -4,10 +4,13 @@ import 'package:flutter/services.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 
 import 'screens/facts_screen.dart';
+import 'screens/fake_call_sheet.dart';
+import 'screens/incoming_call_screen.dart';
 import 'screens/library_screen.dart';
 import 'screens/today_screen.dart';
 import 'services/deck_db.dart';
 import 'services/digest_settings.dart';
+import 'services/fake_call_service.dart';
 import 'services/jarvis_brain.dart';
 import 'services/reminder_service.dart';
 import 'services/voice_service.dart';
@@ -18,6 +21,25 @@ final deckDb = DeckDb();
 // channel setup, so permission is only ever requested once.
 final reminders = ReminderService();
 final digest = DigestSettings(reminders);
+final fakeCall = FakeCallService(reminders.plugin);
+
+/// Lets a notification tap open a screen without a BuildContext to hand.
+final navigatorKey = GlobalKey<NavigatorState>();
+
+/// Answering the fake call means tapping its notification, which can happen
+/// while the app is backgrounded or not running at all.
+void _openFakeCall() {
+  fakeCall.cancel();
+  navigatorKey.currentState?.push(
+    MaterialPageRoute(
+      fullscreenDialog: true,
+      builder: (_) => IncomingCallScreen(
+        name: fakeCall.name,
+        number: fakeCall.number,
+      ),
+    ),
+  );
+}
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -32,7 +54,12 @@ Future<void> main() async {
   } catch (_) {
     // No deck yet — the Today tab shows its empty state rather than crashing.
   }
+  // Must be set before init(), which is what registers the tap handler.
+  reminders.onTapped = (payload) {
+    if (payload == FakeCallService.payload) _openFakeCall();
+  };
   try {
+    await fakeCall.load();
     await digest.load();
     // Re-arm on every launch so the repeating text reflects today's counts.
     await digest.apply(deckDb);
@@ -49,6 +76,7 @@ class JarvisApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MaterialApp(
       title: 'Jarvis',
+      navigatorKey: navigatorKey,
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
         brightness: Brightness.dark,
@@ -239,7 +267,18 @@ class _JarvisHomeState extends State<JarvisHome> {
               children: [
                 _topBar(),
                 const Spacer(),
-                Mascot(state: _state, size: mascotSize),
+                // Arming the fake call. Long-pressing the mascot looks like
+                // idly holding the phone, and deliberately shows no dialog or
+                // snackbar -- a visible confirmation in front of the person
+                // you're escaping would defeat the entire feature. The single
+                // haptic tick is the only feedback.
+                GestureDetector(
+                  onLongPress: () async {
+                    await fakeCall.arm();
+                    await HapticFeedback.mediumImpact();
+                  },
+                  child: Mascot(state: _state, size: mascotSize),
+                ),
                 const SizedBox(height: 24),
                 _stateChip(),
                 const Spacer(),
@@ -260,13 +299,19 @@ class _JarvisHomeState extends State<JarvisHome> {
       padding: const EdgeInsets.fromLTRB(20, 14, 20, 0),
       child: Row(
         children: [
-          const Text(
-            'JARVIS',
-            style: TextStyle(
-              fontSize: 18,
-              letterSpacing: 4,
-              fontWeight: FontWeight.w700,
-              color: Color(0xFFE74848),
+          // Setting the caller up is the one part that needn't hide, but it
+          // still lives behind a long-press so no control on screen hints at
+          // what the mascot gesture does.
+          GestureDetector(
+            onLongPress: () => FakeCallSheet.show(context, fakeCall),
+            child: const Text(
+              'JARVIS',
+              style: TextStyle(
+                fontSize: 18,
+                letterSpacing: 4,
+                fontWeight: FontWeight.w700,
+                color: Color(0xFFE74848),
+              ),
             ),
           ),
           const Spacer(),

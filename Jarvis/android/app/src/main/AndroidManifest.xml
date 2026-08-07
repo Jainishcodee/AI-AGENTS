@@ -14,6 +14,11 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE"/>
     <!-- Draws the water nudge over other apps. User-granted from Settings. -->
     <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW"/>
+    <!-- Lets the fake call light up the lock screen the way a real one does.
+         Android 14+ only grants this to dialler/alarm apps by default, so it
+         may need enabling by hand; without it the call still arrives as a
+         heads-up notification that opens the screen when tapped. -->
+    <uses-permission android:name="android.permission.USE_FULL_SCREEN_INTENT"/>
 
     <application
         android:label="Jarvis"

@@ -9,6 +9,15 @@ class ReminderService {
       FlutterLocalNotificationsPlugin();
   bool _initialized = false;
 
+  /// Called with a notification's payload when the user taps it. Set this
+  /// before [init] -- the fake call uses it to open its screen, since tapping
+  /// the ring is how you "answer".
+  void Function(String payload)? onTapped;
+
+  /// The plugin instance, shared so other features schedule on the same
+  /// initialised channel set rather than standing up a second one.
+  FlutterLocalNotificationsPlugin get plugin => _plugin;
+
   Future<void> init() async {
     if (_initialized) return;
     tzdata.initializeTimeZones();
@@ -16,7 +25,13 @@ class ReminderService {
     const android = AndroidInitializationSettings('@mipmap/ic_launcher');
     const settings = InitializationSettings(android: android);
 
-    await _plugin.initialize(settings);
+    await _plugin.initialize(
+      settings,
+      onDidReceiveNotificationResponse: (r) {
+        final p = r.payload;
+        if (p != null && p.isNotEmpty) onTapped?.call(p);
+      },
+    );
 
     // Runtime permissions on Android 13+
     await Permission.notification.request();
