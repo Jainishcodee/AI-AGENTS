@@ -19,6 +19,13 @@ from common import DATA, load_json, write_json
 
 THUMBS = Path(r"g:\AI AGENTS\Jarvis\assets\thumbs")
 
+# Covers arrive at whatever resolution the creator uploaded -- some are 4500x8000,
+# 36 megapixels behind a 52px CardThumb. The widest they are ever drawn is
+# CardBanner, one 16:9 strip roughly a phone-width across, so 640 is generous.
+# Worth capping before the first commit rather than after: these are tracked in
+# git, and git would carry every full-res byte forever even once they're shrunk.
+MAX_W = 640
+
 # yt-dlp text that means the post itself is gone -- taken down, deleted, or made
 # private. Matching is deliberately narrow: a card is only discarded on one of
 # these, and anything unrecognised keeps its card and just loses the cover.
@@ -33,9 +40,11 @@ GONE = (
     "this post is unavailable",
 )
 
-# Photo carousels have no video stream to pull a cover frame from. Not a dead
-# reel -- the card is fine, it just ships without art.
-CAROUSEL = "no video formats found"
+# Photo posts and carousels have no video stream to pull a cover frame from.
+# Not dead reels -- the cards are fine, they just ship without art. Instagram
+# words this two different ways depending on whether it's a single image or a
+# multi-image carousel.
+CAROUSEL = ("no video formats found", "there is no video in this post")
 
 
 def classify(err):
@@ -43,7 +52,7 @@ def classify(err):
     e = err.lower()
     if any(p in e for p in GONE):
         return "gone"
-    if CAROUSEL in e:
+    if any(p in e for p in CAROUSEL):
         return "carousel"
     return "unknown"
 
@@ -67,14 +76,51 @@ def fetch(url, item_id, force=False):
         return "fail", str(e)
 
 
+def shrink(path):
+    """Downscale a cover in place, returning bytes saved.
+
+    Idempotent -- a cover already at or under MAX_W is left untouched, so this
+    can sweep the whole folder on every run without re-encoding (and quietly
+    degrading) the same JPEG over and over.
+    """
+    from PIL import Image
+
+    try:
+        with Image.open(path) as im:
+            if im.width <= MAX_W:
+                return 0
+            before = path.stat().st_size
+            out = im.convert("RGB")
+            out.thumbnail((MAX_W, MAX_W * 4), Image.LANCZOS)
+        out.save(path, "JPEG", quality=82, optimize=True)
+        return before - path.stat().st_size
+    except Exception:
+        return 0  # a truncated download isn't worth failing the whole run over
+
+
+def sweep():
+    """Cap every cover on disk. Reports what it reclaimed."""
+    files = sorted(THUMBS.glob("*.jpg"))
+    saved = sum(shrink(f) for f in files)
+    total = sum(f.stat().st_size for f in files) / 1024 / 1024
+    print(f"shrunk {len(files)} covers, reclaimed {saved / 1024 / 1024:.1f} MB "
+          f"-> {total:.1f} MB on disk")
+
+
 def main():
     ap = argparse.ArgumentParser()
+    ap.add_argument("--shrink-only", action="store_true",
+                    help="skip fetching; just cap the covers already on disk")
     ap.add_argument("--force", action="store_true")
     ap.add_argument("--sleep", type=float, default=0.5,
                     help="pacing between fetches, to stay under IG's rate limit")
     args = ap.parse_args()
 
     THUMBS.mkdir(parents=True, exist_ok=True)
+    if args.shrink_only:
+        sweep()
+        return
+
     cards = [c for c in load_json(DATA / "distilled.json")
              if c["kind"] in ("task", "fact") and not c.get("error")]
     print(f"{len(cards)} cards to cover\n")
@@ -107,6 +153,7 @@ def main():
         dead = []
 
     write_json(DATA / "unavailable.json", dead)
+    sweep()
 
     got = len(list(THUMBS.glob("*.jpg")))
     print(f"\n{time.time() - t0:.0f}s  {stats}")
