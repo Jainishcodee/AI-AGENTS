@@ -38,7 +38,28 @@ python -m stockseer.cli predict --ticker ^NSEI --model-path artifacts/idx-NSEI__
 
 # Raw feature/target correlations, no model involved
 python -m stockseer.cli inspect --ticker ^NSEI
+
+# What a capital + profit target actually requires (costs, ruin risk, edge uncertainty)
+python -m stockseer.cli plan --capital 40000 --target 50000 --confidence 5 --compare
 ```
+
+### `plan` — the arithmetic before the trading
+
+`plan` answers "what does this goal actually demand of me" with a 20,000-path
+Monte Carlo over the real NSE cost schedule. Two things make it worth running,
+and both are usually left out:
+
+- **Your win rate is an estimate, not a fact.** `--confidence` says how many real
+  trades it rests on. Claim 55% after 5 trades and the truth is plausibly 17-83%
+  — a range that straddles the break-even line. Simulations that assume the
+  estimate is exact report ~100% success, which is how confident bad plans get
+  built.
+- **Stops don't always hold.** `--gap-prob` sends a fraction of losses straight
+  through the stop at `--gap-multiple` the intended size. Rare, and responsible
+  for a large share of real blow-ups.
+
+It also refuses to silently swallow an unfundable plan: risking 25% across a 2%
+stop needs 12.5x leverage, and at 1x your real risk is 2%, not 25%. It says so.
 
 **Symbols:** NSE needs `.NS` (`RELIANCE.NS`), BSE needs `.BO`. Indices: `^NSEI`
 (Nifty 50), `^NSEBANK` (Bank Nifty), `^BSESN` (Sensex), `^GSPC` (S&P 500).

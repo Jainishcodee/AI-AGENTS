@@ -123,11 +123,10 @@ modules' critique prompts with the `watch_for` text (ADR-003).
 | **psychologist** | *The missing row.* Attacks the ledger for what is not in it — the user's exhaustion, the relationship that decays, the fear driving the question. |
 | **optimizer** | *Analysis cost.* Attacks the ratio between the cost of resolving a gap and the value of resolving it. Many of the analyst's gaps are not worth closing. |
 | **ethicist** | *Legibility.* Attacks the tree for measuring what is countable rather than what matters. |
+| **strategist** | *Unexamined power assumptions.* Attacks ledger rows that quietly assume whose opinion decides the outcome. |
 
-The analyst is **not** critiqued by the strategist by default — their concerns
-barely intersect, and routed critique beats broadcast critique. Available on
-`deep`, where a strategist attack on unexamined power assumptions in the ledger
-is occasionally sharp.
+Routing is derived from this list and is the same at every depth; `COUNCIL.md`
+carries the resulting matrix.
 
 ---
 

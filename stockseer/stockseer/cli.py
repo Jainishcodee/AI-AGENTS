@@ -178,6 +178,27 @@ def cmd_inspect(a: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_plan(a: argparse.Namespace) -> int:
+    from .planner import compare_capital, plan_report
+
+    plan_report(
+        capital=a.capital, target_profit=a.target, win_rate=a.win_rate, rr=a.rr,
+        risk_pct=a.risk_pct, stop_pct=a.stop_pct, max_trades=a.max_trades,
+        delivery=a.delivery, leverage=a.leverage,
+        win_rate_confidence=a.confidence, gap_prob=a.gap_prob,
+    )
+    if a.compare:
+        compare_capital(
+            a.target, [a.capital, 100_000, 300_000, 500_000, 1_000_000],
+            win_rate=a.win_rate, rr_gross=a.rr, risk_pct=a.risk_pct,
+            stop_pct=a.stop_pct, max_trades=a.max_trades,
+            delivery=a.delivery, leverage=a.leverage,
+            win_rate_confidence=a.confidence, gap_prob=a.gap_prob,
+        )
+    print(DISCLAIMER)
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
         prog="stockseer",
@@ -214,6 +235,25 @@ def main(argv: list[str] | None = None) -> int:
     p = sub.add_parser("inspect", help="dataset shape and raw feature/target correlations")
     _add_common(p)
     p.set_defaults(func=cmd_inspect)
+
+    p = sub.add_parser("plan", help="what a capital + profit target actually requires")
+    p.add_argument("--capital", type=float, required=True)
+    p.add_argument("--target", type=float, required=True, help="profit goal in rupees")
+    p.add_argument("--win-rate", type=float, default=0.55)
+    p.add_argument("--rr", type=float, default=1.5, help="reward:risk before costs")
+    p.add_argument("--risk-pct", type=float, default=0.02, help="fraction of capital per trade")
+    p.add_argument("--stop-pct", type=float, default=0.02, help="stop distance as a fraction")
+    p.add_argument("--max-trades", type=int, default=500)
+    p.add_argument("--delivery", action="store_true", help="delivery instead of intraday")
+    p.add_argument("--leverage", type=float, default=1.0)
+    p.add_argument("--confidence", type=int, default=30,
+                   help="how many real trades your win-rate estimate rests on. "
+                        "Use 0-10 if you have no track record yet.")
+    p.add_argument("--gap-prob", type=float, default=0.03,
+                   help="fraction of losses that gap past the stop")
+    p.add_argument("--compare", action="store_true",
+                   help="also show the same target across capital levels")
+    p.set_defaults(func=cmd_plan)
 
     args = parser.parse_args(argv)
     logging.basicConfig(

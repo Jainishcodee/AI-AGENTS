@@ -40,12 +40,20 @@ Applied to every artifact regardless of kind:
   `my advice`) on any artifact whose stage is not `terminal`. A hit is a
   validation failure and triggers the repair pass.
 - **No empty collections** where the stage's `min_items` says otherwise.
-- **No fabricated proper nouns.** Named entities in the artifact must appear in
-  the `DecisionContext` or be flagged `inferred: true`. A module that needs an
-  actor the user never mentioned must use a role label (`"the hiring manager"`),
-  never an invented name.
+- **No fabricated proper nouns.** Enforced on the artifacts that enumerate
+  people — `ActorList`, `PersonList`, `AffectedParties`. Any entry whose label
+  does not match something in the `DecisionContext` must carry `inferred: true`;
+  a module needing an actor the user never mentioned must use a role label
+  (`"the hiring manager"`), never an invented name. A general scan for invented
+  proper nouns across all prose fields is deliberately *not* attempted — it
+  false-positives on ordinary capitalised words, and a validator that cries wolf
+  is worse than none.
 - **Row ids are stable and unique** within the artifact (`e1`, `a3`, `n2`), because
-  critiques target them and the trace draws edges to them.
+  critiques target them and the trace draws edges to them. Not every artifact
+  keys rows on `id` — a sequence step is identified by `order`, a harm row by
+  `option_id`, a profile by `person_id` — and all of those forms are citable
+  (`engine/executor.py:ROW_KEYS`). Recognising only `id` showed up in the first
+  live run as a wasted repair call against a row that was in fact real.
 
 ---
 
@@ -309,7 +317,10 @@ profiles: list[PersonProfile]
 nine fields non-empty.** No partial profiles, no skipping the awkward one. This
 is the module's defining constraint: the same nine dimensions for every person,
 every single time, so profiles are comparable across people and across decisions.
-`confidence ≤ 0.5` for any person the user described in under ~20 words.
+`confidence ≤ 0.5` for any person carrying `inferred: true` in the cast — i.e.
+whom the user never actually named. (That flag is the tractable proxy for "the
+user described them in barely a sentence": it is checkable, whereas
+attributing a word count to a particular person in free text is not.)
 
 ### `SelfRead`
 ```python

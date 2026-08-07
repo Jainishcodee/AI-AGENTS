@@ -67,14 +67,18 @@ Routing is derived from the specs, not configured separately: module M critiques
 module T if and only if `M ∈ T.critics`. The resulting matrix:
 
 ```
-target →      analyst  tactician  strategist  psychologist  optimizer  ethicist
-analyst          ·         ✓          deep         ✓            ✓         ✓
-tactician        ✓         ·           ✓           ✓            ✓         ✓
-strategist      deep       ✓           ·           ✓            ·         ✓
-psychologist     ✓         ✓           ✓           ·            ✓         ✓
-optimizer        ✓         ✓           ✓           ✓            ·         ✓
-ethicist         ✓         ✓           ✓           ✓            ✓         ·
+critic ↓ / target →   analyst  tactician  strategist  psychologist  optimizer  ethicist
+analyst                  ·         ✓           ✓           ✓            ✓         ✓
+tactician                ✓         ·           ✓           ✓            ✓         ✓
+strategist               ·         ✓           ·           ✓            ·         ·
+psychologist             ✓         ✓           ✓           ·            ✓         ✓
+optimizer                ✓         ✓           ✓           ✓            ·         ✓
+ethicist                 ✓         ✓           ✓           ✓            ✓         ·
 ```
+
+`GET /critique-matrix` returns this, computed from the specs at runtime, so the
+table above cannot silently drift from the code. `tests/test_loader.py` asserts
+the two agree in both directions.
 
 Each critique call gives the critic: the target's artifacts, the target's
 **biases with `watch_for` detectors**, and its own `critique_lens`. It returns:

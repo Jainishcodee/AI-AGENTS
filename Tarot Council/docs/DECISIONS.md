@@ -343,3 +343,53 @@ should lose.
 **Given up.** Slower adaptation than prompt-tuning on outcomes would give. Bought:
 an audit trail, comparable scores across time, and no silent drift.
 
+---
+
+## ADR-019 — An explicit `null` means "not supplied", not "invalid"
+
+**Decision.** `schemas.common.Strict` runs a pre-validator that replaces an explicit
+`null` with the field's default, for any optional field **not** declared nullable.
+Fields typed `X | None` keep their null, because there the null is meaningful.
+
+**Why.** Found in the first live run: the synthesiser returned
+`"calibration_note": null` — meaning "nothing to say here" — and the whole
+synthesis failed validation. That is the wrong trade twice over. The field has a
+default and the intent is unambiguous, so failing is pedantry; and the repair call
+it triggers costs a request against a per-minute quota that is the binding
+constraint on the entire product.
+
+The distinction is doing real work: it fixes the noise case without weakening any
+invariant. `veto_grounds: str | None` still round-trips its null, so
+"veto raised with no grounds" is still catchable.
+
+**Given up.** A model that genuinely meant to signal something by `null` on a
+defaulted field is silently reinterpreted. No such case exists in the schema.
+
+---
+
+## ADR-020 — Pace requests per minute, not just concurrently
+
+**Decision.** `llm/registry.py` carries two independent limits: a semaphore for
+in-flight calls (`COUNCIL_MAX_CONCURRENCY`) and a sliding-window limiter for calls
+per minute (`COUNCIL_MAX_RPM`). 429 backoff has its own schedule, starting at 12
+seconds rather than 1. The mock provider is exempt from pacing.
+
+**Why.** Also found in the first live run, and it invalidated an assumption in
+ADR-006. Free tiers meter **requests per minute**; a semaphore caps how many are in
+flight, which is a different quantity. Three concurrent calls finishing in two
+seconds each is nine requests a minute, and the limit observed on this key was
+five. Worse, the standard 1-2-4 second exponential backoff retries three times
+*inside the same one-minute window* and fails all three — the retry policy was
+structurally incapable of recovering from the error it existed to handle.
+
+Two further findings from the same run, recorded because they will bite again:
+`gemini-2.5-pro` is not on the free tier at all (429 with `limit: 0`, so the
+synthesis route had to move to flash), and a per-minute cap means a 26-call
+`standard` deliberation takes minutes of wall clock on a free key regardless of how
+fast the model is. That is the real argument for the `critic` role in ADR-017 and
+for `quick` depth — they are not just cost features, they are what make the product
+usable without a card on file.
+
+**Given up.** Wall-clock latency, deliberately. The alternative is a deliberation
+that reliably half-fails, which is worse than one that is slow.
+

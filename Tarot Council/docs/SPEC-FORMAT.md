@@ -125,7 +125,7 @@ risk_tolerance: 0.55            # 0 = never act without certainty, 1 = act now
 time_horizon: medium            # short | medium | long
 memory_kind: power_structure    # what this module extracts into memory
 voice:
-  register: Dry, precise, slightly clinical. Short declaratives.
+  tone: Dry, precise, slightly clinical. Short declaratives.
   forbidden:
     - Fictional references, mysticism, in-world vocabulary.
     - Claiming to be a person, or referring to a fictional biography.

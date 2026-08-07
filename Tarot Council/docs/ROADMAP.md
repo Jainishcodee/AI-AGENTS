@@ -23,28 +23,41 @@ them through prompt iteration would have produced six voices instead of six mind
 
 ## Phase 1 — The engine
 
-### 1a — Interpreter and reasoning core
+### 1a — Interpreter and reasoning core ✅
 
-- [ ] `schemas/` — artifacts, programs, council, trace, cards
-- [ ] `engine/invariants/` — one validator per artifact type
+- [x] `schemas/` — 37 artifact types, programs, council, trace, cards, events
+- [x] `engine/invariants.py` — validators + server-side normalizers
       *(probability-tree normalisation, graph connectivity, profile completeness,
-      server-side ratio recomputation, premature-stance scan)*
-- [ ] `engine/planner.py` — program + depth → execution plan (ADR-013)
-- [ ] `engine/executor.py` — stage execution, repair pass, abstention handling
-- [ ] `llm/` — Gemini · OpenRouter · Ollama · mock, routed by role
-- [ ] `programs/*.yaml` — the six modules, plus the loader's ten rules
-- [ ] `programs/presets/*.yaml` — `full`, `strategy`, `people`, `execution`, `life`, `solo:*`
-- [ ] `council/` — intake → fan-out → routed critique → revision → synthesis
-- [ ] `trace/` — TraceGraph derived from the execution record
-- [ ] SSE streaming with typed events; sync endpoint drains the same generator
-- [ ] `cli.py` — usable before any UI exists
-- [ ] Tests: stage isolation, every invariant, loader rules, full pipeline on mock
+      ratio recomputation, `power_gap` tagging, premature-stance scan, citation
+      resolution, confidence ceiling over admitted assumptions)*
+- [x] `engine/planner.py` — program + depth → execution plan (ADR-013)
+- [x] `engine/executor.py` — stage execution, repair pass, abstention handling
+- [x] `llm/` — Gemini · OpenRouter · Ollama · mock, routed by role, RPM-paced
+- [x] `programs/*.yaml` — the six modules, plus the loader's ten rules
+- [x] `programs/presets.yaml` — `full`, `strategy`, `people`, `execution`, `life`, `solo:*`
+- [x] `council/` — intake → fan-out → routed critique → revision → synthesis
+- [x] `trace/` — TraceGraph derived from the execution record
+- [x] SSE streaming with typed events; sync endpoint drains the same generator
+- [x] `cli.py` — usable before any UI exists
+- [x] 143 tests: stage isolation, every invariant, loader rules, planner at all
+      depths, prose-spec↔YAML agreement, full pipeline on mock
 
-**Exit criterion.** `python -m app.cli --provider mock` runs the full pipeline
-deterministically and every invariant is exercised by a test. Then, with a real
-key: the strategist produces a connected stakeholder graph with a `power_gap` the
-user had not considered, and the analyst produces a probability tree whose
-arithmetic closes — on a question neither module was tuned against.
+**Exit criterion — met.** `python -m app.cli --provider mock` runs the full
+pipeline deterministically: 42 artifacts across six modules, 27 routed critiques,
+six revisions, synthesis, trace and Decision Card, in under two seconds with no
+key and no network. Every invariant is exercised in both directions by a test.
+
+Against a real free-tier Gemini key, on questions no module was tuned against: the
+strategist produced a connected stakeholder graph with authority and influence
+scored separately and cited its own graph nodes in its conclusion; the citation
+invariant caught two invented row references and the repair pass fixed them; and
+when the strategist hit a quota wall mid-program it was recorded as an abstention
+without taking the council down.
+
+Deferred from 1a, deliberately: `Prior` generation has no source of resolved cards
+until Phase 3, so `InMemoryStore.priors()` returns an empty list rather than
+inventing plausible priors — which would poison the exact mechanism it exists to
+serve (ADR-018).
 
 ### 1b — Web client
 

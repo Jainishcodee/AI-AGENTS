@@ -136,7 +136,7 @@ Load-bearing invariants:
 | **ethicist** | *Instrumentalisation.* Attacks treating colleagues as nodes. Asks what the sequence plan does to relationships the user will still need in three years, and holds veto standing. |
 | **optimizer** | *Complexity cost.* Attacks the sequence for steps that do not change the outcome, and prices the one-conversation alternative. |
 | **tactician** | *Tempo.* Attacks the sequence plan as too slow — asks what closes while the user works through six conversations in order, and whether one move would collapse the whole sequence. |
-| **analyst** | *Evidence for the graph.* Attacks influence scores as unsourced numbers — available on `deep`, where it lands hard. |
+| **analyst** | *Evidence for the graph.* Attacks influence scores as unsourced numbers — where did 0.7 come from? |
 
 ---
 
