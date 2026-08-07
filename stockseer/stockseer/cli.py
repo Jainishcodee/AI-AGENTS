@@ -400,6 +400,18 @@ def cmd_advisor(a: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_ui(a: argparse.Namespace) -> int:
+    from .web.server import serve
+
+    if not a.no_open:
+        import threading
+        import webbrowser
+
+        threading.Timer(1.2, lambda: webbrowser.open(f"http://{a.host}:{a.port}")).start()
+    serve(host=a.host, port=a.port)
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
         prog="stockseer",
@@ -515,6 +527,12 @@ def main(argv: list[str] | None = None) -> int:
                    help="stop to assume when the call gives none")
     p.add_argument("--default-target", type=float, default=0.10)
     p.set_defaults(func=cmd_advisor)
+
+    p = sub.add_parser("ui", help="launch the web dashboard (every command, clickable)")
+    p.add_argument("--port", type=int, default=8765)
+    p.add_argument("--host", default="127.0.0.1")
+    p.add_argument("--no-open", action="store_true", help="do not open a browser")
+    p.set_defaults(func=cmd_ui)
 
     args = parser.parse_args(argv)
     logging.basicConfig(

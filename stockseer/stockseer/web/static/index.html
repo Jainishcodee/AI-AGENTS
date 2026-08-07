@@ -1,0 +1,282 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>StockSeer</title>
+  <link rel="stylesheet" href="/static/style.css">
+  <script src="/static/lightweight-charts.js"></script>
+</head>
+<body>
+
+<header class="topbar">
+  <div class="brand">
+    <span class="mark">SS</span>
+    <span>StockSeer</span>
+  </div>
+  <div class="ticker-strip" id="tickerStrip"></div>
+  <div class="topbar-right">
+    <span class="feed-badge" id="feedBadge">feed: …</span>
+    <button class="icon-btn" id="themeToggle" title="Toggle theme">◐</button>
+  </div>
+</header>
+
+<div class="layout">
+
+  <!-- ---------------------------------------------------------------- nav -->
+  <nav class="sidebar">
+    <div class="nav-section">Market</div>
+    <button class="nav-btn active" data-panel="chart">Chart &amp; Signals</button>
+    <button class="nav-btn" data-panel="watch">Live Scan</button>
+    <button class="nav-btn" data-panel="rules">Rule Scorecard</button>
+
+    <div class="nav-section">Research</div>
+    <button class="nav-btn" data-panel="backtest">Backtest</button>
+    <button class="nav-btn" data-panel="sweep">Multi-Stock Sweep</button>
+    <button class="nav-btn" data-panel="predict">Predict</button>
+    <button class="nav-btn" data-panel="inspect">Inspect Features</button>
+
+    <div class="nav-section">Money</div>
+    <button class="nav-btn" data-panel="plan">Plan &amp; Survival</button>
+    <button class="nav-btn" data-panel="journal">Paper Journal</button>
+    <button class="nav-btn" data-panel="advisor">Audit Tips</button>
+
+    <div class="watchlist">
+      <div class="nav-section">Watchlist</div>
+      <div id="watchlist"></div>
+      <form class="add-symbol" id="addSymbolForm">
+        <input id="addSymbolInput" placeholder="RELIANCE.NS" autocomplete="off">
+        <button type="submit" class="icon-btn">+</button>
+      </form>
+    </div>
+  </nav>
+
+  <!-- ------------------------------------------------------------ panels -->
+  <main class="content">
+
+    <!-- CHART -->
+    <section class="panel active" id="panel-chart">
+      <div class="panel-head">
+        <div>
+          <h1 id="chartSymbol">RELIANCE.NS</h1>
+          <div class="sub"><span id="chartPrice">—</span> <span id="chartChange"></span></div>
+        </div>
+        <div class="controls">
+          <select id="chartInterval">
+            <option value="5m" selected>5 min</option>
+            <option value="15m">15 min</option>
+            <option value="30m">30 min</option>
+            <option value="60m">1 hour</option>
+            <option value="1d">1 day</option>
+          </select>
+          <select id="chartDays">
+            <option value="5">5 days</option>
+            <option value="10" selected>10 days</option>
+            <option value="30">30 days</option>
+            <option value="55">55 days</option>
+          </select>
+          <button class="btn primary" id="chartRefresh">Refresh</button>
+        </div>
+      </div>
+      <div class="legend" id="chartLegend"></div>
+      <div class="chart-host" id="chart"></div>
+      <p class="note">Arrows mark rule signals on completed bars. A signal is not a
+        recommendation — check its measured expectancy in <b>Rule Scorecard</b> first.</p>
+    </section>
+
+    <!-- LIVE SCAN -->
+    <section class="panel" id="panel-watch">
+      <div class="panel-head">
+        <div><h1>Live Scan</h1>
+          <div class="sub">Calibrates every rule, then checks the latest completed bar</div></div>
+      </div>
+      <form class="form-grid" id="form-watch">
+        <label>Symbols<input name="tickers" value="RELIANCE.NS,TCS.NS,HDFCBANK.NS"></label>
+        <label>Interval<select name="interval">
+          <option value="5m" selected>5 min</option><option value="15m">15 min</option>
+        </select></label>
+        <label>Capital ₹<input name="capital" type="number" value="40000"></label>
+        <label>Risk / trade<select name="risk_pct">
+          <option value="0.005">0.5%</option><option value="0.01" selected>1%</option>
+          <option value="0.02">2%</option>
+        </select></label>
+        <button class="btn primary" type="submit">Scan now</button>
+      </form>
+      <div class="results" id="out-watch"></div>
+    </section>
+
+    <!-- RULES -->
+    <section class="panel" id="panel-rules">
+      <div class="panel-head">
+        <div><h1>Rule Scorecard</h1>
+          <div class="sub">Triple-barrier test on real intraday bars, costs included</div></div>
+      </div>
+      <form class="form-grid" id="form-rules">
+        <label>Symbols<input name="tickers" value="RELIANCE.NS,TCS.NS,HDFCBANK.NS"></label>
+        <label>Interval<select name="interval">
+          <option value="5m" selected>5 min</option><option value="15m">15 min</option>
+        </select></label>
+        <label>History (days)<input name="days" type="number" value="55"></label>
+        <label>Stop (×ATR)<input name="stop_atr" type="number" step="0.1" value="1.0"></label>
+        <label>Target (×ATR)<input name="target_atr" type="number" step="0.1" value="1.5"></label>
+        <button class="btn primary" type="submit">Measure rules</button>
+      </form>
+      <div class="results" id="out-rules"></div>
+    </section>
+
+    <!-- BACKTEST -->
+    <section class="panel" id="panel-backtest">
+      <div class="panel-head">
+        <div><h1>Backtest</h1>
+          <div class="sub">Purged walk-forward validation, net of costs</div></div>
+      </div>
+      <form class="form-grid" id="form-backtest">
+        <label>Symbol<input name="ticker" value="RELIANCE.NS"></label>
+        <label>Benchmark<input name="benchmark" value="^NSEI" placeholder="optional"></label>
+        <label>Start<input name="start" value="2012-01-01"></label>
+        <label>Horizon (days)<input name="horizon" type="number" value="5"></label>
+        <label>Model<select name="model">
+          <option value="lgbm" selected>LightGBM</option>
+          <option value="logistic">Logistic</option>
+          <option value="rf">Random Forest</option>
+          <option value="dummy">Dummy (baseline)</option>
+        </select></label>
+        <label>Task<select name="task">
+          <option value="classification" selected>Direction</option>
+          <option value="regression">Return</option>
+        </select></label>
+        <label>Threshold<input name="threshold" type="number" step="0.01" value="0.55"></label>
+        <label>Cost (bps)<input name="cost_bps" type="number" step="0.5" value="5"></label>
+        <label class="check"><input name="control" type="checkbox" checked> Run leakage control</label>
+        <button class="btn primary" type="submit">Run backtest</button>
+      </form>
+      <div class="results" id="out-backtest"></div>
+    </section>
+
+    <!-- SWEEP -->
+    <section class="panel" id="panel-sweep">
+      <div class="panel-head">
+        <div><h1>Multi-Stock Sweep</h1>
+          <div class="sub">Same config across many names, with the chance baseline</div></div>
+      </div>
+      <form class="form-grid" id="form-sweep">
+        <label>Symbols<input name="tickers"
+          value="RELIANCE.NS,TCS.NS,INFY.NS,HDFCBANK.NS,ITC.NS"></label>
+        <label>Start<input name="start" value="2014-01-01"></label>
+        <label>Horizon<input name="horizon" type="number" value="5"></label>
+        <label>Threshold<input name="threshold" type="number" step="0.01" value="0.55"></label>
+        <button class="btn primary" type="submit">Run sweep</button>
+      </form>
+      <div class="results" id="out-sweep"></div>
+    </section>
+
+    <!-- PREDICT -->
+    <section class="panel" id="panel-predict">
+      <div class="panel-head">
+        <div><h1>Predict</h1><div class="sub">Signal for the most recent bar</div></div>
+      </div>
+      <form class="form-grid" id="form-predict">
+        <label>Symbol<input name="ticker" value="^NSEI"></label>
+        <label>Horizon<input name="horizon" type="number" value="5"></label>
+        <label>Threshold<input name="threshold" type="number" step="0.01" value="0.55"></label>
+        <button class="btn primary" type="submit">Predict</button>
+      </form>
+      <div class="results" id="out-predict"></div>
+    </section>
+
+    <!-- INSPECT -->
+    <section class="panel" id="panel-inspect">
+      <div class="panel-head">
+        <div><h1>Inspect Features</h1>
+          <div class="sub">Raw correlation with the forward return — no model involved</div></div>
+      </div>
+      <form class="form-grid" id="form-inspect">
+        <label>Symbol<input name="ticker" value="^NSEI"></label>
+        <label>Horizon<input name="horizon" type="number" value="5"></label>
+        <button class="btn primary" type="submit">Inspect</button>
+      </form>
+      <div class="results" id="out-inspect"></div>
+    </section>
+
+    <!-- PLAN -->
+    <section class="panel" id="panel-plan">
+      <div class="panel-head">
+        <div><h1>Plan &amp; Survival</h1>
+          <div class="sub">What your capital and target actually require</div></div>
+      </div>
+      <form class="form-grid" id="form-plan">
+        <label>Capital ₹<input name="capital" type="number" value="40000"></label>
+        <label>Profit target ₹<input name="target" type="number" value="50000"></label>
+        <label>Win rate estimate<input name="win_rate" type="number" step="0.01" value="0.55"></label>
+        <label>Based on N trades<input name="confidence" type="number" value="5"></label>
+        <label>Reward : risk<input name="rr" type="number" step="0.1" value="1.5"></label>
+        <label>Risk / trade<input name="risk_pct" type="number" step="0.005" value="0.02"></label>
+        <label>Stop distance<input name="stop_pct" type="number" step="0.005" value="0.02"></label>
+        <label>Leverage<input name="leverage" type="number" step="0.5" value="1"></label>
+        <button class="btn primary" type="submit">Run 20,000 simulations</button>
+      </form>
+      <div class="results" id="out-plan"></div>
+    </section>
+
+    <!-- JOURNAL -->
+    <section class="panel" id="panel-journal">
+      <div class="panel-head">
+        <div><h1>Paper Journal</h1>
+          <div class="sub">Measure your real win rate before it costs anything</div></div>
+        <button class="btn" id="journalRefresh">Refresh</button>
+      </div>
+      <form class="form-grid" id="form-journal-open">
+        <label>Symbol<input name="symbol" value="RELIANCE.NS"></label>
+        <label>Source / rule<input name="rule" value="manual"
+          placeholder="rule name, or a tip service"></label>
+        <label>Side<select name="side"><option value="long">Long</option>
+          <option value="short">Short</option></select></label>
+        <label>Entry<input name="entry" type="number" step="0.05" required></label>
+        <label>Stop<input name="stop" type="number" step="0.05" required></label>
+        <label>Target<input name="target" type="number" step="0.05" required></label>
+        <label>Qty<input name="qty" type="number" required></label>
+        <button class="btn primary" type="submit">Log trade</button>
+      </form>
+      <div class="results" id="out-journal"></div>
+    </section>
+
+    <!-- ADVISOR -->
+    <section class="panel" id="panel-advisor">
+      <div class="panel-head">
+        <div><h1>Audit Tips</h1>
+          <div class="sub">Score any service against random entry in the same names</div></div>
+        <button class="btn primary" id="advisorScore">Score all sources</button>
+      </div>
+      <form class="form-grid" id="form-advisor-add">
+        <label>Source<input name="source" placeholder="service name" required></label>
+        <label>Symbol<input name="symbol" placeholder="RELIANCE.NS" required></label>
+        <label>Side<select name="side"><option value="long">Long</option>
+          <option value="short">Short</option></select></label>
+        <label>Published on<input name="published_at" type="date" required></label>
+        <label>Target<input name="target" type="number" step="0.05" placeholder="optional"></label>
+        <label>Stop<input name="stop" type="number" step="0.05" placeholder="optional"></label>
+        <label>Hold (days)<input name="horizon_days" type="number" value="10"></label>
+        <button class="btn primary" type="submit">Log call</button>
+      </form>
+      <div class="results" id="out-advisor"></div>
+    </section>
+
+  </main>
+</div>
+
+<div class="console" id="console" hidden>
+  <div class="console-head">
+    <span id="consoleTitle">output</span>
+    <button class="icon-btn" id="consoleClose">×</button>
+  </div>
+  <pre id="consoleBody"></pre>
+</div>
+
+<div class="disclaimer">
+  Research tooling, not investment advice. Backtested results are the ceiling of live
+  performance, never the floor.
+</div>
+
+<script src="/static/app.js"></script>
+</body>
+</html>

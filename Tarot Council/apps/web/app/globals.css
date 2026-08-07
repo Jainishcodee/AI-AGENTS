@@ -1,0 +1,138 @@
+@import "tailwindcss";
+
+/*
+ * Design language: dark, quiet, typographic. The screen holds a lot of
+ * structured data, so the chrome gets out of the way and hierarchy is carried by
+ * type and spacing rather than by borders and colour.
+ *
+ * Colour is reserved for meaning: each module's accent, and the epistemic status
+ * markers (given / inferred / assumed / speculative). Nothing else is coloured, so
+ * when something is coloured it means something.
+ */
+
+@theme {
+  --color-ink: #08080a;
+  --color-surface: #101013;
+  --color-raised: #17171b;
+  --color-line: #232329;
+  --color-line-soft: #1a1a1f;
+
+  --color-text: #eceae6;
+  --color-muted: #9b978f;
+  --color-faint: #6a6862;
+
+  /* Epistemic status. Deliberately desaturated — this is not a dashboard. */
+  --color-given: #7fae9b;
+  --color-inferred: #8aa0c0;
+  --color-assumed: #c9a86a;
+  --color-speculative: #c98d7a;
+  --color-unknown: #6a6862;
+
+  --font-sans: ui-sans-serif, -apple-system, "Segoe UI", Inter, system-ui, sans-serif;
+  --font-serif: ui-serif, "Iowan Old Style", Georgia, Cambria, serif;
+  --font-mono: ui-monospace, "SF Mono", "Cascadia Mono", Menlo, Consolas, monospace;
+}
+
+html {
+  color-scheme: dark;
+}
+
+body {
+  background: var(--color-ink);
+  color: var(--color-text);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  font-feature-settings: "cv05", "ss01";
+}
+
+/* A single hairline that reads as a hairline at any DPR. */
+.hair {
+  border-color: var(--color-line);
+}
+
+.serif {
+  font-family: var(--font-serif);
+  font-feature-settings: "onum";
+}
+
+.mono {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+}
+
+.tnum {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Small-caps section labels, used everywhere instead of heavier headings. */
+.label {
+  font-size: 0.6875rem;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--color-faint);
+  font-weight: 500;
+}
+
+::selection {
+  background: #2b3a44;
+  color: #fff;
+}
+
+/* Scrollbars: present but nearly invisible until hovered. */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--color-line) transparent;
+}
+*::-webkit-scrollbar {
+  width: 9px;
+  height: 9px;
+}
+*::-webkit-scrollbar-thumb {
+  background: var(--color-line);
+  border-radius: 99px;
+  border: 2px solid transparent;
+  background-clip: content-box;
+}
+*::-webkit-scrollbar-thumb:hover {
+  background: #34343c;
+  background-clip: content-box;
+}
+*::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+/* Artifacts stream in; a 140ms rise is enough to read as "arrived" without
+   turning six parallel columns into a light show. */
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(3px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+.rise {
+  animation: rise 140ms ease-out both;
+}
+
+@keyframes pulse-soft {
+  0%,
+  100% {
+    opacity: 0.35;
+  }
+  50% {
+    opacity: 0.85;
+  }
+}
+.working {
+  animation: pulse-soft 1.4s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .rise,
+  .working {
+    animation: none;
+  }
+}

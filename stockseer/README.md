@@ -20,6 +20,35 @@ are impossible, and it prints the honest number even when the honest number is
 pip install -r requirements.txt
 ```
 
+## The dashboard
+
+```powershell
+python -m stockseer.cli ui
+```
+
+Opens `http://127.0.0.1:8765`. Every command is a panel with a button — no flags
+to remember:
+
+| Panel | What it runs |
+|---|---|
+| **Chart & Signals** | Candlesticks, volume, VWAP, EMAs, rule signals marked on the bars |
+| **Live Scan** | `watch` — calibrates rules, checks the latest completed bar |
+| **Rule Scorecard** | `rules` — triple-barrier measurement of every alert rule |
+| **Backtest** | `backtest` — metrics, leakage control, equity curve, feature importance |
+| **Multi-Stock Sweep** | `sweep` — with the how-many-by-chance baseline |
+| **Predict** | `predict` — signal for the latest bar |
+| **Inspect Features** | `inspect` — raw feature/target correlations |
+| **Plan & Survival** | `plan` — 20,000-path Monte Carlo on your capital and target |
+| **Paper Journal** | `paper` — log trades, see your win rate with its confidence interval |
+| **Audit Tips** | `advisor` — score any service against random entry |
+
+Charts use TradingView's own `lightweight-charts` (Apache 2.0), vendored locally
+so the dashboard runs fully offline. Long jobs run in the background and stream
+their console output into a panel, so the UI shows exactly what the CLI prints —
+there is no second, prettier set of numbers that could disagree with the real ones.
+
+Light and dark themes; the toggle is top-right.
+
 ## Use
 
 ```powershell
@@ -91,6 +120,42 @@ The monitor calibrates every rule per symbol at startup and **mutes any rule tha
 does not clear positive expectancy on at least 30 signals.** On the shipped rule
 set across Reliance, TCS and HDFC Bank, 14 of 15 rule/symbol pairs were muted.
 That is the system working.
+
+## Auditing someone else's calls
+
+Before paying for a tip service, an advisory, a Telegram channel or a YouTube
+analyst, log their calls and score them:
+
+```powershell
+python -m stockseer.cli advisor add --source someservice --symbol RELIANCE.NS \
+       --at 2026-06-02 --target 1500 --stop 1350 --horizon 10
+python -m stockseer.cli advisor import --csv their_calls.csv --source someservice
+python -m stockseer.cli advisor score
+```
+
+Each call is filled at the close of the bar it was **published** on — never at a
+convenient later price — walked through the same triple-barrier test as
+everything else, charged real costs, and compared against a **random-entry
+baseline in the same symbols over the same holding period.** That control is the
+whole point: in a rising market, long calls make money with no skill involved.
+
+The scorecard also reports `calls_needed` — how many scored calls it would take
+to prove the observed edge at t = 2. On a synthetic test with two publishers, one
+picking dates at random and one deliberately picking 65% winners:
+
+```
+source                  n   hit%  stop%   avg R   avg %  base %  edge t
+real_edge             200    5.0   19.0  +0.160   +0.80   +0.45    1.15
+noise_tips            200    5.0   23.0  +0.092   +0.46   +0.41    0.18
+
+ real_edge   positive but unproven -- needs ~607 calls to confirm, has 200
+ noise_tips  positive but unproven -- needs ~25452 calls to confirm, has 200
+```
+
+Both look profitable on the surface. The scorer separates them and puts a price
+on certainty: **even a genuinely strong picker needs ~600 scored calls before the
+edge is provable.** Any service claiming a verified hit rate on a few dozen calls
+is claiming something the arithmetic cannot support.
 
 ### `plan` — the arithmetic before the trading
 

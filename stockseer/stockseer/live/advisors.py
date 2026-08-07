@@ -80,12 +80,16 @@ class SourceStats:
     baseline_avg_pct: float
     edge_vs_baseline: float
     edge_t_stat: float
+    calls_needed: float          # scored calls required to prove this edge at t=2
 
     @property
     def verdict(self) -> str:
         if self.n_scored < 30:
             return f"too few calls ({self.n_scored}) to judge"
         if self.edge_t_stat < 2.0:
+            if self.edge_vs_baseline > 0 and self.calls_needed == self.calls_needed:
+                return (f"positive but unproven -- needs ~{self.calls_needed:.0f}"
+                        f" calls to confirm, has {self.n_scored}")
             return "no measurable edge over random entry"
         if self.expectancy_r <= 0:
             return "beats random entry but still loses after costs"
@@ -268,6 +272,13 @@ def score_calls(
             baseline_avg_pct=base_mean,
             edge_vs_baseline=edge,
             edge_t_stat=edge / se if se and se == se and se > 0 else float("nan"),
+            # Sample size for t = 2, from n = (2 * sd / edge)^2. Usually a
+            # sobering number: single-call returns are so noisy that even a
+            # strong picker needs hundreds of calls before the edge is provable.
+            calls_needed=(
+                (2.0 * float(pcts.std(ddof=1)) / edge) ** 2
+                if len(pcts) > 1 and edge > 0 else float("nan")
+            ),
         )
     return outcomes, stats
 
