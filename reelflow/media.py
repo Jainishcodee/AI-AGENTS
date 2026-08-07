@@ -47,9 +47,21 @@ GONE = (
 CAROUSEL = ("no video formats found", "there is no video in this post")
 
 
+# Age- or region-gated, NOT taken down. yt-dlp is anonymous here, so it gets
+# refused where the logged-in account that saved the reel can still open it --
+# dropping these would throw away perfectly good cards. Checked before GONE
+# because the wording overlaps ("content isn't available ...").
+RESTRICTED = (
+    "isn't available to everyone",
+    "can't be seen by certain accounts",
+)
+
+
 def classify(err):
-    """gone / carousel / unknown. Unknown never costs a card."""
+    """restricted / carousel / gone / unknown. Only 'gone' ever costs a card."""
     e = err.lower()
+    if any(p in e for p in RESTRICTED):
+        return "unknown"
     if any(p in e for p in GONE):
         return "gone"
     if any(p in e for p in CAROUSEL):

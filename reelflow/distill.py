@@ -26,12 +26,15 @@ ENV = r"g:\AI AGENTS\Jarvis\.env"
 # the tail of the list is for -- each name below was probed and still answered
 # with a valid schema-conformant card after the originals were capped. Quotas
 # are per-model, so a long run keeps going by walking down this list.
-# gemma-4-31b-it is deliberately absent: it returns trailing junk after the
-# JSON object and fails to parse. gemma-4-26b-a4b-it is a smaller, weaker model
-# than the geminis, so it sits last and only sees traffic once all else is out.
+# Both gemma models are deliberately absent. gemma-4-31b-it returns trailing
+# junk after the JSON object and fails to parse. gemma-4-26b-a4b-it is worse:
+# when it's out of capacity it *hangs* instead of returning 429, so every call
+# burns the full retry ladder, and because a timeout isn't a quota error the
+# walk below never advances past it. One overnight run was lost to that. A
+# model that fails slowly is worse than no fallback at all.
 MODELS = ["gemini-2.5-flash", "gemini-3.5-flash", "gemini-3.1-flash-lite",
           "gemini-3.6-flash", "gemini-3-flash-preview", "gemini-3.5-flash-lite",
-          "gemini-flash-lite-latest", "gemma-4-26b-a4b-it"]
+          "gemini-flash-lite-latest"]
 ENDPOINT = "https://generativelanguage.googleapis.com/v1beta/models/{}:generateContent"
 
 DOMAINS = ["fitness", "finance", "decision-making", "career", "tech", "health",
@@ -112,11 +115,23 @@ Rules:
 """
 
 
-def api_key():
+def api_keys():
+    """Every GEMINI_API_KEY* line in Jarvis/.env, in file order.
+
+    Free-tier quota is counted per Google Cloud *project*, not per key, so a
+    second key from a different account multiplies the day's budget outright.
+    A extra key cut from the same project shares the same spent counters and
+    buys nothing -- worth checking before assuming a run has more headroom.
+    """
+    keys = []
     for line in open(ENV, encoding="utf-8"):
         if line.startswith("GEMINI_API_KEY"):
-            return line.split("=", 1)[1].strip()
-    raise SystemExit("GEMINI_API_KEY not found in Jarvis/.env")
+            v = line.split("=", 1)[1].strip()
+            if v and v not in keys:
+                keys.append(v)
+    if not keys:
+        raise SystemExit("GEMINI_API_KEY not found in Jarvis/.env")
+    return keys
 
 
 def build_prompt(item):
@@ -135,28 +150,44 @@ def build_prompt(item):
 
 
 class Budget:
-    """Tracks which models still have quota left today."""
+    """Walks (key, model) pairs as each one's daily quota runs out.
 
-    def __init__(self, models):
-        self.models = list(models)
+    Every model is tried on the first key before moving to the second, since
+    quota is per project: a fresh key resets the whole model list at once.
+    """
+
+    def __init__(self, keys, models):
+        # (key index, key, model) -- the index is for logging, since a key is a
+        # secret and must never be printed.
+        self.combos = [(n, k, m) for n, k in enumerate(keys, 1) for m in models]
         self.i = 0
 
     @property
+    def _cur(self):
+        return self.combos[self.i] if self.i < len(self.combos) else None
+
+    @property
+    def key(self):
+        return self._cur[1] if self._cur else None
+
+    @property
     def model(self):
-        return self.models[self.i] if self.i < len(self.models) else None
+        return self._cur[2] if self._cur else None
+
+    def label(self):
+        c = self._cur
+        return f"{c[2]} (key {c[0]})" if c else "nothing"
 
     def exhausted(self):
-        """Current model is out of daily quota -- move to the next one."""
-        dead = self.model
+        """Current pair is out of daily quota -- move to the next one."""
+        dead = self.label()
         self.i += 1
-        if self.model:
-            print(f"    ! {dead} daily quota used up -> switching to {self.model}")
-        else:
-            print(f"    ! {dead} daily quota used up -- no models left")
+        print(f"    ! {dead} daily quota used up -> "
+              + (f"switching to {self.label()}" if self.model else "nothing left to try"))
         return self.model
 
 
-def call(key, prompt, budget, retries=3):
+def call(prompt, budget, retries=3):
     body = {
         "systemInstruction": {"parts": [{"text": SYSTEM}]},
         "contents": [{"role": "user", "parts": [{"text": prompt}]}],
@@ -172,8 +203,15 @@ def call(key, prompt, budget, retries=3):
         for _ in range(retries):
             try:
                 r = requests.post(ENDPOINT.format(budget.model),
-                                  headers={"x-goog-api-key": key},
-                                  json=body, timeout=120)
+                                  headers={"x-goog-api-key": budget.key},
+                                  json=body, timeout=60)
+                if r.status_code in (400, 404) and "model" in r.text.lower():
+                    # This key's project can't see this model at all -- newer
+                    # projects don't get the older ones. Neither transient nor a
+                    # quota cap, so retrying is pointless and breaking out would
+                    # stall every remaining item on a dead pool. Retire it.
+                    last = f"{budget.model} not available on this key -- retiring"
+                    break
                 if r.status_code == 429:
                     msg = r.text
                     if "PerDay" in msg:      # daily cap, waiting won't help
@@ -190,8 +228,10 @@ def call(key, prompt, budget, retries=3):
                 last = str(e)
                 time.sleep(delay)
                 delay *= 2
-        if "daily quota exhausted" not in last:
-            break                            # a real failure, not a quota one
+        # Both "quota exhausted" and "not available" mean this pool is finished
+        # for good; anything else is a real failure worth surfacing.
+        if "daily quota exhausted" not in last and "retiring" not in last:
+            break
         budget.exhausted()
     # Flagged with an error key so a later run retries it instead of trusting it.
     return {"kind": "skip", "skip_reason": "empty", "title": "", "error": last,
@@ -214,8 +254,20 @@ def main():
         ids = set(load_json(DATA / "sample.json"))
         items = [i for i in items if i["id"] in ids]
 
-    key = api_key()
+    keys = api_keys()
     out_path = DATA / ("distilled_sample.json" if args.sample else "distilled.json")
+
+    # Checkpointing rewrites this file from the top on every API call, so a run
+    # that replays from index 1 (any pass after the first) leaves only a handful
+    # of rows on disk until it finishes -- and a kill in that window would drop
+    # every card the previous pass earned. Keep last run's copy until this one
+    # completes; it costs one file and turns a catastrophic interrupt into a
+    # `copy .bak` away.
+    backup = out_path.with_suffix(".bak.json")
+    if out_path.exists():
+        backup.write_bytes(out_path.read_bytes())
+        print(f"safety copy -> {backup}")
+
     done = {}
     if out_path.exists():
         have_tx = {i["id"] for i in items if len(i.get("transcript", "").strip()) > 30}
@@ -226,13 +278,15 @@ def main():
                 continue  # pass 1 gave up for want of audio; we have it now, so ask again
             done[d["id"]] = d
 
-    budget = Budget(MODELS)
+    budget = Budget(keys, MODELS)
+    print(f"{len(keys)} API key(s) x {len(MODELS)} models = "
+          f"{len(keys) * len(MODELS)} quota pools")
     results, t0 = [], time.time()
     for n, it in enumerate(items, 1):
         if it["id"] in done:
             results.append(done[it["id"]])
             continue
-        card = call(key, build_prompt(it), budget)
+        card = call(build_prompt(it), budget)
         card["model"] = budget.model or ""
         card["id"] = it["id"]
         card["url"] = it["url"]

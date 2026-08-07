@@ -19,7 +19,11 @@
       "Bash(PYTHONIOENCODING=utf-8 python ingest.py)",
       "Bash(awk -F/ '{print $1\"/\"$2}')",
       "Bash(git status *)",
-      "Bash(gh repo *)"
+      "Bash(gh repo *)",
+      "Bash(python -c \"import py_compile;py_compile.compile\\('distill.py',doraise=True\\);print\\('distill.py syntax OK'\\)\")",
+      "Bash(cp data/distilled.json data/distilled_preclean.json)",
+      "Bash(cp data/distilled.json data/distilled_final_backup.json)",
+      "Bash(break)"
     ]
   }
 }
