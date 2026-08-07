@@ -199,6 +199,207 @@ def cmd_plan(a: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_rules(a: argparse.Namespace) -> int:
+    """Measure every alert rule on real intraday history before trusting it."""
+    from .live.feed import get_feed
+    from .live.rules import evaluate_all
+
+    feed = get_feed(a.feed)
+    print(f"\n feed: {feed.describe()}   interval: {a.interval}   history: {a.days}d")
+    print(f" barriers: stop {a.stop_atr}xATR, target {a.target_atr}xATR,"
+          f" costs {a.cost_r}R\n")
+
+    header = (f"{'symbol':<14}{'rule':<16}{'n':>5}{'hit%':>7}{'stop%':>7}"
+              f"{'exp R':>8}{'B/E%':>7}  verdict")
+    print(header)
+    print("-" * len(header))
+
+    for symbol in [s.strip() for s in a.tickers.split(",") if s.strip()]:
+        try:
+            bars = feed.history(symbol, a.interval, a.days)
+        except Exception as exc:
+            print(f"{symbol:<14}FAILED: {exc}")
+            continue
+        for st in evaluate_all(bars, stop_atr=a.stop_atr,
+                               target_atr=a.target_atr, cost_r=a.cost_r):
+            if st.n_signals == 0:
+                print(f"{symbol:<14}{st.rule:<16}{0:>5}   never fired")
+                continue
+            verdict = ("TRADE" if st.worth_trading else
+                       "too few signals" if st.n_signals < 30 else "MUTE (no edge)")
+            print(f"{symbol:<14}{st.rule:<16}{st.n_signals:>5.0f}"
+                  f"{st.hit_rate * 100:>7.1f}{st.stop_rate * 100:>7.1f}"
+                  f"{st.expectancy_r:>+8.3f}{st.breakeven_win_rate * 100:>7.1f}"
+                  f"  {verdict}")
+    print("\n 'exp R' is expected profit per signal in units of risk, net of costs."
+          "\n Anything at or below zero should never fire an alert.\n")
+    return 0
+
+
+def cmd_watch(a: argparse.Namespace) -> int:
+    from .live.feed import get_feed
+    from .live.ledger import Ledger
+    from .live.monitor import Monitor
+
+    symbols = [s.strip() for s in a.tickers.split(",") if s.strip()]
+    mon = Monitor(
+        symbols=symbols,
+        feed=get_feed(a.feed),
+        ledger=Ledger(capital=a.capital),
+        interval=a.interval,
+        capital=a.capital,
+        risk_pct=a.risk_pct,
+        stop_atr=a.stop_atr,
+        target_atr=a.target_atr,
+        paper=not a.live,
+    )
+    try:
+        mon.run(poll_seconds=a.poll, once=a.once)
+    except KeyboardInterrupt:
+        print("\n stopped.")
+    return 0
+
+
+def cmd_paper(a: argparse.Namespace) -> int:
+    from .live.ledger import Ledger, trades_needed_for_confidence
+
+    led = Ledger(capital=a.capital)
+
+    if a.action == "open":
+        t = led.open_trade(a.symbol, a.rule, a.side, a.entry, a.stop,
+                           a.target, a.qty, note=a.note or "")
+        print(f"\n opened {t.id}: {a.qty} {a.symbol} @ {a.entry:.2f}")
+        print(f" stop {a.stop:.2f}  target {a.target:.2f}"
+              f"  risking Rs {t.risk_amount:,.0f}\n")
+        return 0
+
+    if a.action == "close":
+        t = led.close_trade(a.id, a.exit, a.reason or "manual")
+        print(f"\n closed {t.id} at {a.exit:.2f} ({t.exit_reason})")
+        print(f" P&L Rs {t.pnl():,.2f}  =  {t.r_multiple():+.2f}R"
+              f"  (costs Rs {t.costs:.2f})\n")
+        return 0
+
+    if a.action == "export":
+        path = led.export_csv(a.out or "artifacts/journal/trades.csv")
+        print(f" exported -> {path}")
+        return 0
+
+    if a.action == "compare":
+        rows = led.compare_sources()
+        if not rows:
+            print("\n No closed trades yet. Log signals with --rule <source-name> to"
+                  "\n audit any provider: --rule my_rules, --rule tipsProviderX, etc.\n")
+            return 0
+        print(f"\n{'source':<22}{'n':>5}{'win%':>7}{'95% interval':>16}"
+              f"{'exp R':>9}{'P&L':>11}  verdict")
+        print("-" * 88)
+        for src, st, verdict in rows:
+            print(f"{src:<22}{st.n_closed:>5}{st.win_rate * 100:>7.1f}"
+                  f"{st.win_rate_lo * 100:>8.0f}-{st.win_rate_hi * 100:<7.0f}"
+                  f"{st.expectancy_r:>+9.3f}{st.total_pnl:>11,.0f}  {verdict}")
+        print("\n Same barriers, same costs, same scoring for every source --"
+              "\n including whatever anyone else recommends to you.\n")
+        return 0
+
+    st = led.stats(a.rule)
+    print(f"\n{'=' * 70}")
+    print(f" PAPER JOURNAL  |  {st.n_closed} closed, {st.n_open} open"
+          + (f"  |  rule: {a.rule}" if a.rule else ""))
+    print("=" * 70)
+    if st.n_closed == 0:
+        print("\n No closed trades yet. Log some with:"
+              "\n   stockseer paper open --symbol RELIANCE.NS --rule vwap_reclaim \\"
+              "\n                        --entry 1400 --stop 1385 --target 1425 --qty 28\n")
+        return 0
+
+    print(f"\n win rate        : {st.win_rate * 100:.1f}%"
+          f"   ({st.wins}W / {st.losses}L)")
+    print(f" 95% interval    : {st.win_rate_lo * 100:.1f}% - {st.win_rate_hi * 100:.1f}%")
+    print(f" expectancy      : {st.expectancy_r:+.3f}R per trade")
+    print(f" avg win / loss  : {st.avg_win_r:+.2f}R / {st.avg_loss_r:+.2f}R")
+    print(f" best / worst    : {st.best_r:+.2f}R / {st.worst_r:+.2f}R")
+    print(f" worst streak    : {st.max_consecutive_losses} losses in a row")
+    print(f" total P&L       : Rs {st.total_pnl:,.2f}"
+          f"   (costs Rs {st.total_costs:,.2f})")
+
+    breakeven = 0.42
+    print(f"\n break-even win rate is ~{breakeven * 100:.0f}% at 1.5R.")
+    if st.win_rate_lo > breakeven:
+        print(" Your interval clears it. This is evidence of a real edge.")
+    elif st.win_rate_hi < breakeven:
+        print(" Your interval sits entirely BELOW it. This is evidence of no edge --"
+              "\n stop and change something rather than trading more.")
+    else:
+        # Project off a realistic win rate, not the observed one. After 3 trades
+        # the observed rate is often 100% or 0%, and projecting from that would
+        # promise certainty in a week.
+        need = trades_needed_for_confidence(min(max(st.win_rate, 0.45), 0.60), breakeven)
+        print(f" Your interval straddles it -- {st.n_closed} trades is not yet an answer."
+              f"\n At this win rate you would need ~{need} trades to know.")
+    print()
+    return 0
+
+
+def cmd_advisor(a: argparse.Namespace) -> int:
+    """Score anyone's recommendations against random entry in the same names."""
+    from .data import load_prices
+    from .live.advisors import Call, CallLog, print_scorecard, score_calls
+
+    log_ = CallLog(a.file)
+
+    if a.action == "add":
+        c = log_.add(Call(
+            source=a.source, symbol=a.symbol, side=a.side,
+            published_at=a.at, entry=a.entry, stop=a.stop, target=a.target,
+            horizon_days=a.horizon, note=a.note or "",
+        ))
+        print(f"\n logged {c.id}: {c.source} says {c.side} {c.symbol}"
+              f" on {c.published_at}\n")
+        return 0
+
+    if a.action == "import":
+        n = log_.import_csv(a.csv, a.source)
+        print(f"\n imported {n} calls from {a.csv}")
+        print(f" sources now: {', '.join(log_.sources())}\n")
+        return 0
+
+    if a.action == "list":
+        print(f"\n {len(log_.calls)} calls from {len(log_.sources())} sources")
+        for c in log_.calls[-40:]:
+            print(f"  {c.id:<22}{c.published_at[:10]}  {c.side:<6}{c.symbol:<16}{c.source}")
+        print()
+        return 0
+
+    if not log_.calls:
+        print("\n No calls logged yet. Add them one at a time:"
+              "\n   stockseer advisor add --source someservice --symbol RELIANCE.NS \\"
+              "\n                         --at 2026-06-02 --target 1500 --stop 1350"
+              "\n\n or bulk-import a CSV with columns"
+              " symbol,side,published_at[,entry,stop,target,horizon_days,source]:"
+              "\n   stockseer advisor import --csv calls.csv --source someservice\n")
+        return 1
+
+    def loader(symbol: str):
+        return load_prices(symbol, start=a.start, end=a.end)
+
+    outcomes, stats = score_calls(
+        log_.calls, loader, cost_pct=a.cost_pct,
+        default_stop_pct=a.default_stop, default_target_pct=a.default_target,
+    )
+    print_scorecard(stats)
+
+    if a.out:
+        out = Path(a.out)
+        out.parent.mkdir(parents=True, exist_ok=True)
+        out.write_text(json.dumps(
+            {s: vars(v) for s, v in stats.items()}, indent=2, default=str
+        ), encoding="utf-8")
+        print(f" scorecard -> {out}\n")
+    print(DISCLAIMER)
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
         prog="stockseer",
@@ -254,6 +455,66 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--compare", action="store_true",
                    help="also show the same target across capital levels")
     p.set_defaults(func=cmd_plan)
+
+    def _live_args(sp):
+        sp.add_argument("--tickers", default="RELIANCE.NS",
+                        help="comma separated NSE symbols")
+        sp.add_argument("--interval", default="5m",
+                        choices=["1m", "3m", "5m", "15m", "30m", "60m"])
+        sp.add_argument("--feed", default="auto", choices=["auto", "angel", "yahoo"])
+        sp.add_argument("--stop-atr", type=float, default=1.0)
+        sp.add_argument("--target-atr", type=float, default=1.5)
+
+    p = sub.add_parser("rules", help="measure each alert rule on real intraday history")
+    _live_args(p)
+    p.add_argument("--days", type=int, default=55)
+    p.add_argument("--cost-r", type=float, default=0.05,
+                   help="transaction cost per trade in units of risk")
+    p.set_defaults(func=cmd_rules)
+
+    p = sub.add_parser("watch", help="live session monitor with entry and exit alerts")
+    _live_args(p)
+    p.add_argument("--capital", type=float, default=40_000.0)
+    p.add_argument("--risk-pct", type=float, default=0.01)
+    p.add_argument("--poll", type=int, default=60, help="seconds between scans")
+    p.add_argument("--once", action="store_true", help="scan once and exit")
+    p.add_argument("--live", action="store_true",
+                   help="mark alerts as real-money rather than paper")
+    p.set_defaults(func=cmd_watch)
+
+    p = sub.add_parser("paper", help="paper-trading journal: measure your real win rate")
+    p.add_argument("action", nargs="?", default="stats",
+                   choices=["stats", "open", "close", "export", "compare"])
+    p.add_argument("--capital", type=float, default=40_000.0)
+    p.add_argument("--rule", default=None)
+    p.add_argument("--symbol"); p.add_argument("--side", default="long")
+    p.add_argument("--entry", type=float); p.add_argument("--stop", type=float)
+    p.add_argument("--target", type=float); p.add_argument("--qty", type=int)
+    p.add_argument("--id"); p.add_argument("--exit", type=float)
+    p.add_argument("--reason"); p.add_argument("--note"); p.add_argument("--out")
+    p.set_defaults(func=cmd_paper)
+
+    p = sub.add_parser("advisor",
+                       help="score a tip service / analyst / channel against random entry")
+    p.add_argument("action", nargs="?", default="score",
+                   choices=["score", "add", "import", "list"])
+    p.add_argument("--file", default=None, help="call log path")
+    p.add_argument("--source", default="unknown", help="who made the call")
+    p.add_argument("--symbol"); p.add_argument("--side", default="long")
+    p.add_argument("--at", help="publication date/time, e.g. 2026-06-02 or 2026-06-02T10:05")
+    p.add_argument("--entry", type=float, default=None,
+                   help="omit to fill at the close of the published bar")
+    p.add_argument("--stop", type=float, default=None)
+    p.add_argument("--target", type=float, default=None)
+    p.add_argument("--horizon", type=int, default=10, help="max trading days to hold")
+    p.add_argument("--note"); p.add_argument("--csv"); p.add_argument("--out")
+    p.add_argument("--start", default="2012-01-01"); p.add_argument("--end", default=None)
+    p.add_argument("--cost-pct", type=float, default=0.0011,
+                   help="round-trip cost as a fraction (0.0011 = 11bps delivery)")
+    p.add_argument("--default-stop", type=float, default=0.05,
+                   help="stop to assume when the call gives none")
+    p.add_argument("--default-target", type=float, default=0.10)
+    p.set_defaults(func=cmd_advisor)
 
     args = parser.parse_args(argv)
     logging.basicConfig(

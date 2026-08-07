@@ -18,10 +18,20 @@ from common import DATA, load_json, write_json
 ENV = r"g:\AI AGENTS\Jarvis\.env"
 
 # Free-tier daily request quotas are per-model and small (gemini-3.6-flash is
-# only 20/day), so a 154-item run has to spread across models. Ordered best
+# only 20/day), so a 1073-item run has to spread across models. Ordered best
 # quality first; a run drops to the next only when the current one is used up
 # for the day.
-MODELS = ["gemini-2.5-flash", "gemini-3.5-flash", "gemini-3.1-flash-lite"]
+#
+# The first three all ran dry ~530 items into the 2026-08-07 run, which is what
+# the tail of the list is for -- each name below was probed and still answered
+# with a valid schema-conformant card after the originals were capped. Quotas
+# are per-model, so a long run keeps going by walking down this list.
+# gemma-4-31b-it is deliberately absent: it returns trailing junk after the
+# JSON object and fails to parse. gemma-4-26b-a4b-it is a smaller, weaker model
+# than the geminis, so it sits last and only sees traffic once all else is out.
+MODELS = ["gemini-2.5-flash", "gemini-3.5-flash", "gemini-3.1-flash-lite",
+          "gemini-3.6-flash", "gemini-3-flash-preview", "gemini-3.5-flash-lite",
+          "gemini-flash-lite-latest", "gemma-4-26b-a4b-it"]
 ENDPOINT = "https://generativelanguage.googleapis.com/v1beta/models/{}:generateContent"
 
 DOMAINS = ["fitness", "finance", "decision-making", "career", "tech", "health",

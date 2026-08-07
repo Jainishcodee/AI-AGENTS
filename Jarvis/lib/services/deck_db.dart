@@ -144,10 +144,14 @@ class DeckDb {
     final list = (jsonDecode(raw) as List).cast<Map<String, dynamic>>();
     if (list.isEmpty) return 0;
 
-    final existing = Sqflite.firstIntValue(
-            await db.rawQuery('SELECT COUNT(*) FROM cards')) ??
-        0;
-    if (existing == list.length) {
+    // Card count alone can't tell two decks apart -- successive pipeline runs
+    // land on similar totals often enough that comparing sizes would silently
+    // ignore a rebuilt deck -- so compare the actual ids.
+    final incoming = list.map((j) => j['id'] as String).toSet();
+    final present = (await db.query('cards', columns: ['id']))
+        .map((r) => r['id'] as String)
+        .toSet();
+    if (present.length == incoming.length && present.containsAll(incoming)) {
       // Deck unchanged. An install upgraded from v1 still has an empty search
       // index though, so fill it before bailing out.
       if (_fts) {
@@ -175,6 +179,23 @@ class DeckDb {
       }
       if (_fts) batch.insert('card_fts', _ftsRow(card));
     }
+
+    // Cards the pipeline no longer emits have to go, or a deck built against an
+    // older export keeps surfacing next to the current one. Their state and day
+    // picks go with them -- a daily_pick row whose card is gone would otherwise
+    // resolve to nothing and leave Today looking empty for the rest of the day.
+    final gone = present.difference(incoming);
+    if (gone.isNotEmpty) {
+      final marks = List.filled(gone.length, '?').join(',');
+      final ids = gone.toList();
+      for (final t in ['cards', 'task_state', 'fact_state']) {
+        batch.rawDelete('DELETE FROM $t WHERE id IN ($marks)', ids);
+      }
+      for (final t in ['daily_pick', 'daily_fact']) {
+        batch.rawDelete('DELETE FROM $t WHERE card_id IN ($marks)', ids);
+      }
+    }
+
     await batch.commit(noResult: true);
     return list.length;
   }

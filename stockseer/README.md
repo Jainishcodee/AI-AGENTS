@@ -43,6 +43,55 @@ python -m stockseer.cli inspect --ticker ^NSEI
 python -m stockseer.cli plan --capital 40000 --target 50000 --confidence 5 --compare
 ```
 
+## Live layer (intraday)
+
+```powershell
+# Measure every alert rule on real intraday history -- do this before trusting any of them
+python -m stockseer.cli rules --tickers "RELIANCE.NS,TCS.NS" --interval 5m --days 55
+
+# Live session monitor: entry signals, stop/target/square-off alerts
+python -m stockseer.cli watch --tickers "RELIANCE.NS,TCS.NS" --capital 40000 --risk-pct 0.01
+
+# Paper journal -- the fastest way to learn your real win rate
+python -m stockseer.cli paper open --symbol RELIANCE.NS --rule vwap_reclaim \
+       --entry 1400 --stop 1385 --target 1425 --qty 26
+python -m stockseer.cli paper close --id RELIANCE.NS-0001 --exit 1425 --reason target
+python -m stockseer.cli paper stats
+```
+
+### Angel One (real-time, free)
+
+Create a **Market Feed** app at <https://smartapi.angelone.in/> — it has no order
+permissions, and this system never needs them. Then put four values in a `.env`
+at the repo root:
+
+```
+ANGEL_API_KEY=...
+ANGEL_CLIENT_ID=A123456
+ANGEL_PIN=1234
+ANGEL_TOTP_SECRET=...      # the base32 secret, not the 6-digit code
+```
+
+Without them everything still runs on Yahoo, which is ~15 minutes delayed on NSE.
+The monitor says so on every start rather than letting stale prices pass as live.
+
+### Rules ship with measured hit rates, or they don't fire
+
+`rules` runs a **triple-barrier** test on real 5-minute history: for each signal,
+walk forward bar by bar and see whether the target or the stop is touched first.
+This is the only honest scoring method — "average return 12 bars later" counts a
+trade that went to −3R before recovering as a winner, and you would have been
+stopped out long before.
+
+When both barriers fall inside one bar, the loss is assumed. Without tick data the
+order is unknowable, and the optimistic assumption silently converts losers into
+winners.
+
+The monitor calibrates every rule per symbol at startup and **mutes any rule that
+does not clear positive expectancy on at least 30 signals.** On the shipped rule
+set across Reliance, TCS and HDFC Bank, 14 of 15 rule/symbol pairs were muted.
+That is the system working.
+
 ### `plan` — the arithmetic before the trading
 
 `plan` answers "what does this goal actually demand of me" with a 20,000-path

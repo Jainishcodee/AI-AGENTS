@@ -155,8 +155,14 @@ class Ledger:
         closed = [t for t in self.closed_trades() if rule is None or t.rule == rule]
         n = len(closed)
         if n == 0:
-            return Stats(0, len(self.open_trades()), 0, 0, *(float("nan"),) * 7, 0.0, 0.0,
-                         float("nan"), float("nan"), 0)
+            nan = float("nan")
+            return Stats(
+                n_closed=0, n_open=len(self.open_trades()), wins=0, losses=0,
+                win_rate=nan, win_rate_lo=nan, win_rate_hi=nan,
+                avg_win_r=nan, avg_loss_r=nan, expectancy_r=nan,
+                total_pnl=0.0, total_costs=0.0, best_r=nan, worst_r=nan,
+                max_consecutive_losses=0,
+            )
 
         rs = np.array([t.r_multiple() for t in closed], dtype="float64")
         wins, losses = rs[rs > 0], rs[rs <= 0]
@@ -185,6 +191,30 @@ class Ledger:
             worst_r=float(rs.min()),
             max_consecutive_losses=best_streak,
         )
+
+    def sources(self) -> list[str]:
+        """Distinct signal sources in the journal.
+
+        The ``rule`` field is deliberately free-text. It holds a built-in rule
+        name, but it just as happily holds "tipsProviderX" or "telegram_channel" --
+        which makes this journal an audit tool for anyone else's recommendations,
+        scored by exactly the same barriers as our own.
+        """
+        return sorted({t.rule for t in self.closed_trades()})
+
+    def compare_sources(self, breakeven: float = 0.42) -> list[tuple[str, Stats, str]]:
+        """Rank every signal source by expectancy, with an evidence verdict."""
+        rows = []
+        for src in self.sources():
+            st = self.stats(src)
+            if st.win_rate_lo > breakeven:
+                verdict = "real edge"
+            elif st.win_rate_hi < breakeven:
+                verdict = "NO edge"
+            else:
+                verdict = f"unproven ({st.n_closed} trades)"
+            rows.append((src, st, verdict))
+        return sorted(rows, key=lambda r: r[1].expectancy_r, reverse=True)
 
     def export_csv(self, path: Path | str) -> Path:
         path = Path(path)
