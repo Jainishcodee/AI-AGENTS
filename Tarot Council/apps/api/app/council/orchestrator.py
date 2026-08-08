@@ -46,6 +46,7 @@ from ..schemas.council import (
 )
 from ..schemas.common import ModuleId
 from ..schemas.events import Event, ev
+from .live import LiveRegistry, LiveRun
 from ..schemas.program import AgentProgram
 from ..trace import builder as trace_builder
 
@@ -72,10 +73,15 @@ class Council:
         )
         self._engine = Engine(self._router)
         self._store = store or build_store(self._settings.store, self._settings.store_dir)
+        self._live = LiveRegistry()
 
     @property
     def store(self) -> MemoryStore:
         return self._store
+
+    @property
+    def live(self) -> LiveRegistry:
+        return self._live
 
     async def aclose(self) -> None:
         await self._router.aclose()
@@ -297,6 +303,26 @@ class Council:
         depth: Depth = request.depth or self._settings.default_depth
         programs = loader.programs()
 
+        # A live run is addressable for interjection from the first event, so a client
+        # can answer an unknown the moment it sees one raised.
+        run_id = uuid.uuid4().hex[:12]
+        live = self._live.open(run_id, request.question)
+        await emit(ev("run_started", run_id=run_id, preset=preset.id, depth=depth))
+
+        try:
+            await self._pipeline(request, preset, depth, programs, live, emit)
+        finally:
+            self._live.close(run_id)
+
+    async def _pipeline(
+        self,
+        request: DeliberationRequest,
+        preset,
+        depth: Depth,
+        programs,
+        live: LiveRun,
+        emit: Emit,
+    ) -> None:
         # ---- stage 0: intake -------------------------------------------------
         await emit(ev("stage_started", phase="intake", label="Reading the question"))
         context = await self._intake(request, emit)
@@ -336,6 +362,7 @@ class Council:
                 role=preset.role_of(module),
                 memory=memory,
                 emit=emit,
+                live=live,
             )
 
         results = await asyncio.gather(
@@ -403,6 +430,14 @@ class Council:
                     else None,
                 )
             )
+
+        if live.consumed:
+            deliberation.rerun = Rerun(
+                kind="refine",
+                added_facts=live.facts,
+                reason="supplied mid-deliberation",
+            )
+            await self._store.save_deliberation(deliberation)
 
         await emit(
             ev(

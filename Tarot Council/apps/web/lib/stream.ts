@@ -82,6 +82,33 @@ function parseFrame(frame: string): StreamEvent | null {
 
 export async function getJSON<T>(path: string): Promise<T> {
   const response = await fetch(`/api/council/${path}`, { cache: "no-store" });
-  if (!response.ok) throw new Error(`${path}: HTTP ${response.status}`);
+  if (!response.ok) throw new Error(await describe(response, path));
   return response.json() as Promise<T>;
+}
+
+export async function sendJSON<T>(
+  path: string,
+  body: unknown,
+  method: "POST" | "PATCH" = "POST",
+): Promise<T> {
+  const response = await fetch(`/api/council/${path}`, {
+    method,
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(body),
+    cache: "no-store",
+  });
+  if (!response.ok) throw new Error(await describe(response, path));
+  return response.json() as Promise<T>;
+}
+
+/** Surface the API's own `detail` — it carries the actionable part of a failure
+ *  (which card is missing, that a live run has ended, which preset is unknown). */
+async function describe(response: Response, path: string): Promise<string> {
+  try {
+    const parsed = await response.json();
+    if (typeof parsed?.detail === "string") return parsed.detail;
+  } catch {
+    /* not JSON */
+  }
+  return `${path}: HTTP ${response.status}`;
 }

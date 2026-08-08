@@ -82,6 +82,7 @@ COMMANDS = (
     "memories",
     "rerun",
     "refine",
+    "migrate",
 )
 
 
@@ -167,6 +168,17 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     )
     refine.add_argument("--reason", default="")
 
+    migrate = sub.add_parser(
+        "migrate", help="Import legacy JSON-file history into the SQLite store."
+    )
+    migrate.add_argument(
+        "--from-dir",
+        default=None,
+        dest="from_dir",
+        help="The var/ directory holding deliberations/, cards/ and memories.json. "
+        "Defaults to the configured store directory.",
+    )
+
     args = list(sys.argv[1:] if argv is None else argv)
     return parser.parse_args(_insert_default_command(args))
 
@@ -211,6 +223,7 @@ async def _run(args: argparse.Namespace) -> int:
             "memories": _cmd_memories,
             "rerun": _cmd_rerun,
             "refine": _cmd_refine,
+            "migrate": _cmd_migrate,
         }[args.command]
         code = await handler(council, args)
         if not args.json:
@@ -244,6 +257,47 @@ async def _nudge_due(council: Council, args: argparse.Namespace) -> None:
         ),
         file=sys.stderr,
     )
+
+
+async def _cmd_migrate(council: Council, args: argparse.Namespace) -> int:
+    """Bring legacy JSON history into SQLite.
+
+    Idempotent — every write is an upsert on id — so running it twice is safe and
+    running it after new decisions have been recorded does not clobber them.
+    """
+    from pathlib import Path
+
+    from .memory.sqlite_store import SQLiteStore
+    from .memory.store import FileStore
+
+    target = council.store
+    if not isinstance(target, SQLiteStore):
+        print(
+            _wrap(
+                "The active store is not SQLite, so there is nothing to migrate into. "
+                "Set COUNCIL_STORE=sqlite and run this again."
+            ),
+            file=sys.stderr,
+        )
+        return 1
+
+    source_dir = Path(args.from_dir) if args.from_dir else get_settings().store_dir
+    if not (source_dir / "cards").is_dir() and not (source_dir / "deliberations").is_dir():
+        print(_wrap(f"No JSON history found under {source_dir}. Nothing to do."))
+        return 0
+
+    counts = await target.import_from(FileStore(source_dir))
+    if args.json:
+        print(json.dumps(counts, indent=2))
+        return 0
+    print(
+        _wrap(
+            f"Imported {counts['deliberations']} deliberations, {counts['cards']} cards "
+            f"and {counts['memories']} memories from {source_dir}."
+        )
+    )
+    print(_c(_wrap("The JSON files are left untouched; delete them once you are happy."), DIM))
+    return 0
 
 
 async def _cmd_memories(council: Council, args: argparse.Namespace) -> int:

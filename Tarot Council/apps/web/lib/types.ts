@@ -235,6 +235,8 @@ export interface TraceGraph {
 /* ──────────────────────────────────────────────────────────────── events ── */
 
 export type EventType =
+  | "run_started"
+  | "injection_applied"
   | "stage_started"
   | "intake_complete"
   | "module_started"
@@ -256,6 +258,101 @@ export interface StreamEvent {
 }
 
 /* ──────────────────────────────────────────────────────────────── modules ── */
+
+/* ─────────────────────────────────────────────────── cards + calibration ── */
+
+export type Verdict = "right" | "wrong" | "partial" | "untested";
+export type CardStatus = "open" | "due" | "resolved";
+
+export interface ExpectedOutcome {
+  statement: string;
+  check_on: string;
+  measurable_by: string;
+}
+
+export interface Resolution {
+  chose: string;
+  actual_outcome: string;
+  happened_at: string;
+  surprises: string[];
+  notes: string;
+}
+
+export interface ModuleVerdict {
+  module: ModuleId;
+  verdict: Verdict;
+  justification: string;
+  followed: boolean;
+  falsifier_fired: boolean;
+  overridden: boolean;
+}
+
+export interface CardScoring {
+  graded_at: string;
+  expected_outcome_met: "yes" | "no" | "partial" | "unclear";
+  chose_was_proposed: boolean;
+  module_verdicts: ModuleVerdict[];
+  metric_answers: { module: ModuleId; metric_id: string; answer: string; evidence: string }[];
+  unpredicted: string[];
+  grader_model: string;
+}
+
+export interface DecisionCard {
+  id: string;
+  created_at: string;
+  question: string;
+  deliberation_id: string;
+  preset: string;
+  depth: string;
+  domains: string[];
+  recommendation: Synthesis["recommendation"];
+  per_module: {
+    module: ModuleId;
+    stance: string;
+    confidence: Confidence | null;
+    abstained: boolean;
+    role: string;
+  }[];
+  expected_outcome: ExpectedOutcome | null;
+  minority_opinions: Synthesis["minority_opinions"];
+  resolution: Resolution | null;
+  scoring: CardScoring | null;
+}
+
+export interface ModuleScore {
+  module: ModuleId;
+  domain: string | null;
+  n: number;
+  brier: number | null;
+  hit_rate: number | null;
+  mean_confidence: number | null;
+  execution_rate: number | null;
+  falsifier_hit_rate: number | null;
+  overconfidence: number | null;
+  chance_brier: number;
+}
+
+export interface ScoresResponse {
+  min_n_to_display: number;
+  withheld: number;
+  scores: ModuleScore[];
+}
+
+export interface Prior {
+  module: ModuleId;
+  pattern: string;
+  evidence_count: number;
+  derived_from: string[];
+  confidence: number;
+  domain: string | null;
+}
+
+export interface LiveRun {
+  run_id: string;
+  question: string;
+  pending: string[];
+  applied: string[];
+}
 
 export interface ModuleSpec {
   id: ModuleId;

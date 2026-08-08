@@ -41,6 +41,8 @@ class MemoryStore(Protocol):
 
     async def get_deliberation(self, deliberation_id: str) -> Deliberation | None: ...
 
+    async def list_deliberations(self, limit: int = 50) -> list[Deliberation]: ...
+
     async def save_card(self, card: DecisionCard) -> None: ...
 
     async def get_card(self, card_id: str) -> DecisionCard | None: ...
@@ -73,6 +75,10 @@ class InMemoryStore:
 
     async def get_deliberation(self, deliberation_id: str) -> Deliberation | None:
         return self._deliberations.get(deliberation_id)
+
+    async def list_deliberations(self, limit: int = 50) -> list[Deliberation]:
+        ordered = sorted(self._deliberations.values(), key=lambda d: d.created_at, reverse=True)
+        return ordered[:limit]
 
     async def save_card(self, card: DecisionCard) -> None:
         self._cards[card.id] = card
@@ -231,7 +237,15 @@ class FileStore(InMemoryStore):
 
 
 def build_store(kind: str, root: Path) -> MemoryStore:
-    return FileStore(root) if kind == "file" else InMemoryStore()
+    """`sqlite` is the default (ADR-024). `file` and `memory` remain for migration
+    and for tests that want no I/O at all."""
+    if kind == "sqlite":
+        from .sqlite_store import SQLiteStore
+
+        return SQLiteStore(root / "cognitive-os.sqlite3")
+    if kind == "file":
+        return FileStore(root)
+    return InMemoryStore()
 
 
 STOPWORDS = frozenset(

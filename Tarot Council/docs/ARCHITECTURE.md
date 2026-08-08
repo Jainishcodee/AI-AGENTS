@@ -323,7 +323,7 @@ done                { usage, cost_estimate }
 `POST /council/deliberate` streams these; `/deliberate/sync` drains the same
 generator. One code path, so streamed and non-streamed results cannot drift.
 
-## 11. Data model (Phase 2 target)
+## 11. Data model (SQLite — ADR-024)
 
 ```sql
 decision_cards    id, user_id, project_id, question, domain, depth, created_at,

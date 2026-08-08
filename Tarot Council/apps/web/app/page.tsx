@@ -1,8 +1,10 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { AskBar } from "@/components/AskBar";
 import { DebateView } from "@/components/DebateView";
+import { GapPanel } from "@/components/GapPanel";
 import { ModuleColumn } from "@/components/ModuleColumn";
 import { SynthesisView } from "@/components/SynthesisView";
 import { TraceMap } from "@/components/TraceMap";
@@ -14,7 +16,7 @@ import { isBusy, useDeliberation } from "@/lib/useDeliberation";
 type Tab = "modules" | "debate" | "synthesis" | "trace";
 
 export default function Page() {
-  const { state, run, cancel, reset } = useDeliberation();
+  const { state, run, cancel, reset, inject } = useDeliberation();
   const [modules, setModules] = useState<Record<string, ModuleSpec>>({});
   const [presets, setPresets] = useState<PresetSpec[]>([]);
   const [offline, setOffline] = useState<string | null>(null);
@@ -53,13 +55,12 @@ export default function Page() {
   }, [state.critiques]);
 
   const columns = state.order.map((id) => state.modules[id]!).filter(Boolean);
-  const primaryCount = columns.filter((c) => c.role === "primary").length;
 
   return (
     <main className="mx-auto w-full max-w-[1680px] px-4 py-6 sm:px-6 lg:px-8">
       <header className="mb-6 flex flex-wrap items-end justify-between gap-3">
         <div>
-          <h1 className="text-[15px] font-medium tracking-tight">Cognitive OS</h1>
+          <h1 className="text-[15px] font-medium tracking-tight">A decision</h1>
           <p className="mt-0.5 text-[12px] text-[var(--color-faint)]">
             Six reasoning engines. Different algorithms, not different voices.
           </p>
@@ -148,9 +149,13 @@ export default function Page() {
               </span>
             )}
             {state.phase === "done" && state.cardId && (
-              <span className="mono ml-auto text-[11px] text-[var(--color-faint)]">
-                card {state.cardId}
-              </span>
+              <Link
+                href={`/cards/${state.cardId}`}
+                className="mono ml-auto text-[11px] text-[var(--color-faint)] underline decoration-dotted underline-offset-2 transition-colors hover:text-[var(--color-text)]"
+                title="Record the outcome when you know it — this is what makes the council yours"
+              >
+                card {state.cardId} →
+              </Link>
             )}
           </div>
 
@@ -165,13 +170,27 @@ export default function Page() {
 
           {state.context && tab === "modules" && <ContextStrip context={state.context} />}
 
+          {tab === "modules" && (
+            <GapPanel
+              context={state.context}
+              modules={columns}
+              injected={state.injected}
+              running={busy}
+              onInject={inject}
+            />
+          )}
+
           <div className="mt-5">
             {tab === "modules" && (
+              // Six columns at 300px each meant three cramped columns on a laptop and
+              // the artifacts hidden behind clicks — the "six different analyses" claim
+              // was invisible. 420px floors a column at readable prose width and lets
+              // it wrap to two rows instead of squeezing.
               <div
                 className="grid gap-4"
                 style={{
                   gridTemplateColumns: `repeat(auto-fit, minmax(${
-                    primaryCount <= 2 ? 380 : 300
+                    columns.length <= 2 ? 460 : 420
                   }px, 1fr))`,
                 }}
               >

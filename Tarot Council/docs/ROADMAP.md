@@ -96,19 +96,33 @@ test with a person in it, and it has not been run.
 
 ---
 
-## Phase 2 — Memory and continuity
+## Phase 2 — Memory and continuity ✅ *core built*
 
-- [ ] Postgres + pgvector; `PostgresStore` replaces `FileStore`
-- [ ] Decision Cards persisted with `expected_outcome` and `check_on`
-- [ ] Per-module memory extraction — six different rules for what is worth keeping
-      (`fact`, `opportunity`, `power_structure`, `emotional`, `workflow`, `promise`)
-- [ ] Recall injected into stage 1 as attributed evidence
+- [x] **SQLite, not Postgres** (ADR-024, superseding ADR-008's plan). One file, WAL,
+      versioned migrations via `PRAGMA user_version`. Filter in SQL on denormalised
+      columns; hydrate the full model from a `doc` JSON column.
+- [x] FTS5 + BM25 recall with `porter` stemming, replacing hand-rolled term overlap.
+      User text is never interpolated into a `MATCH` expression — every term is
+      extracted and quoted, because raw text containing `AND`, `NEAR`, `*` or `-` is
+      valid FTS syntax and would silently mean something else.
+- [x] Deliberations, cards and per-module memories all persisted
+- [x] Per-module memory extraction — six rules (`fact`, `opportunity`,
+      `power_structure`, `emotional`, `workflow`, `promise`), run at resolution
+- [x] Recall injected into stage 1 as attributed, arguable evidence
+- [x] `app.cli migrate` imports legacy JSON history; idempotent upserts, so running
+      it twice neither duplicates nor clobbers newer rows
 - [ ] Projects: decisions grouped under an ongoing situation
-- [ ] History, search, replay a card against its recorded `program_versions`
+- [ ] Replay a card against its recorded `program_versions`
 
-**Exit criterion.** A follow-up two weeks later, and the psychologist references
-the emotional context of the earlier decision while the analyst references its
-facts — each recalling through its own extraction bias, both citing the card.
+**Verified.** 27 tests against a **real database** in a temp file — migrations,
+idempotent re-open, WAL, status filtering, BM25 ranking, stemming, module scoping,
+hostile FTS input, trigger-maintained deletes, timezone round-tripping, and a
+two-process restart proving history survives. About two seconds, no service.
+
+**Exit criterion — partially met.** Persistence and per-module extraction work. The
+full criterion — a follow-up two weeks later where the psychologist recalls the
+emotional context while the analyst recalls the facts — needs two weeks and real
+decisions.
 
 ---
 
@@ -173,9 +187,12 @@ outcome corpus is not.
       the unknowns the council raised and deliberate again knowing them.
 - [x] **Derive, never mutate** — both produce a new deliberation with `derived_from`
       and a `Rerun` record; the original is immutable (ADR-022).
-- [ ] Interject *mid-deliberation* (answer a module's gap while it is still running).
-      The two above cover the after-the-fact case; this needs the stream to accept
-      input, which is the first thing here that genuinely wants checkpointing.
+- [x] **Interject mid-deliberation** — `POST /council/live/{run_id}/inject`. A run is
+      addressable from its first event (`run_started`), so a client can answer an
+      unknown the moment it sees one raised. Every batch that has not started picks
+      the fact up; batches in flight are untouched, so a stage's artifact is always
+      explicable by the context it was handed. Late facts are **labelled** as late
+      rather than merged silently — earlier stages genuinely did not have them.
 - [x] **MCP server** — `python -m app.mcp`. JSON-RPC over stdio on the standard
       library only; MCP is newline-delimited JSON-RPC 2.0 and the four methods needed
       are ~150 lines, against an SDK that would pin us to its release cycle. Six
@@ -191,11 +208,15 @@ outcome corpus is not.
       are the mistakes that actually break clients).
 - [ ] Voice: per-module voices; the council as something you listen to
 - [ ] Mobile
-- [ ] LangGraph migration — still deferred, and now for a concrete reason rather than
-      a general one. Stage re-run turned out **not** to need it: resumption fell out
-      of per-stage artifacts plus a batch index. LangGraph earns its dependency at
-      mid-deliberation interruption, where execution must pause, persist, and resume
-      across processes. Revisit there, not before (ADR-007).
+- [ ] LangGraph migration — deferred a third time, and the reason has now been tested
+      twice rather than asserted. Stage re-run did not need it (resumption fell out of
+      per-stage artifacts plus a batch index). Mid-deliberation interjection did not
+      need it either: a running deliberation never leaves the process, so a dict of
+      queues and a four-line check before each batch was the whole mechanism.
+
+      What actually requires checkpointing is **execution surviving the process** — a
+      deliberation you close your laptop on and resume tomorrow, or one that spans a
+      free-tier quota window. That is the trigger. Not before (ADR-007).
 
 ---
 

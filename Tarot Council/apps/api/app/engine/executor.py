@@ -51,6 +51,7 @@ class Engine:
         emit: Emit | None = None,
         resume_from: StageId | None = None,
         seed: ModuleRun | None = None,
+        live: Any | None = None,
     ) -> ModuleRun:
         """Execute a program, optionally resuming partway through a previous run.
 
@@ -84,6 +85,23 @@ class Engine:
             batches = batches[start:]
 
         for index, batch in enumerate(batches, start=start + 1):
+            # Facts a human supplied since the last batch. Checked here rather than
+            # mid-batch so a stage never sees its inputs change underneath it — the
+            # artifact it produces must be explicable by the context it was given.
+            if live is not None:
+                arriving = await live.drain()
+                if arriving:
+                    context = _with_facts(context, [item.fact for item in arriving])
+                    if emit:
+                        await emit(
+                            ev(
+                                "injection_applied",
+                                module=program.id,
+                                before_stage=batch.stages[0].id,
+                                facts=[item.fact for item in arriving],
+                            )
+                        )
+
             try:
                 artifacts = await self._run_batch(
                     program,
@@ -294,6 +312,25 @@ class Engine:
             available[stage.id] = artifact
 
         return (artifacts, problems) if problems else (artifacts, [])
+
+
+LATE_FACT_PREFIX = "[arrived mid-deliberation] "
+"""Marks a fact the user supplied after reasoning began.
+
+Labelled rather than silently merged: a module treating late information as though it
+had been there from the start would produce a transcript that cannot be read back
+honestly — and the earlier stages genuinely did not have it."""
+
+
+def _with_facts(context: DecisionContext, facts: list[str]) -> DecisionContext:
+    return context.model_copy(
+        update={
+            "constraints": [
+                *context.constraints,
+                *(f"{LATE_FACT_PREFIX}{fact}" for fact in facts),
+            ]
+        }
+    )
 
 
 def _batch_index_of(batches: list[StageBatch], stage_id: StageId) -> int:

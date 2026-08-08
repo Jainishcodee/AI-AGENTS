@@ -509,3 +509,48 @@ surfacing any memory with `salience ≥ 0.7` regardless of overlap, so a standin
 like "this user never gets anything in writing" reaches decisions that share no words
 with the one it came from.
 
+---
+
+## ADR-024 — SQLite, not Postgres or MongoDB (supersedes ADR-008's Phase 2 plan)
+
+**Decision.** Phase 2 persistence is SQLite: one file, WAL mode, versioned migrations
+via `PRAGMA user_version`, and FTS5 with BM25 for recall. `FileStore` survives only as
+a migration source (`app.cli migrate`); `InMemoryStore` remains for tests.
+
+The shape is **filter in SQL, hydrate with Pydantic**: the fields actually queried on —
+`check_on`, `resolved`, `graded`, `module`, `created_at` — are denormalised into
+columns, while the whole validated model lives in a `doc` JSON column. Duplicating the
+Pydantic schema in DDL would give two definitions that drift.
+
+**Why not Postgres,** which ADR-008 planned for: the only thing it brought over SQLite
+here was pgvector, and ADR-023 had already ruled vectors out until there is a query
+lexical search demonstrably misses. Everything else it offers — concurrent writers,
+network access, horizontal scale — belongs to a phase with actual users. `user_id` is
+already on every schema for that day.
+
+**Why not MongoDB,** which is the better *document* fit and was available on this
+machine: `mongod` runs permanently and WiredTiger reserves a cache of
+`max(256MB, half of RAM − 1GB)`, on a machine already at 88% full. And its local
+edition has no vector search either — Atlas Search is Atlas-only — so the recall story
+would have been the same text indexing, for the price of a resident service.
+
+**The argument that actually decided it:** SQLite is the only one of the three whose
+storage layer can be **verified in CI against a real database**. `tests/test_sqlite_store.py`
+opens a temp file and exercises migrations, status filtering, BM25 ranking, trigger-
+maintained FTS deletes, timezone round-tripping, and migration idempotence — in about
+two seconds, with no service and no fixtures to stand up. A database layer nobody can
+run in tests is a database layer taken on trust, and this one holds the corpus that
+Phase 3 makes the product defensible with.
+
+**Given up.** Single-writer concurrency (fine: one user, and WAL keeps readers
+unblocked), no network access, and no vector index. When there are real users the
+`MemoryStore` protocol makes Postgres a swap rather than a rewrite — which is exactly
+what ADR-008 was actually protecting, and it still holds.
+
+**Also given up, deliberately:** hand-rolled term overlap in Python, replaced by FTS5.
+Stemming now works — "negotiating" finds "negotiation" — and BM25 ranks better than my
+count-and-weight did. One correctness detail worth naming: user text is never
+interpolated into a `MATCH` expression. Every term is extracted and quoted, because raw
+text containing `AND`, `NEAR`, `*` or `-` is valid FTS syntax and would silently mean
+something other than what the user asked.
+

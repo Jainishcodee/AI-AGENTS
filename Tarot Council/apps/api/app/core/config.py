@@ -115,7 +115,11 @@ class Settings(BaseSettings):
         validation_alias="COUNCIL_CORS_ORIGINS",
     )
     log_level: str = Field(default="INFO", validation_alias="COUNCIL_LOG_LEVEL")
-    store: Literal["memory", "file"] = Field(default="file", validation_alias="COUNCIL_STORE")
+    store: Literal["memory", "file", "sqlite"] = Field(
+        default="sqlite", validation_alias="COUNCIL_STORE"
+    )
+    """`sqlite` (default, ADR-024) · `file` (legacy JSON, kept for migration) ·
+    `memory` (no I/O, for tests)."""
     store_dir: Path = Field(
         default=Path(__file__).resolve().parents[2] / "var",
         validation_alias="COUNCIL_STORE_DIR",

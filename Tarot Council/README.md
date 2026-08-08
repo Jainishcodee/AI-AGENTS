@@ -93,8 +93,10 @@ belonging to one person are not.
 
 ## Status
 
-**Phase 1 — specification complete, engine in progress.** See
-[docs/ROADMAP.md](docs/ROADMAP.md).
+Phases 1–3 built and 4 underway: reasoning engine, web client, SQLite persistence,
+the calibration loop, stage re-run, mid-deliberation interjection, and an MCP
+server. 235 tests. See [docs/ROADMAP.md](docs/ROADMAP.md) for what each phase
+claims and what it does not.
 
 ## Documentation
 
@@ -106,7 +108,7 @@ Read in this order:
 | [SPEC-FORMAT.md](docs/SPEC-FORMAT.md) | the meta-spec: the seven questions every module must answer |
 | [ARTIFACTS.md](docs/ARTIFACTS.md) | the artifact registry and every machine-checked invariant |
 | [COUNCIL.md](docs/COUNCIL.md) | presets, critique routing, synthesis contract, Decision Cards, calibration |
-| [DECISIONS.md](docs/DECISIONS.md) | 18 ADRs, including what each one gave up |
+| [DECISIONS.md](docs/DECISIONS.md) | 24 ADRs, including what each one gave up |
 | `docs/agents/*.md` | the six formal reasoning specifications |
 
 ## Quick start
@@ -126,7 +128,7 @@ python -m app.cli --provider mock "Should I quit my internship?"
 # for real
 python -m app.cli --preset strategy --depth quick "Should I quit my internship?"
 
-pytest                                  # 143 tests, ~2s
+pytest                                  # 235 tests, ~5s
 uvicorn app.main:app --reload --port 8787
 ```
 
@@ -161,6 +163,17 @@ dissent — disagreements, minority opinions, and what no module examined — pl
 `deliberation_id` for the full transcript, so a calling agent gets something it can act
 on without swallowing 40k tokens.
 
+**Answering an unknown while it is still thinking**
+
+```
+POST /council/live/{run_id}/inject   {"facts": ["The offer arrived in writing"]}
+```
+
+A run is addressable from its first event, so you can answer a gap the moment a module
+raises it. Every batch that has not started picks the fact up; batches in flight are
+left alone, so a stage's output is always explicable by the context it was handed. Late
+facts are labelled as late rather than merged silently.
+
 **Re-running without rewriting history**
 
 ```powershell
@@ -176,6 +189,10 @@ the Decision Card gets scored against (ADR-022).
 
 Presets: `full` · `strategy` · `people` · `execution` · `life` · `solo:<module>`.
 Depths: `quick` (~9 calls) · `standard` (~26) · `deep` (~56).
+
+**Storage.** SQLite by default — one file under `apps/api/var/`, no service, FTS5 with
+BM25 for recall (ADR-024). Coming from an earlier JSON-file build:
+`python -m app.cli migrate` (idempotent).
 
 > **On free-tier quota.** Gemini's free tier meters *requests per minute* — around 5
 > to 10 depending on the model, and `gemini-2.5-pro` is not on it at all. The
@@ -196,7 +213,9 @@ apps/api/app/
   prompts/    Jinja templates
   council/    orchestrator: intake → fan-out → critique → revise → synthesise
   trace/      TraceGraph construction. Pure functions.
-  memory/     MemoryStore protocol, per-module extraction, calibration
+  learning/   grader (blind) · scoring (pure maths) · priors (templated counts)
+  memory/     SQLiteStore (default) · FileStore (legacy) · InMemoryStore (tests)
+  mcp/        JSON-RPC over stdio — the council as a tool for other agents
   api/        FastAPI routers
 apps/web/     Next.js client (Phase 1b)
 docs/

@@ -10,7 +10,7 @@
  */
 
 import { useCallback, useReducer, useRef } from "react";
-import { streamEvents } from "./stream";
+import { sendJSON, streamEvents } from "./stream";
 import type {
   Artifact,
   Conclusion,
@@ -55,6 +55,9 @@ export type Phase =
 export interface State {
   phase: Phase;
   phaseLabel: string;
+  runId: string | null;
+  /** Facts supplied while the council was still running, in the order applied. */
+  injected: string[];
   question: string;
   context: DecisionContext | null;
   /** Keyed by module id. A plain string index, not `Record<ModuleId, …>`: ModuleId
@@ -76,6 +79,8 @@ export interface State {
 const EMPTY: State = {
   phase: "idle",
   phaseLabel: "",
+  runId: null,
+  injected: [],
   question: "",
   context: null,
   modules: {},
@@ -141,6 +146,14 @@ function reduce(state: State, action: Action): State {
   const { type, payload } = action.event;
 
   switch (type) {
+    case "run_started":
+      // A run is addressable from its first event, so the interjection control can
+      // appear immediately rather than after the first module finishes.
+      return { ...state, runId: payload.run_id as string };
+
+    case "injection_applied":
+      return { ...state, injected: [...state.injected, ...(payload.facts as string[])] };
+
     case "stage_started":
       return {
         ...state,
@@ -254,6 +267,7 @@ function reduce(state: State, action: Action): State {
 export function useDeliberation() {
   const [state, dispatch] = useReducer(reduce, EMPTY);
   const abort = useRef<AbortController | null>(null);
+  const latest = useRef<string | null>(null);
 
   const run = useCallback(
     async (input: { question: string; preset: string; depth: Depth; notes?: string }) => {
@@ -286,13 +300,26 @@ export function useDeliberation() {
     [],
   );
 
+  const inject = useCallback(
+    async (facts: string[]) => {
+      const runId = latest.current;
+      if (!runId || !facts.length) return;
+      await sendJSON(`council/live/${runId}/inject`, { facts });
+    },
+    [],
+  );
+
   const cancel = useCallback(() => abort.current?.abort(), []);
   const reset = useCallback(() => {
     abort.current?.abort();
     dispatch({ kind: "reset" });
   }, []);
 
-  return { state, run, cancel, reset };
+  // Kept in a ref as well as in state: `inject` must read the current run id without
+  // being re-created on every event, or the caller's handler goes stale mid-run.
+  latest.current = state.runId;
+
+  return { state, run, cancel, reset, inject };
 }
 
 export const isBusy = (phase: Phase) =>

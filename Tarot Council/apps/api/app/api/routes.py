@@ -10,6 +10,7 @@ from pydantic import BaseModel, Field
 
 from ..core.errors import CognitiveOSError, ProgramInvalid
 from ..council import Council
+from ..council.live import Injection
 from ..engine.planner import call_estimate
 from ..learning import priors
 from ..learning.scoring import CHANCE_BRIER
@@ -39,6 +40,11 @@ class RefineRequest(BaseModel):
     answers: list[str] = Field(min_length=1)
     """Answers to the unknowns the council raised."""
     reason: str = ""
+
+
+class InjectRequest(BaseModel):
+    facts: list[str] = Field(min_length=1)
+    answers_gap: str | None = None
 
 
 def _council(request: Request) -> Council:
@@ -221,6 +227,44 @@ async def override_verdict(
         )
     except KeyError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+
+@router.get("/council/live")
+async def live_runs(request: Request) -> list[dict[str, object]]:
+    """Deliberations currently executing, and what has been injected into each."""
+    return [
+        {
+            "run_id": run.run_id,
+            "question": run.question,
+            "pending": [i.fact for i in run.pending],
+            "applied": run.facts,
+        }
+        for run in _council(request).live.active()
+    ]
+
+
+@router.post("/council/live/{run_id}/inject")
+async def inject(request: Request, run_id: str, body: InjectRequest) -> dict[str, object]:
+    """Supply a fact to a deliberation that is still running.
+
+    Every batch that has not yet started picks it up; batches already in flight are
+    left alone, so a stage's output is always explicable by the context it was handed.
+    Facts arriving this way are labelled as late in the transcript rather than merged
+    silently — earlier stages genuinely did not have them.
+    """
+    try:
+        count = await _council(request).live.inject(
+            run_id, [Injection(fact=f, answers_gap=body.answers_gap) for f in body.facts]
+        )
+    except KeyError as exc:
+        raise HTTPException(
+            status_code=404,
+            detail=(
+                f"no live run '{run_id}'. It may have finished — use "
+                f"POST /deliberations/{{id}}/refine to answer unknowns after the fact."
+            ),
+        ) from exc
+    return {"run_id": run_id, "queued": count}
 
 
 @router.get("/reminders")

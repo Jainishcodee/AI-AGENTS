@@ -11,6 +11,8 @@ from typing import Any, Literal
 from pydantic import BaseModel, Field
 
 EventType = Literal[
+    "run_started",
+    "injection_applied",
     "stage_started",
     "intake_complete",
     "module_started",
