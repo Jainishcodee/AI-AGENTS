@@ -79,13 +79,19 @@ serve (ADR-018).
       `when_it_would_be_right`, the veto response, and the dated bet on record
 - [x] Thinking Trace: deterministic layered map from server-computed depth,
       pan/zoom, click to isolate a node and its neighbours
+- [x] App shell with routes — the single-screen version made the product look like
+      something you ask once, when the whole argument is that it accumulates
+- [x] Interjection control: the unknowns the council raised, with an input to answer
+      them mid-run and a note saying which modules already finished
+- [x] Density fix — module columns floor at 420px so six analyses are readable rather
+      than three cramped ones with the artifacts hidden
 - [ ] Verified visually by a person (see below)
 
-**Verified:** `tsc --noEmit` clean, production build clean (126 kB first load),
-page server-renders, and a full deliberation streams through the proxy end to end —
-46 SSE frames in the correct order, 3 module runs × 7 artifacts, 14 routed
-critiques, 3 revisions, synthesis, a 42-node/75-edge/10-layer trace, and a Decision
-Card.
+**Verified:** `tsc --noEmit` clean, production build clean (four routes, 131 kB first
+load), every route renders, and the whole loop exercised through the proxy against a
+running API — deliberate → card → resolve → per-module verdicts → history →
+calibration → per-module recall. `tests/test_web_contract.py` now guards the
+hand-maintained TS mirror after two new stream events drifted out of it unnoticed.
 
 **Not verified:** how it actually looks. There is no browser automation in this
 setup, so the rendering is confirmed only by types, build, and payload shape.
@@ -153,8 +159,11 @@ decisions.
 - [x] `recall()` is lexical overlap weighted by salience and recency, not
       salience-only and not embeddings (ADR-023). `GET /memories/{module}` exposes it
       so retrieval is inspectable rather than magic.
-- [ ] Web UI for the loop — resolution form, card list, scoreboard *(deferred with
-      the rest of the UI work)*
+- [x] **Web UI for the loop** — `/history` (cards, due first, status filter),
+      `/cards/[id]` (the card, the resolution form, the grader's verdicts, and a
+      one-click override per module), `/calibration` (scores with the n≥8 rule and the
+      withheld count stated, plus the priors each module will be told next run). A nav
+      badge counts what is due, because the loop only closes if somebody comes back.
 
 **Verified.** 21 tests covering the maths in both directions, plus an end-to-end
 test that deliberates four times, resolves and grades each, and asserts a computed

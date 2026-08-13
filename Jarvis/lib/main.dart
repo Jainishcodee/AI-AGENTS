@@ -1,4 +1,6 @@
+import 'dart:async';
 import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
@@ -7,12 +9,14 @@ import 'screens/facts_screen.dart';
 import 'screens/fake_call_sheet.dart';
 import 'screens/incoming_call_screen.dart';
 import 'screens/library_screen.dart';
+import 'screens/market_alerts_sheet.dart';
 import 'screens/today_screen.dart';
 import 'services/deck_db.dart';
 import 'services/digest_settings.dart';
 import 'services/fake_call_service.dart';
 import 'services/jarvis_brain.dart';
 import 'services/reminder_service.dart';
+import 'services/stock_alert_service.dart';
 import 'services/voice_service.dart';
 import 'widgets/mascot.dart';
 
@@ -22,6 +26,7 @@ final deckDb = DeckDb();
 final reminders = ReminderService();
 final digest = DigestSettings(reminders);
 final fakeCall = FakeCallService(reminders);
+final stockAlerts = StockAlertService(reminders);
 
 /// Lets a notification tap open a screen without a BuildContext to hand.
 final navigatorKey = GlobalKey<NavigatorState>();
@@ -65,6 +70,14 @@ Future<void> main() async {
     await digest.apply(deckDb);
   } catch (_) {
     // Notification permission refused or unavailable — the app is still usable.
+  }
+  try {
+    // Market alerts from the StockSeer box. Failing here must not block launch:
+    // the PC is often off, and Jarvis has nothing to do with markets otherwise.
+    await stockAlerts.init();
+    unawaited(stockAlerts.syncIpoCalendar());
+  } catch (_) {
+    // No PC on the network, or alerts disabled. Everything else still works.
   }
   runApp(const JarvisApp());
 }
@@ -329,6 +342,12 @@ class _JarvisHomeState extends State<JarvisHome> {
             ),
           ),
           const Spacer(),
+          IconButton(
+            tooltip: 'Market alerts',
+            onPressed: () => MarketAlertsSheet.show(context, stockAlerts),
+            icon: const Icon(Icons.candlestick_chart_outlined,
+                color: Colors.white70),
+          ),
           IconButton(
             tooltip: 'Reset chat',
             onPressed: () {

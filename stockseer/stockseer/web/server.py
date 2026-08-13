@@ -86,6 +86,13 @@ def _clean(obj: Any) -> Any:
     return str(obj)
 
 
+def asdict_notif(n) -> dict:
+    """Notification -> JSON, with the vibration pattern Jarvis should use."""
+    from dataclasses import asdict
+
+    return {**asdict(n), "vibration": n.vibration}
+
+
 def _feed(kind: str = "auto"):
     if kind not in _FEED_CACHE:
         _FEED_CACHE[kind] = get_feed(kind)
@@ -135,6 +142,62 @@ def create_app() -> Flask:
         st.update(request.get_json(force=True) or {})
         _save_state(st)
         return jsonify(st)
+
+    # ---------------------------------------------------- notifications (Jarvis)
+    @app.get("/api/notify/pending")
+    def notify_pending():
+        """Undelivered alerts. Jarvis polls this and vibrates once per alert."""
+        from ..notify import hub
+
+        items = hub().pending(int(request.args.get("limit", 20)))
+        return jsonify(_clean([{**asdict_notif(n)} for n in items]))
+
+    @app.post("/api/notify/ack")
+    def notify_ack():
+        """Mark alerts delivered so the phone never buzzes twice for one event."""
+        from ..notify import hub
+
+        ids = (request.get_json(force=True) or {}).get("ids") or []
+        return jsonify({"acknowledged": hub().mark_delivered(ids)})
+
+    @app.post("/api/notify/test")
+    def notify_test():
+        """Queue a test alert so the phone can verify the buzz reaches it."""
+        from ..notify import hub
+
+        urgency = (request.args.get("urgency") or "act")
+        n = hub().alert(
+            "test", urgency, "StockSeer test alert",
+            "If your phone buzzed, Jarvis is wired up correctly.\n"
+            "This is the pattern real market alerts will use.",
+        )
+        return jsonify(_clean(asdict_notif(n)))
+
+    @app.get("/api/notify/recent")
+    def notify_recent():
+        from ..notify import hub
+
+        return jsonify(_clean([asdict_notif(n)
+                               for n in hub().recent(int(request.args.get("limit", 50)))]))
+
+    @app.get("/api/ipo/calendar")
+    def ipo_calendar():
+        from ..ipo.calendar import scan
+        from ..ipo.registry import to_dict
+
+        events = scan(refresh=request.args.get("refresh") == "1")
+        return jsonify(_clean([{"kind": e.kind, "urgency": e.urgency,
+                                "days_away": e.days_away, "ipo": to_dict(e.ipo)}
+                               for e in events]))
+
+    @app.post("/api/ipo/scan")
+    def ipo_scan():
+        """Run the calendar and queue notifications for anything due."""
+        from ..ipo.calendar import notify_today
+
+        pushed = notify_today(refresh=True)
+        return jsonify(_clean({"queued": len(pushed),
+                               "titles": [n.title for n in pushed]}))
 
     # --------------------------------------------------------------- search
     @app.get("/api/search")

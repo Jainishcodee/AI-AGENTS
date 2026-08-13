@@ -400,6 +400,98 @@ def cmd_advisor(a: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_ipo(a: argparse.Namespace) -> int:
+    from .ipo.calendar import notify_today, print_calendar
+    from .ipo.registry import refresh_registry, upcoming_listings
+
+    if a.action == "calendar":
+        print_calendar(refresh=a.refresh, mainboard_only=a.mainboard_only)
+        if a.notify:
+            pushed = notify_today(refresh=False, mainboard_only=a.mainboard_only)
+            print(f" queued {len(pushed)} notification(s) for Jarvis\n")
+        return 0
+
+    if a.action == "refresh":
+        print(f"\n registry: {refresh_registry()}\n")
+        return 0
+
+    if a.action == "upcoming":
+        rows = upcoming_listings(a.days)
+        print(f"\n Listing in the next {a.days} days:")
+        for i in rows:
+            print(f"   {i.symbol:<14}{i.listing_date}  issue Rs.{i.issue_price}"
+                  f"  {'SME' if i.is_sme else 'MAIN'}")
+        print()
+        return 0
+
+    if a.action == "study":
+        from .ipo.study import run_study
+
+        run_study(limit=a.limit, refresh=a.refresh)
+        return 0
+
+    if a.action == "morning":
+        from datetime import date, timedelta
+
+        from .ipo.intraday import run_intraday_study
+        from .ipo.registry import past_issues
+        from .live.feed import get_feed
+
+        feed = get_feed(a.feed)
+        cutoff = date.today() - timedelta(days=a.days - 3)
+        ipos = [i for i in past_issues() if i.listed and i.listing_day()
+                and i.listing_day() >= cutoff
+                and (not a.mainboard_only or not i.is_sme)]
+        print(f"\n {len(ipos)} listings since {cutoff} · feed {feed.describe()}\n")
+        run_intraday_study(feed, ipos, interval=a.interval, days_back=a.days)
+        return 0
+
+    if a.action == "watch":
+        from .ipo.watcher import WatchConfig, run
+        from .live.feed import get_feed
+
+        cfg = WatchConfig(stop_pct=a.stop_pct, trail_pct=a.trail_pct,
+                          take_profit_pct=a.take_profit, poll_seconds=a.poll,
+                          confirm_minutes=a.confirm)
+        syms = [s.strip() for s in a.symbols.split(",")] if a.symbols else None
+        try:
+            run(symbols=syms, feed=get_feed(a.feed), config=cfg, once=a.once)
+        except KeyboardInterrupt:
+            print("\n stopped.")
+        return 0
+    return 1
+
+
+def cmd_notify(a: argparse.Namespace) -> int:
+    from .notify import hub
+
+    h = hub()
+    if a.action == "pending":
+        items = h.pending()
+        print(f"\n {len(items)} undelivered alert(s)")
+        for n in items:
+            print(f"   [{n.urgency:<8}] {n.title}")
+        print()
+        return 0
+    if a.action == "recent":
+        for n in h.recent(a.limit):
+            flag = "sent" if n.delivered else "queued"
+            print(f" {n.created_at[:16]}  [{flag:<6}] {n.urgency:<8} {n.title}")
+        return 0
+    if a.action == "test":
+        n = h.alert("test", a.urgency, "StockSeer test alert",
+                    "If your phone buzzed, Jarvis is wired up correctly.",
+                    dedupe_key=None)
+        print(f"\n queued: {n.title}  (urgency {n.urgency}, "
+              f"vibration {n.vibration})\n")
+        return 0
+    if a.action == "clear":
+        h.clear()
+        print(" cleared.")
+        return 0
+    return 1
+
+
 def cmd_ui(a: argparse.Namespace) -> int:
     from .web.server import serve
 
@@ -527,6 +619,34 @@ def main(argv: list[str] | None = None) -> int:
                    help="stop to assume when the call gives none")
     p.add_argument("--default-target", type=float, default=0.10)
     p.set_defaults(func=cmd_advisor)
+
+    p = sub.add_parser("ipo", help="IPO calendar, listing studies, and the live watcher")
+    p.add_argument("action", nargs="?", default="calendar",
+                   choices=["calendar", "upcoming", "refresh", "study", "morning", "watch"])
+    p.add_argument("--refresh", action="store_true", help="re-fetch from NSE")
+    p.add_argument("--notify", action="store_true", help="queue alerts for Jarvis")
+    p.add_argument("--mainboard-only", action="store_true",
+                   help="skip SME issues; they behave like a different asset class")
+    p.add_argument("--days", type=int, default=95)
+    p.add_argument("--limit", type=int, default=450, help="IPOs to measure in 'study'")
+    p.add_argument("--interval", default="5m")
+    p.add_argument("--feed", default="auto", choices=["auto", "angel", "yahoo"])
+    p.add_argument("--symbols", default=None, help="override which IPOs to watch")
+    p.add_argument("--stop-pct", type=float, default=0.04)
+    p.add_argument("--trail-pct", type=float, default=0.03)
+    p.add_argument("--take-profit", type=float, default=0.08)
+    p.add_argument("--confirm", type=int, default=5,
+                   help="minutes it must hold above the open before an entry alert")
+    p.add_argument("--poll", type=int, default=20)
+    p.add_argument("--once", action="store_true")
+    p.set_defaults(func=cmd_ipo)
+
+    p = sub.add_parser("notify", help="alert queue that Jarvis polls")
+    p.add_argument("action", nargs="?", default="pending",
+                   choices=["pending", "recent", "test", "clear"])
+    p.add_argument("--urgency", default="act", choices=["info", "act", "critical"])
+    p.add_argument("--limit", type=int, default=25)
+    p.set_defaults(func=cmd_notify)
 
     p = sub.add_parser("ui", help="launch the web dashboard (every command, clickable)")
     p.add_argument("--port", type=int, default=8765)

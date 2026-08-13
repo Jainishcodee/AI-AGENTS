@@ -125,18 +125,33 @@ def _parse_price(raw) -> float | None:
 
 
 def _to_ipo(row: dict) -> IPO | None:
+    """Normalise a row from either NSE endpoint.
+
+    The two endpoints do not agree on field names: past-issues uses
+    ``ipoStartDate`` / ``company``, while upcoming-issues uses
+    ``issueStartDate`` / ``companyName``. Reading only one set silently yields
+    IPOs with no dates -- which looks like an empty calendar rather than a bug.
+    """
     symbol = (row.get("symbol") or "").strip().upper()
     if not symbol:
         return None
+
+    raw_price = row.get("issuePrice")
+    price_range = (row.get("priceRange") or "").strip()
+    # On upcoming issues `issuePrice` carries the band ("Rs.92 to Rs.97"); once
+    # priced it becomes a single number and priceRange holds the band.
+    if not price_range and isinstance(raw_price, str) and " to " in raw_price:
+        price_range = raw_price.strip()
+
     return IPO(
         symbol=symbol,
         company=(row.get("company") or row.get("companyName") or symbol).strip(),
-        issue_price=_parse_price(row.get("issuePrice")),
+        issue_price=_parse_price(raw_price),
         listing_date=_parse_date(row.get("listingDate")),
-        price_range=(row.get("priceRange") or "").strip(),
+        price_range=price_range,
         security_type=(row.get("securityType") or "EQ").strip().upper(),
-        ipo_start=_parse_date(row.get("ipoStartDate")),
-        ipo_end=_parse_date(row.get("ipoEndDate")),
+        ipo_start=_parse_date(row.get("ipoStartDate") or row.get("issueStartDate")),
+        ipo_end=_parse_date(row.get("ipoEndDate") or row.get("issueEndDate")),
     )
 
 
