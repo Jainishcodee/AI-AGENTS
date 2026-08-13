@@ -4,6 +4,7 @@ import android.content.Intent
 import android.net.Uri
 import android.os.Build
 import android.provider.Settings
+import android.util.Log
 import com.larossatech.jarvis.nudge.NudgeAlarmReceiver
 import com.larossatech.jarvis.nudge.NudgeKind
 import com.larossatech.jarvis.nudge.NudgePrefs
@@ -16,6 +17,23 @@ class MainActivity : FlutterActivity() {
 
     // Named for the first nudge that used it; carries both kinds now.
     private val channel = "com.larossatech.jarvis/water"
+
+    /**
+     * Re-arm on every open.
+     *
+     * The nudge alarms are a chain — each fire schedules the next — so anything
+     * that drops one link stops them for good: an OEM battery manager killing
+     * the app, a force-stop, a revoked exact-alarm grant. Opening the app is the
+     * one moment we're guaranteed to run, so it doubles as the repair.
+     */
+    override fun onResume() {
+        super.onResume()
+        try {
+            NudgeScheduler.syncAll(this)
+        } catch (e: Throwable) {
+            Log.w("Jarvis", "could not re-arm nudges", e)
+        }
+    }
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)

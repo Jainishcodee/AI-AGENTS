@@ -15,7 +15,15 @@ from ..engine.planner import call_estimate
 from ..learning import priors
 from ..learning.scoring import CHANCE_BRIER
 from ..programs import loader
-from ..schemas.cards import MIN_N_TO_DISPLAY, CardStatus, DecisionCard, Prior, Resolution
+from ..schemas.cards import (
+    MIN_N_TO_DISPLAY,
+    CardStatus,
+    DecisionCard,
+    Prior,
+    Project,
+    ReplayResult,
+    Resolution,
+)
 from ..schemas.common import Verdict
 from ..schemas.council import Deliberation, DeliberationRequest
 from ..schemas.events import sse
@@ -45,6 +53,11 @@ class RefineRequest(BaseModel):
 class InjectRequest(BaseModel):
     facts: list[str] = Field(min_length=1)
     answers_gap: str | None = None
+
+
+class ProjectRequest(BaseModel):
+    name: str = Field(min_length=1)
+    brief: str = ""
 
 
 def _council(request: Request) -> Council:
@@ -265,6 +278,57 @@ async def inject(request: Request, run_id: str, body: InjectRequest) -> dict[str
             ),
         ) from exc
     return {"run_id": run_id, "queued": count}
+
+
+@router.get("/projects")
+async def projects(request: Request) -> list[Project]:
+    """Ongoing situations, open ones first."""
+    return await _council(request).store.list_projects()
+
+
+@router.post("/projects")
+async def create_project(request: Request, body: ProjectRequest) -> Project:
+    return await _council(request).create_project(body.name, body.brief)
+
+
+@router.get("/projects/{project_id}")
+async def get_project(request: Request, project_id: str) -> dict[str, object]:
+    store = _council(request).store
+    project = await store.get_project(project_id)
+    if project is None:
+        raise HTTPException(status_code=404, detail="no such project")
+    lister = getattr(store, "cards_in_project", None)
+    cards = (
+        await lister(project_id)
+        if lister
+        else [c for c in await store.list_cards(limit=500) if c.project_id == project_id]
+    )
+    return {"project": project, "cards": cards}
+
+
+@router.post("/projects/{project_id}/close")
+async def close_project(request: Request, project_id: str) -> Project:
+    try:
+        return await _council(request).close_project(project_id)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail="no such project") from exc
+
+
+@router.post("/cards/{card_id}/replay")
+async def replay_card(request: Request, card_id: str) -> ReplayResult:
+    """Re-decide a resolved card against today's programs and grade it against what
+    actually happened.
+
+    Turns the resolved corpus into a test set for the council itself. Memories and
+    priors derived from this card are withheld for the duration — otherwise a module
+    reads its own answer — and the response reports how many were withheld (ADR-025).
+    """
+    try:
+        return await _council(request).replay(card_id)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail="no such card") from exc
+    except CognitiveOSError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
 @router.get("/reminders")

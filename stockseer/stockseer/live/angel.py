@@ -50,10 +50,23 @@ MAX_DAYS_PER_CALL = {
 
 
 def _load_dotenv() -> None:
-    """Minimal .env reader -- avoids a dependency for four variables."""
-    for candidate in (Path.cwd() / ".env", Path(__file__).resolve().parents[2] / ".env"):
+    """Minimal .env reader -- avoids a dependency for four variables.
+
+    Searches the repo root, the package directory, and the working directory,
+    because "which folder does .env go in" is a guess everyone gets wrong once
+    and the failure mode is an unhelpful "missing credentials".
+    """
+    here = Path(__file__).resolve()
+    candidates = (
+        here.parents[2] / ".env",      # repo root:      stockseer/.env
+        here.parents[1] / ".env",      # package dir:    stockseer/stockseer/.env
+        here.parents[0] / ".env",      # live/ dir
+        Path.cwd() / ".env",
+    )
+    for candidate in candidates:
         if not candidate.exists():
             continue
+        log.debug("loading credentials from %s", candidate)
         for line in candidate.read_text(encoding="utf-8").splitlines():
             line = line.strip()
             if not line or line.startswith("#") or "=" not in line:

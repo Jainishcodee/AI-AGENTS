@@ -50,6 +50,7 @@ def load_prices(
     interval: str = "1d",
     cache_dir: Path | str = CACHE_DIR,
     refresh: bool = False,
+    min_rows: int = 260,
 ) -> pd.DataFrame:
     """Return an adjusted OHLCV frame indexed by date.
 
@@ -85,10 +86,13 @@ def load_prices(
         df.to_csv(path)
 
     out = _clean(df, ticker)
-    if len(out) < 260:
+    # Modelling needs a year of history, but IPO work is the opposite case: a
+    # freshly listed stock has a handful of bars by definition, and that is the
+    # data. Callers studying listings pass a small `min_rows`.
+    if len(out) < min_rows:
         raise ValueError(
-            f"{ticker}: only {len(out)} usable rows. Need at least ~1 year of "
-            f"history; widen --start or pick a more liquid symbol."
+            f"{ticker}: only {len(out)} usable rows, need {min_rows}. Widen "
+            f"--start, pick a more liquid symbol, or lower min_rows."
         )
     log.info("%s: %d rows, %s .. %s", ticker, len(out), out.index[0].date(), out.index[-1].date())
     return out

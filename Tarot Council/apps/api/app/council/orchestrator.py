@@ -29,7 +29,15 @@ from ..llm.registry import Router
 from ..memory.store import MemoryStore, build_store
 from ..programs import loader
 from ..prompts import renderer
-from ..schemas.cards import DecisionCard, ExpectedOutcome, ModuleStance, Resolution
+from ..schemas.cards import (
+    DecisionCard,
+    ExpectedOutcome,
+    ModuleReplay,
+    ModuleStance,
+    Project,
+    ReplayResult,
+    Resolution,
+)
 from ..schemas.common import Verdict
 from ..schemas.council import (
     Critique,
@@ -116,6 +124,10 @@ class Council:
         # failure must never cost the resolution, which is the expensive artefact.
         try:
             memories = await extract_memories(graded, card.resolution, self._router)
+            for memory in memories:
+                # Inherited, not asked for: a memory belongs to the situation its
+                # decision belonged to, and that is a fact about the card.
+                memory.project_id = graded.project_id
             for module in {m.module for m in memories}:
                 await self._store.remember(module, [m for m in memories if m.module == module])
             if memories:
@@ -123,6 +135,161 @@ class Council:
         except Exception as exc:  # noqa: BLE001
             log.warning("memory extraction failed for card %s: %s", card_id, exc)
         return graded
+
+    # ------------------------------------------------------------- projects --
+
+    async def create_project(self, name: str, brief: str = "") -> Project:
+        project = Project(id=uuid.uuid4().hex[:12], name=name, brief=brief)
+        await self._store.save_project(project)
+        return project
+
+    async def close_project(self, project_id: str) -> Project:
+        project = await self._store.get_project(project_id)
+        if project is None:
+            raise KeyError(project_id)
+        project.closed_at = datetime.now(timezone.utc)
+        await self._store.save_project(project)
+        return project
+
+    # --------------------------------------------------------------- replay --
+
+    async def replay(self, card_id: str) -> ReplayResult:
+        """Re-decide a resolved card against the current programs, then grade it.
+
+        This is what turns the resolved corpus into a test set for the council itself:
+        with the outcome already known, re-running an old decision measures whether a
+        changed program would have done better. It is the only way to improve the six
+        on evidence rather than on taste — and the counterpart to ADR-018's rule that
+        the system never tunes itself.
+
+        The correctness problem is leakage, and it is severe. Memories extracted from
+        this very card describe what happened, and priors computed from it encode the
+        verdict. Handed those, a module would score well by reading the answer. So both
+        are withheld for the duration (ADR-025), and the count of what was withheld is
+        reported so the result cannot be quietly trusted more than it deserves.
+        """
+        card = await self._store.get_card(card_id)
+        if card is None:
+            raise KeyError(card_id)
+        if card.resolution is None or card.scoring is None:
+            raise CognitiveOSError(
+                f"card {card_id} is not resolved and graded; there is nothing to "
+                "measure a replay against"
+            )
+
+        original = await self._store.get_deliberation(card.deliberation_id)
+        if original is None:
+            raise CognitiveOSError(f"card {card_id} has no stored deliberation to replay")
+
+        programs = loader.programs()
+        preset = loader.preset(card.preset)
+        blocked = frozenset({card.id})
+
+        withheld_memories = 0
+        withheld_priors = 0
+        runs: list[ModuleRun] = []
+
+        async def run_module(module: ModuleId) -> ModuleRun:
+            nonlocal withheld_memories, withheld_priors
+            everything = await self._store.agent_memory(
+                module, original.context.question, project_id=original.project_id
+            )
+            clean = await self._store.agent_memory(
+                module,
+                original.context.question,
+                project_id=original.project_id,
+                exclude_cards=blocked,
+            )
+            withheld_memories += len(everything.recalled) - len(clean.recalled)
+            withheld_priors += len(everything.priors) - len(clean.priors)
+            return await self._engine.run_program(
+                programs[module],
+                context=original.context,
+                depth=original.depth,  # type: ignore[arg-type]
+                role=preset.role_of(module),
+                memory=clean,
+            )
+
+        running = [m for m in preset.running if m in programs]
+        results = await asyncio.gather(
+            *(run_module(m) for m in running), return_exceptions=True
+        )
+        for module, result in zip(running, results):
+            if isinstance(result, BaseException):
+                log.warning("replay of %s failed: %s", module, result)
+                runs.append(
+                    ModuleRun(
+                        module=module,
+                        program_version=programs[module].version,
+                        role=preset.role_of(module),
+                        abstained=True,
+                        abstain_reason=str(result),
+                    )
+                )
+            else:
+                runs.append(result)
+
+        replayed = Deliberation(
+            id=uuid.uuid4().hex[:12],
+            question=original.question,
+            preset=original.preset,
+            depth=original.depth,
+            project_id=original.project_id,
+            context=original.context,
+            derived_from=original.id,
+            rerun=Rerun(kind="refine", reason=f"replay of card {card.id}"),
+            runs=runs,
+            program_versions={m: programs[m].version for m in running},
+        )
+
+        async def noop(_event: Event) -> None:
+            return None
+
+        replayed.synthesis = await self._synthesise(programs, replayed, noop)
+        await self._store.save_deliberation(replayed)
+
+        # Grade the replay against the outcome that actually happened. A throwaway
+        # card is used so the original's scoring history is never overwritten.
+        shadow = self._make_card(replayed, replayed.synthesis) if replayed.synthesis else None
+        now_verdicts: dict[ModuleId, str] = {}
+        if shadow is not None:
+            shadow.resolution = card.resolution
+            try:
+                scoring = await grade_card(shadow, card.resolution, self._router)
+                now_verdicts = {v.module: v.verdict for v in scoring.module_verdicts}
+            except CognitiveOSError as exc:
+                log.warning("grading the replay failed: %s", exc)
+
+        then_stance = {m.module: m for m in card.per_module}
+        then_verdict = {v.module: v.verdict for v in card.scoring.module_verdicts}
+
+        return ReplayResult(
+            card_id=card.id,
+            original_deliberation_id=original.id,
+            replay_deliberation_id=replayed.id,
+            program_versions_then=dict(card.program_versions),
+            program_versions_now={m: programs[m].version for m in running},
+            excluded_memories=withheld_memories,
+            excluded_priors=withheld_priors,
+            modules=[
+                ModuleReplay(
+                    module=run.module,
+                    then_stance=then_stance.get(run.module).stance
+                    if then_stance.get(run.module)
+                    else "",
+                    now_stance=run.conclusion.stance if run.conclusion else "",
+                    then_verdict=then_verdict.get(run.module),
+                    now_verdict=now_verdicts.get(run.module),
+                    then_confidence=(
+                        then_stance[run.module].confidence.score
+                        if then_stance.get(run.module) and then_stance[run.module].confidence
+                        else None
+                    ),
+                    now_confidence=run.conclusion.confidence.score if run.conclusion else None,
+                )
+                for run in runs
+            ],
+        )
 
     # -------------------------------------------------------------- re-runs --
 
@@ -333,6 +500,7 @@ class Council:
             question=request.question,
             preset=preset.id,
             depth=depth,
+            project_id=request.project_id,
             context=context,
             program_versions={m: programs[m].version for m in preset.participants},
         )
@@ -351,7 +519,9 @@ class Council:
         async def run_module(module: str) -> ModuleRun:
             program = programs[module]
             await emit(ev("module_started", module=module, role=preset.role_of(module)))
-            memory = await self._store.agent_memory(module, context.question)
+            memory = await self._store.agent_memory(
+                module, context.question, project_id=request.project_id
+            )
             # Isolation is structural: the only arguments are the program, the
             # context, and this module's own memory. There is no parameter through
             # which a sibling's output could arrive.
@@ -724,6 +894,7 @@ class Council:
             deliberation_id=deliberation.id,
             preset=deliberation.preset,
             depth=deliberation.depth,
+            project_id=deliberation.project_id,
             domains=list(deliberation.context.domains),
             program_versions=deliberation.program_versions,
             recommendation=synthesis.recommendation,

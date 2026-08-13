@@ -44,15 +44,73 @@ object NudgeScheduler {
         val pi = pendingIntent(c, k)
 
         val exact = Build.VERSION.SDK_INT < Build.VERSION_CODES.S || am.canScheduleExactAlarms()
-        if (exact) {
-            am.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, at, pi)
-        } else {
-            // Without the exact-alarm grant the nudge still lands, just loosely.
+        try {
+            if (exact) {
+                am.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, at, pi)
+            } else {
+                // Without the exact-alarm grant the nudge still lands, just loosely.
+                am.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, at, pi)
+            }
+        } catch (e: SecurityException) {
+            // The grant can be revoked between the check above and this call.
+            // Throwing here would kill the receiver and with it the whole chain,
+            // so drop to an inexact alarm rather than stop nudging entirely.
             am.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, at, pi)
         }
     }
 
-    fun syncAll(c: Context) = NudgeKind.entries.forEach { sync(c, it) }
+    fun syncAll(c: Context) {
+        NudgeKind.entries.forEach { sync(c, it) }
+        syncWatchdog(c)
+    }
+
+    // ---------------------------------------------------------- watchdog
+
+    private const val WATCHDOG_ACTION = "com.larossatech.jarvis.NUDGE_WATCHDOG"
+    private const val WATCHDOG_REQUEST = 7399
+    private const val WATCHDOG_PERIOD = AlarmManager.INTERVAL_HALF_HOUR
+
+    private fun watchdogIntent(c: Context): PendingIntent {
+        val intent = Intent(c, NudgeAlarmReceiver::class.java).setAction(WATCHDOG_ACTION)
+        var flags = PendingIntent.FLAG_UPDATE_CURRENT
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) flags = flags or PendingIntent.FLAG_IMMUTABLE
+        return PendingIntent.getBroadcast(c.applicationContext, WATCHDOG_REQUEST, intent, flags)
+    }
+
+    fun isWatchdog(action: String?) = action == WATCHDOG_ACTION
+
+    /**
+     * A slow repeating alarm whose only job is to re-arm the exact ones.
+     *
+     * The per-nudge alarms form a chain — each fire schedules the next — so a
+     * single dropped link stops them forever. A dropped link is not exotic:
+     * aggressive OEM battery managers, a force-stop, or a revoked exact-alarm
+     * grant will all do it, which is what made the nudges work for a day and
+     * then quietly stop. This is inexact and repeating, so the system owns it
+     * and keeps redelivering even when the chain is broken.
+     */
+    fun syncWatchdog(c: Context) {
+        val am = c.getSystemService(Context.ALARM_SERVICE) as AlarmManager
+        val pi = watchdogIntent(c)
+        val anyOn = NudgeKind.entries.any { NudgePrefs.enabled(c, it) }
+        if (!anyOn) {
+            am.cancel(pi)
+            return
+        }
+        am.setInexactRepeating(
+            AlarmManager.RTC_WAKEUP,
+            System.currentTimeMillis() + WATCHDOG_PERIOD,
+            WATCHDOG_PERIOD,
+            pi,
+        )
+    }
+
+    /** Re-arms any enabled nudge whose alarm has gone missing. */
+    fun heal(c: Context) {
+        NudgeKind.entries.forEach { k ->
+            if (NudgePrefs.enabled(c, k)) sync(c, k)
+        }
+    }
 
     /**
      * Next nudge at [from] + interval, pushed to the start of the window if

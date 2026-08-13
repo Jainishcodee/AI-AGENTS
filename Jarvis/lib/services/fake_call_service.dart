@@ -1,6 +1,9 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:timezone/timezone.dart' as tz;
+
+import 'reminder_service.dart';
 
 /// A way out of a conversation: arm it discreetly, then the phone rings on its
 /// own a few minutes later with a name you chose.
@@ -9,9 +12,15 @@ import 'package:timezone/timezone.dart' as tz;
 /// so arming is a hidden gesture that shows no UI, and the delay exists so the
 /// call never arrives while you still have your hand on the phone.
 class FakeCallService {
-  FakeCallService(this._plugin);
+  FakeCallService(this._reminders);
 
-  final FlutterLocalNotificationsPlugin _plugin;
+  /// Held rather than just its plugin, so arming can guarantee the plugin and
+  /// the timezone database are ready. They're only initialised as a side effect
+  /// of the daily digest otherwise, inside a try/catch that swallows failures —
+  /// which left arming to throw out of a gesture callback with nothing to catch it.
+  final ReminderService _reminders;
+
+  FlutterLocalNotificationsPlugin get _plugin => _reminders.plugin;
 
   static const _kName = 'fakecall_name';
   static const _kNumber = 'fakecall_number';
@@ -53,12 +62,51 @@ class FakeCallService {
     }
   }
 
-  /// Schedules the ring. Returns when it will land, so the caller can show a
-  /// brief confirmation somewhere unobtrusive.
-  Future<DateTime> arm({int? inSeconds}) async {
+  /// Schedules the ring. Returns when it will land, or null if the phone
+  /// refused to take the booking.
+  ///
+  /// Nothing here is allowed to throw: the only caller is a long-press on the
+  /// mascot, and an exception escaping an async gesture callback took the app
+  /// down. A fake call that quietly fails to arm is bad; a crash in front of
+  /// the person you're trying to escape is worse.
+  Future<DateTime?> arm({int? inSeconds}) async {
     final wait = inSeconds ?? delaySecs;
     final when = DateTime.now().add(Duration(seconds: wait));
 
+    try {
+      // Guarantees the plugin is initialised and the timezone database is
+      // loaded, rather than relying on the digest having done it first.
+      await _reminders.init();
+
+      // Exact delivery needs a grant that can be absent or revoked; without
+      // this check the schedule call throws instead of landing a minute late.
+      final exact = await _reminders.canScheduleExact();
+      final mode = exact
+          ? AndroidScheduleMode.exactAllowWhileIdle
+          : AndroidScheduleMode.inexactAllowWhileIdle;
+
+      await _schedule(when, mode, fullScreen: true);
+      return when;
+    } catch (e) {
+      debugPrint('fake call: full-screen schedule failed ($e), retrying plain');
+      // A full-screen intent needs its own grant on Android 14+. Falling back
+      // to an ordinary heads-up still rings; it just won't cover the lockscreen.
+      try {
+        await _schedule(when, AndroidScheduleMode.inexactAllowWhileIdle,
+            fullScreen: false);
+        return when;
+      } catch (e2) {
+        debugPrint('fake call: could not arm ($e2)');
+        return null;
+      }
+    }
+  }
+
+  Future<void> _schedule(
+    DateTime when,
+    AndroidScheduleMode mode, {
+    required bool fullScreen,
+  }) async {
     // A dedicated max-importance channel so this arrives as a heads-up with
     // sound and vibration, rather than sliding silently into the shade with
     // the digest notifications.
@@ -75,7 +123,7 @@ class FakeCallService {
       // of chiming once and going quiet.
       ongoing: true,
       autoCancel: false,
-      fullScreenIntent: true,
+      fullScreenIntent: fullScreen,
       ticker: 'Incoming call',
     );
 
@@ -85,12 +133,11 @@ class FakeCallService {
       number.isEmpty ? 'Incoming call' : number,
       tz.TZDateTime.from(when, tz.local),
       NotificationDetails(android: android),
-      androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
+      androidScheduleMode: mode,
       uiLocalNotificationDateInterpretation:
           UILocalNotificationDateInterpretation.absoluteTime,
       payload: payload,
     );
-    return when;
   }
 
   /// Called when the call is answered, declined, or armed by mistake.

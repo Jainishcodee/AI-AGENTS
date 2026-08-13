@@ -36,6 +36,7 @@ from ..schemas.cards import (
     Memory,
     ModuleScore,
     Prior,
+    Project,
     Resolution,
 )
 from ..schemas.common import ModuleId
@@ -43,7 +44,7 @@ from ..schemas.council import Deliberation
 
 log = get_logger(__name__)
 
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
 
 MIGRATIONS: dict[int, list[str]] = {
     1: [
@@ -119,7 +120,26 @@ MIGRATIONS: dict[int, list[str]] = {
             INSERT INTO memories_fts (rowid, content) VALUES (new.rowid, new.content);
         END
         """,
-    ]
+    ],
+    2: [
+        # Projects: real decisions arrive in chains, and grouping them is what stops
+        # recall dragging a side project into a salary conversation.
+        """
+        CREATE TABLE projects (
+            id         TEXT PRIMARY KEY,
+            user_id    TEXT NOT NULL DEFAULT 'local',
+            name       TEXT NOT NULL,
+            brief      TEXT NOT NULL DEFAULT '',
+            created_at TEXT NOT NULL,
+            closed_at  TEXT
+        )
+        """,
+        "ALTER TABLE deliberations ADD COLUMN project_id TEXT",
+        "ALTER TABLE cards ADD COLUMN project_id TEXT",
+        "ALTER TABLE memories ADD COLUMN project_id TEXT",
+        "CREATE INDEX ix_cards_project ON cards (project_id)",
+        "CREATE INDEX ix_mem_project ON memories (project_id, module)",
+    ],
 }
 
 STOPWORDS = frozenset(
@@ -178,10 +198,13 @@ class SQLiteStore:
                 self._conn.execute(
                     """
                     INSERT INTO deliberations
-                        (id, created_at, question, preset, depth, derived_from, doc)
-                    VALUES (?, ?, ?, ?, ?, ?, ?)
+                        (id, created_at, question, preset, depth, derived_from,
+                         project_id, doc)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
                     ON CONFLICT(id) DO UPDATE SET
-                        doc=excluded.doc, derived_from=excluded.derived_from
+                        doc=excluded.doc,
+                        derived_from=excluded.derived_from,
+                        project_id=excluded.project_id
                     """,
                     (
                         deliberation.id,
@@ -190,6 +213,7 @@ class SQLiteStore:
                         deliberation.preset,
                         deliberation.depth,
                         deliberation.derived_from,
+                        deliberation.project_id,
                         deliberation.model_dump_json(),
                     ),
                 )
@@ -223,13 +247,14 @@ class SQLiteStore:
                     """
                     INSERT INTO cards
                         (id, user_id, created_at, question, deliberation_id, preset, depth,
-                         domains, check_on, resolved, graded, doc)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                         domains, check_on, resolved, graded, project_id, doc)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     ON CONFLICT(id) DO UPDATE SET
                         resolved=excluded.resolved,
                         graded=excluded.graded,
                         check_on=excluded.check_on,
                         domains=excluded.domains,
+                        project_id=excluded.project_id,
                         doc=excluded.doc
                     """,
                     (
@@ -246,6 +271,7 @@ class SQLiteStore:
                         else None,
                         int(card.resolved),
                         int(card.graded),
+                        card.project_id,
                         card.model_dump_json(),
                     ),
                 )
@@ -316,8 +342,9 @@ class SQLiteStore:
                 self._conn.executemany(
                     """
                     INSERT INTO memories
-                        (id, module, kind, content, salience, source_card_id, created_at)
-                    VALUES (?, ?, ?, ?, ?, ?, ?)
+                        (id, module, kind, content, salience, source_card_id,
+                         project_id, created_at)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
                     ON CONFLICT(id) DO UPDATE SET
                         content=excluded.content, salience=excluded.salience
                     """,
@@ -329,6 +356,7 @@ class SQLiteStore:
                             m.content,
                             m.salience,
                             m.source_card_id,
+                            m.project_id,
                             m.created_at.isoformat(),
                         )
                         for m in memories
@@ -337,20 +365,41 @@ class SQLiteStore:
 
         await self._run(write)
 
-    async def recall(self, module: ModuleId, query: str, k: int = 5) -> list[Memory]:
-        """BM25 over FTS5, blended with salience and recency.
+    async def recall(
+        self,
+        module: ModuleId,
+        query: str,
+        k: int = 5,
+        *,
+        project_id: str | None = None,
+        exclude_cards: frozenset[str] = frozenset(),
+    ) -> list[Memory]:
+        """BM25 over FTS5, blended with salience, recency and project match.
 
-        Two queries rather than one: the FTS match, and a salience floor for memories
-        that matter regardless of vocabulary. Merging in Python is clearer than an
-        `OR` that would defeat the FTS index.
+        Three queries rather than one: the FTS match, a salience floor for memories
+        that matter regardless of vocabulary, and — when scoped to a project — that
+        project's own memories. Merging in Python is clearer than an `OR` that would
+        defeat the FTS index.
+
+        `exclude_cards` is what keeps replay honest: a memory extracted from the very
+        card being re-decided would hand the module its own answer (ADR-025).
         """
         match = _fts_query(query)
+        blocked = set(exclude_cards)
 
         def read() -> list[Memory]:
             found: dict[str, tuple[float, sqlite3.Row]] = {}
 
+            def offer(row: sqlite3.Row, score: float) -> None:
+                if row["source_card_id"] in blocked:
+                    return
+                bonus = 2.0 if project_id and row["project_id"] == project_id else 0.0
+                current = found.get(row["id"])
+                if current is None or score + bonus > current[0]:
+                    found[row["id"]] = (score + bonus, row)
+
             if match:
-                rows = self._conn.execute(
+                for row in self._conn.execute(
                     """
                     SELECT m.*, bm25(memories_fts) AS bm
                     FROM memories_fts
@@ -360,12 +409,11 @@ class SQLiteStore:
                     LIMIT ?
                     """,
                     (match, module, k * 4),
-                ).fetchall()
-                # bm25() is negative and lower is better, so negate it into a score.
-                for row in rows:
-                    found[row["id"]] = (-float(row["bm"]) + row["salience"] * 1.5, row)
+                ).fetchall():
+                    # bm25() is negative and lower is better, so negate it.
+                    offer(row, -float(row["bm"]) + row["salience"] * 1.5)
 
-            floor = self._conn.execute(
+            for row in self._conn.execute(
                 """
                 SELECT * FROM memories
                 WHERE module = ? AND salience >= ?
@@ -373,10 +421,20 @@ class SQLiteStore:
                 LIMIT ?
                 """,
                 (module, SALIENCE_FLOOR, k),
-            ).fetchall()
-            for row in floor:
-                if row["id"] not in found:
-                    found[row["id"]] = (row["salience"], row)
+            ).fetchall():
+                offer(row, row["salience"])
+
+            if project_id:
+                for row in self._conn.execute(
+                    """
+                    SELECT * FROM memories
+                    WHERE module = ? AND project_id = ?
+                    ORDER BY salience DESC, created_at DESC
+                    LIMIT ?
+                    """,
+                    (module, project_id, k),
+                ).fetchall():
+                    offer(row, row["salience"])
 
             ordered = sorted(found.values(), key=lambda pair: pair[0], reverse=True)[:k]
             return [_memory_of(row) for _score, row in ordered]
@@ -400,17 +458,84 @@ class SQLiteStore:
 
     # -------------------------------------------------------------- derived --
 
-    async def priors(self, module: ModuleId) -> list[Prior]:
-        return priors_for_module(await self._graded_cards(), module)
+    async def priors(
+        self, module: ModuleId, *, exclude_cards: frozenset[str] = frozenset()
+    ) -> list[Prior]:
+        cards = [c for c in await self._graded_cards() if c.id not in exclude_cards]
+        return priors_for_module(cards, module)
 
     async def scores(self) -> list[ModuleScore]:
         return all_scores(await self._graded_cards())
 
-    async def agent_memory(self, module: ModuleId, query: str) -> AgentMemory:
+    async def agent_memory(
+        self,
+        module: ModuleId,
+        query: str,
+        *,
+        project_id: str | None = None,
+        exclude_cards: frozenset[str] = frozenset(),
+    ) -> AgentMemory:
         return AgentMemory(
-            recalled=await self.recall(module, query),
-            priors=await self.priors(module),
+            recalled=await self.recall(
+                module, query, project_id=project_id, exclude_cards=exclude_cards
+            ),
+            priors=await self.priors(module, exclude_cards=exclude_cards),
         )
+
+    # ------------------------------------------------------------- projects --
+
+    async def save_project(self, project: Project) -> None:
+        def write() -> None:
+            with self._conn:
+                self._conn.execute(
+                    """
+                    INSERT INTO projects (id, user_id, name, brief, created_at, closed_at)
+                    VALUES (?, ?, ?, ?, ?, ?)
+                    ON CONFLICT(id) DO UPDATE SET
+                        name=excluded.name,
+                        brief=excluded.brief,
+                        closed_at=excluded.closed_at
+                    """,
+                    (
+                        project.id,
+                        project.user_id,
+                        project.name,
+                        project.brief,
+                        project.created_at.isoformat(),
+                        project.closed_at.isoformat() if project.closed_at else None,
+                    ),
+                )
+
+        await self._run(write)
+
+    async def get_project(self, project_id: str) -> Project | None:
+        def read() -> Project | None:
+            row = self._conn.execute(
+                "SELECT * FROM projects WHERE id = ?", (project_id,)
+            ).fetchone()
+            return _project_of(row) if row else None
+
+        return await self._run(read)
+
+    async def list_projects(self) -> list[Project]:
+        def read() -> list[Project]:
+            # Open projects first: a closed one is history, not something to add to.
+            rows = self._conn.execute(
+                "SELECT * FROM projects ORDER BY closed_at IS NOT NULL, created_at DESC"
+            ).fetchall()
+            return [_project_of(r) for r in rows]
+
+        return await self._run(read)
+
+    async def cards_in_project(self, project_id: str, limit: int = 200) -> list[DecisionCard]:
+        def read() -> list[DecisionCard]:
+            rows = self._conn.execute(
+                "SELECT doc FROM cards WHERE project_id = ? ORDER BY created_at DESC LIMIT ?",
+                (project_id, limit),
+            ).fetchall()
+            return [DecisionCard.model_validate_json(r["doc"]) for r in rows]
+
+        return await self._run(read)
 
     async def _graded_cards(self) -> list[DecisionCard]:
         """Only graded cards feed calibration, so the query filters in SQL.
@@ -458,7 +583,19 @@ def _memory_of(row: sqlite3.Row) -> Memory:
         content=row["content"],
         salience=row["salience"],
         source_card_id=row["source_card_id"],
+        project_id=row["project_id"],
         created_at=_parse_dt(row["created_at"]),
+    )
+
+
+def _project_of(row: sqlite3.Row) -> Project:
+    return Project(
+        id=row["id"],
+        user_id=row["user_id"],
+        name=row["name"],
+        brief=row["brief"],
+        created_at=_parse_dt(row["created_at"]),
+        closed_at=_parse_dt(row["closed_at"]) if row["closed_at"] else None,
     )
 
 

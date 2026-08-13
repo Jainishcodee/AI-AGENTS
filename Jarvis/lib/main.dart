@@ -21,7 +21,7 @@ final deckDb = DeckDb();
 // channel setup, so permission is only ever requested once.
 final reminders = ReminderService();
 final digest = DigestSettings(reminders);
-final fakeCall = FakeCallService(reminders.plugin);
+final fakeCall = FakeCallService(reminders);
 
 /// Lets a notification tap open a screen without a BuildContext to hand.
 final navigatorKey = GlobalKey<NavigatorState>();
@@ -274,8 +274,22 @@ class _JarvisHomeState extends State<JarvisHome> {
                 // haptic tick is the only feedback.
                 GestureDetector(
                   onLongPress: () async {
-                    await fakeCall.arm();
-                    await HapticFeedback.mediumImpact();
+                    // Belt and braces: arm() already swallows its own failures,
+                    // but an exception escaping an async gesture callback has
+                    // no handler above it and takes the app down.
+                    try {
+                      final at = await fakeCall.arm();
+                      await HapticFeedback.mediumImpact();
+                      // A second tick means it didn't take, readable in a pocket
+                      // without anything appearing on screen.
+                      if (at == null) {
+                        await Future<void>.delayed(
+                            const Duration(milliseconds: 140));
+                        await HapticFeedback.mediumImpact();
+                      }
+                    } catch (e) {
+                      debugPrint('fake call arm failed: $e');
+                    }
                   },
                   child: Mascot(state: _state, size: mascotSize),
                 ),

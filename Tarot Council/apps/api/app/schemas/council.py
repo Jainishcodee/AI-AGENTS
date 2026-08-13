@@ -241,6 +241,8 @@ class ModuleRun(BaseModel):
 
 class DeliberationRequest(BaseModel):
     question: str = Field(min_length=3)
+    project_id: str | None = None
+    """Group this under an ongoing situation, and prefer its memories on recall."""
     preset: str | None = None
     depth: Literal["quick", "standard", "deep"] | None = None
     context_notes: str = ""
@@ -269,6 +271,7 @@ class Deliberation(BaseModel):
     question: str
     preset: str
     depth: str
+    project_id: str | None = None
     derived_from: str | None = None
     rerun: Rerun | None = None
     context: DecisionContext

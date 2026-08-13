@@ -28,6 +28,7 @@ from ..schemas.cards import (
     Memory,
     ModuleScore,
     Prior,
+    Project,
     Resolution,
 )
 from ..schemas.common import ModuleId
@@ -51,15 +52,38 @@ class MemoryStore(Protocol):
         self, limit: int = 50, status: CardStatus | None = None
     ) -> list[DecisionCard]: ...
 
-    async def recall(self, module: ModuleId, query: str, k: int = 5) -> list[Memory]: ...
+    async def recall(
+        self,
+        module: ModuleId,
+        query: str,
+        k: int = 5,
+        *,
+        project_id: str | None = None,
+        exclude_cards: frozenset[str] = frozenset(),
+    ) -> list[Memory]: ...
 
     async def remember(self, module: ModuleId, memories: list[Memory]) -> None: ...
 
-    async def priors(self, module: ModuleId) -> list[Prior]: ...
+    async def priors(
+        self, module: ModuleId, *, exclude_cards: frozenset[str] = frozenset()
+    ) -> list[Prior]: ...
 
     async def scores(self) -> list[ModuleScore]: ...
 
-    async def agent_memory(self, module: ModuleId, query: str) -> AgentMemory: ...
+    async def agent_memory(
+        self,
+        module: ModuleId,
+        query: str,
+        *,
+        project_id: str | None = None,
+        exclude_cards: frozenset[str] = frozenset(),
+    ) -> AgentMemory: ...
+
+    async def save_project(self, project: Project) -> None: ...
+
+    async def get_project(self, project_id: str) -> Project | None: ...
+
+    async def list_projects(self) -> list[Project]: ...
 
 
 class InMemoryStore:
@@ -69,6 +93,7 @@ class InMemoryStore:
         self._deliberations: dict[str, Deliberation] = {}
         self._cards: dict[str, DecisionCard] = {}
         self._memories: dict[ModuleId, list[Memory]] = {}
+        self._projects: dict[str, Project] = {}
 
     async def save_deliberation(self, deliberation: Deliberation) -> None:
         self._deliberations[deliberation.id] = deliberation
@@ -98,17 +123,26 @@ class InMemoryStore:
         cards.sort(key=lambda c: (c.status(today) != "due", -c.created_at.timestamp()))
         return cards[:limit]
 
-    async def recall(self, module: ModuleId, query: str, k: int = 5) -> list[Memory]:
-        """Lexical overlap, weighted by salience and recency.
+    async def recall(
+        self,
+        module: ModuleId,
+        query: str,
+        k: int = 5,
+        *,
+        project_id: str | None = None,
+        exclude_cards: frozenset[str] = frozenset(),
+    ) -> list[Memory]:
+        """Lexical overlap, weighted by salience, recency and project match.
 
-        Not embeddings, deliberately. At this corpus size — a heavy user produces a
-        few hundred memories a year — approximate nearest-neighbour search solves a
-        problem that does not exist, and semantic similarity actively misfires: two
-        unrelated decisions that share vocabulary surface as relevant. Overlap plus
-        salience is legible, debuggable, and good enough until there is a query it
-        demonstrably misses. pgvector arrives when that query exists, not before.
+        Not embeddings, deliberately (ADR-023). `exclude_cards` is what keeps replay
+        honest: a memory extracted from the very card being re-decided would hand the
+        module its own answer (ADR-025).
         """
-        items = self._memories.get(module, [])
+        items = [
+            m
+            for m in self._memories.get(module, [])
+            if m.source_card_id not in exclude_cards
+        ]
         if not items:
             return []
         terms = _terms(query)
@@ -117,27 +151,38 @@ class InMemoryStore:
         def rank(memory: Memory) -> float:
             overlap = len(terms & _terms(memory.content))
             score = overlap * 1.0 + memory.salience * 1.5
+            if project_id and memory.project_id == project_id:
+                score += 2.0  # same ongoing situation beats a merely similar one
             if newest is not None:
                 age_days = (newest - memory.created_at).total_seconds() / 86400
                 score += max(0.0, 1.0 - age_days / 365) * 0.5
             return score
 
         ranked = sorted(items, key=rank, reverse=True)
-        # A memory with no lexical overlap still surfaces if it is highly salient —
-        # "this user never puts anything in writing" is relevant to decisions that
-        # share no words with the one it came from.
-        return [m for m in ranked if _terms(m.content) & terms or m.salience >= 0.7][:k]
+        # A memory with no lexical overlap still surfaces if it is highly salient, or
+        # if it belongs to the same project — "this user never puts anything in
+        # writing" is relevant to decisions that share none of its words.
+        return [
+            m
+            for m in ranked
+            if _terms(m.content) & terms
+            or m.salience >= 0.7
+            or (project_id and m.project_id == project_id)
+        ][:k]
 
     async def remember(self, module: ModuleId, memories: list[Memory]) -> None:
         self._memories.setdefault(module, []).extend(memories)
 
-    async def priors(self, module: ModuleId) -> list[Prior]:
+    async def priors(
+        self, module: ModuleId, *, exclude_cards: frozenset[str] = frozenset()
+    ) -> list[Prior]:
         """Computed from graded cards on demand (ADR-018).
 
         Recomputing per call rather than caching: the corpus is small, and a cached
         prior that outlives the card it cites is worse than a cheap recount.
         """
-        return priors_for_module(list(self._cards.values()), module)
+        cards = [c for c in self._cards.values() if c.id not in exclude_cards]
+        return priors_for_module(cards, module)
 
     async def scores(self) -> list[ModuleScore]:
         return all_scores(list(self._cards.values()))
@@ -158,11 +203,29 @@ class InMemoryStore:
         await self.save_card(card)
         return card
 
-    async def agent_memory(self, module: ModuleId, query: str) -> AgentMemory:
+    async def agent_memory(
+        self,
+        module: ModuleId,
+        query: str,
+        *,
+        project_id: str | None = None,
+        exclude_cards: frozenset[str] = frozenset(),
+    ) -> AgentMemory:
         return AgentMemory(
-            recalled=await self.recall(module, query),
-            priors=await self.priors(module),
+            recalled=await self.recall(
+                module, query, project_id=project_id, exclude_cards=exclude_cards
+            ),
+            priors=await self.priors(module, exclude_cards=exclude_cards),
         )
+
+    async def save_project(self, project: Project) -> None:
+        self._projects[project.id] = project
+
+    async def get_project(self, project_id: str) -> Project | None:
+        return self._projects.get(project_id)
+
+    async def list_projects(self) -> list[Project]:
+        return sorted(self._projects.values(), key=lambda p: p.created_at, reverse=True)
 
 
 class FileStore(InMemoryStore):

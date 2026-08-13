@@ -140,6 +140,26 @@ class DecisionCard(BaseModel):
         return "due" if self.is_due(today) else "open"
 
 
+class Project(BaseModel):
+    """An ongoing situation that several decisions belong to.
+
+    Real decisions arrive in chains — "should I leave", then "how do I negotiate",
+    then "do I take the counteroffer". Grouping them is what stops recall from
+    dragging memories about a side project into a conversation about a salary.
+    """
+
+    id: str
+    user_id: str = "local"
+    name: str
+    brief: str = ""
+    created_at: datetime = Field(default_factory=_now)
+    closed_at: datetime | None = None
+
+    @property
+    def open(self) -> bool:
+        return self.closed_at is None
+
+
 class Memory(BaseModel):
     """One remembered item, extracted per module with its own bias."""
 
@@ -149,6 +169,9 @@ class Memory(BaseModel):
     content: str
     salience: float = Field(default=0.5, ge=0.0, le=1.0)
     source_card_id: str | None = None
+    project_id: str | None = None
+    """Inherited from the card it came from, so recall can prefer same-project
+    memories over merely similar-sounding ones."""
     created_at: datetime = Field(default_factory=_now)
 
 
@@ -190,6 +213,63 @@ class AgentMemory(BaseModel):
     @property
     def empty(self) -> bool:
         return not self.recalled and not self.priors
+
+
+class ModuleReplay(Strict):
+    """How one module did the first time versus on a replay."""
+
+    module: ModuleId
+    then_stance: str = ""
+    now_stance: str = ""
+    then_verdict: Verdict | None = None
+    now_verdict: Verdict | None = None
+    then_confidence: float | None = None
+    now_confidence: float | None = None
+
+    @property
+    def moved(self) -> bool:
+        return self.then_verdict != self.now_verdict
+
+
+class ReplayResult(BaseModel):
+    """A resolved decision re-run against the current programs.
+
+    The point of the exercise: with the outcome already known, re-running an old
+    decision measures whether a changed program would have done better — the only way
+    to improve the council on evidence rather than on taste.
+    """
+
+    card_id: str
+    original_deliberation_id: str
+    replay_deliberation_id: str
+    program_versions_then: dict[ModuleId, int] = Field(default_factory=dict)
+    program_versions_now: dict[ModuleId, int] = Field(default_factory=dict)
+    modules: list[ModuleReplay] = Field(default_factory=list)
+    excluded_memories: int = 0
+    excluded_priors: int = 0
+    """What was withheld to stop the replay reading its own answer (ADR-025)."""
+
+    @property
+    def improved(self) -> int:
+        rank = {"wrong": 0, "untested": 1, "partial": 2, "right": 3}
+        return sum(
+            1
+            for m in self.modules
+            if m.then_verdict
+            and m.now_verdict
+            and rank[m.now_verdict] > rank[m.then_verdict]
+        )
+
+    @property
+    def regressed(self) -> int:
+        rank = {"wrong": 0, "untested": 1, "partial": 2, "right": 3}
+        return sum(
+            1
+            for m in self.modules
+            if m.then_verdict
+            and m.now_verdict
+            and rank[m.now_verdict] < rank[m.then_verdict]
+        )
 
 
 class ModuleScore(BaseModel):

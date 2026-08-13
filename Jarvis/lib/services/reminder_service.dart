@@ -33,14 +33,32 @@ class ReminderService {
       },
     );
 
-    // Runtime permissions on Android 13+
-    await Permission.notification.request();
-    final androidImpl = _plugin
-        .resolvePlatformSpecificImplementation<
-            AndroidFlutterLocalNotificationsPlugin>();
-    await androidImpl?.requestExactAlarmsPermission();
-
+    // Marked ready before the permission prompts: those can be denied or throw,
+    // and callers still need a usable plugin. Without this a refusal left every
+    // later call re-running init and re-prompting.
     _initialized = true;
+
+    // Runtime permissions on Android 13+
+    try {
+      await Permission.notification.request();
+      await _android?.requestExactAlarmsPermission();
+    } catch (e) {
+      debugPrint('reminders: permission request failed ($e)');
+    }
+  }
+
+  AndroidFlutterLocalNotificationsPlugin? get _android =>
+      _plugin.resolvePlatformSpecificImplementation<
+          AndroidFlutterLocalNotificationsPlugin>();
+
+  /// Whether exact alarms are currently allowed. The grant can be refused or
+  /// revoked later, and scheduling an exact alarm without it throws.
+  Future<bool> canScheduleExact() async {
+    try {
+      return await _android?.canScheduleExactNotifications() ?? true;
+    } catch (_) {
+      return false;
+    }
   }
 
   /// Schedules a one-shot reminder at [when] (local time). Returns the
@@ -96,9 +114,17 @@ class ReminderService {
   }) async {
     await init();
 
-    final now = tz.TZDateTime.now(tz.local);
-    var first = tz.TZDateTime(tz.local, now.year, now.month, now.day, hour, minute);
-    if (!first.isAfter(now)) first = first.add(const Duration(days: 1));
+    // Built from a device-local DateTime, then converted. `initializeTimeZones`
+    // alone leaves `tz.local` as UTC — composing the time from parts in that
+    // zone scheduled 08:30 UTC, i.e. 14:00 in India. Converting an instant is
+    // correct whatever `tz.local` happens to be.
+    final nowLocal = DateTime.now();
+    var firstLocal =
+        DateTime(nowLocal.year, nowLocal.month, nowLocal.day, hour, minute);
+    if (!firstLocal.isAfter(nowLocal)) {
+      firstLocal = firstLocal.add(const Duration(days: 1));
+    }
+    final first = tz.TZDateTime.from(firstLocal, tz.local);
 
     const android = AndroidNotificationDetails(
       'jarvis_digest',

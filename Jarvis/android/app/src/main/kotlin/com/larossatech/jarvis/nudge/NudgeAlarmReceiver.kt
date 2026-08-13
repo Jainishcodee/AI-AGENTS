@@ -5,6 +5,7 @@ import android.content.Context
 import android.content.Intent
 import android.os.Build
 import android.provider.Settings
+import android.util.Log
 
 /**
  * Fires on the alarm: show the overlay, then arm the next one.
@@ -40,17 +41,28 @@ class NudgeAlarmReceiver : BroadcastReceiver() {
 
     override fun onReceive(context: Context, intent: Intent?) {
         val app = context.applicationContext
-        when (intent?.action) {
-            Intent.ACTION_BOOT_COMPLETED,
-            Intent.ACTION_MY_PACKAGE_REPLACED,
-            "android.intent.action.QUICKBOOT_POWERON" -> NudgeScheduler.syncAll(app)
+        // Nothing may throw out of here: an exception in a receiver kills the
+        // process before the next alarm is armed, which stops the chain dead.
+        try {
+            when {
+                intent?.action == Intent.ACTION_BOOT_COMPLETED ||
+                    intent?.action == Intent.ACTION_MY_PACKAGE_REPLACED ||
+                    intent?.action == "android.intent.action.QUICKBOOT_POWERON" ->
+                    NudgeScheduler.syncAll(app)
 
-            else -> {
-                val kind = NudgeKind.from(intent?.getStringExtra(EXTRA_KIND))
-                if (NudgePrefs.enabled(app, kind)) showOverlay(app, kind)
-                // Re-arm even when the overlay was skipped, or the chain stops here.
-                NudgeScheduler.sync(app, kind)
+                NudgeScheduler.isWatchdog(intent?.action) -> NudgeScheduler.heal(app)
+
+                else -> {
+                    val kind = NudgeKind.from(intent?.getStringExtra(EXTRA_KIND))
+                    if (NudgePrefs.enabled(app, kind)) showOverlay(app, kind)
+                    // Re-arm even when the overlay was skipped, or the chain stops here.
+                    NudgeScheduler.sync(app, kind)
+                }
             }
+        } catch (e: Throwable) {
+            Log.w("NudgeAlarm", "nudge dispatch failed", e)
+            // Last resort: get the alarms back on the books whatever happened.
+            try { NudgeScheduler.heal(app) } catch (_: Throwable) {}
         }
     }
 }

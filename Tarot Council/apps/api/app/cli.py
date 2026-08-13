@@ -83,6 +83,8 @@ COMMANDS = (
     "rerun",
     "refine",
     "migrate",
+    "projects",
+    "replay",
 )
 
 
@@ -110,6 +112,18 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     )
     ask.add_argument("--depth", choices=("quick", "standard", "deep"), default=None)
     ask.add_argument("--notes", default="", help="Extra context: constraints, actors, values.")
+    ask.add_argument(
+        "--project",
+        default=None,
+        dest="project_id",
+        help="Group under an ongoing situation, and prefer its memories on recall.",
+    )
+    ask.add_argument(
+        "--project",
+        default=None,
+        dest="project_id",
+        help="Group under an ongoing situation, and prefer its memories on recall.",
+    )
 
     cards = sub.add_parser("cards", help="List Decision Cards, due ones first.")
     cards.add_argument("--status", choices=("open", "due", "resolved"), default=None)
@@ -168,9 +182,37 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     )
     refine.add_argument("--reason", default="")
 
+    projects = sub.add_parser("projects", help="Ongoing situations decisions belong to.")
+    projects.add_argument(
+        "--new", default=None, metavar="NAME", help="Create a project with this name."
+    )
+    projects.add_argument("--brief", default="", help="What the situation is.")
+    projects.add_argument("--close", default=None, metavar="ID", help="Close a project.")
+
+    replay = sub.add_parser(
+        "replay",
+        help="Re-decide a resolved card against today's programs and score it against "
+        "what actually happened.",
+    )
+    replay.add_argument("card_id")
+
     migrate = sub.add_parser(
         "migrate", help="Import legacy JSON-file history into the SQLite store."
     )
+
+    projects = sub.add_parser("projects", help="Ongoing situations decisions belong to.")
+    projects.add_argument(
+        "--new", default=None, metavar="NAME", help="Create a project with this name."
+    )
+    projects.add_argument("--brief", default="", help="What the situation actually is.")
+    projects.add_argument("--close", default=None, metavar="ID", help="Close a project.")
+
+    replay = sub.add_parser(
+        "replay",
+        help="Re-decide a resolved card against today's programs and score it against "
+        "what actually happened.",
+    )
+    replay.add_argument("card_id")
     migrate.add_argument(
         "--from-dir",
         default=None,
@@ -224,6 +266,8 @@ async def _run(args: argparse.Namespace) -> int:
             "rerun": _cmd_rerun,
             "refine": _cmd_refine,
             "migrate": _cmd_migrate,
+            "projects": _cmd_projects,
+            "replay": _cmd_replay,
         }[args.command]
         code = await handler(council, args)
         if not args.json:
@@ -257,6 +301,102 @@ async def _nudge_due(council: Council, args: argparse.Namespace) -> None:
         ),
         file=sys.stderr,
     )
+
+
+async def _cmd_projects(council: Council, args: argparse.Namespace) -> int:
+    if args.new:
+        project = await council.create_project(args.new, args.brief)
+        print(_c(f"{project.id}  {project.name}", BOLD))
+        print(_wrap(f'Use it with: app.cli ask --project {project.id} "..."'))
+        return 0
+
+    if args.close:
+        try:
+            closed = await council.close_project(args.close)
+        except KeyError:
+            print(f"no such project: {args.close}", file=sys.stderr)
+            return 1
+        print(_wrap(f"closed {closed.id} ({closed.name})"))
+        return 0
+
+    found = await council.store.list_projects()
+    if args.json:
+        print(json.dumps([p.model_dump(mode="json") for p in found], indent=2, default=str))
+        return 0
+    if not found:
+        print(
+            _wrap(
+                'No projects. Create one with: app.cli projects --new "Job hunt". '
+                "Decisions in the same project share memories, which stops unrelated "
+                "ones bleeding into each other."
+            )
+        )
+        return 0
+    cards = await council.store.list_cards(limit=500)
+    for project in found:
+        mine = [c for c in cards if c.project_id == project.id]
+        state = "open" if project.open else "closed"
+        print(f"{GLYPH['dot']} {_c(project.id, BOLD)}  {state:<7}{len(mine):>3} decisions  {project.name}")
+        if project.brief:
+            print(_c(_wrap(project.brief, indent="    "), DIM))
+    print()
+    return 0
+
+
+async def _cmd_replay(council: Council, args: argparse.Namespace) -> int:
+    """Re-decide a resolved card and compare against what actually happened."""
+    try:
+        result = await council.replay(args.card_id)
+    except KeyError:
+        print(f"no such card: {args.card_id}", file=sys.stderr)
+        return 1
+    except CognitiveOSError as exc:
+        print(f"{exc}", file=sys.stderr)
+        return 1
+
+    if args.json:
+        print(result.model_dump_json(indent=2))
+        return 0
+
+    print()
+    print(RULE)
+    print(_c(f"replay of card {result.card_id}", BOLD))
+    print(RULE)
+    print(
+        _wrap(
+            f"withheld from the replay: {result.excluded_memories} memories and "
+            f"{result.excluded_priors} priors derived from this card. Without that it "
+            "would be reading its own answer."
+        )
+    )
+    print()
+    print(_c(f"  {'module':<14}{'then':<10}{'now':<10}", BOLD))
+    for module in result.modules:
+        then = module.then_verdict or "—"
+        now = module.now_verdict or "—"
+        mark = "" if not module.moved else ("  changed")
+        print(f"  {module.module:<14}{then:<10}{now:<10}{_c(mark, DIM)}")
+    print()
+    print(
+        _wrap(
+            f"{result.improved} module(s) did better, {result.regressed} worse, on a "
+            "decision whose outcome is already known."
+        )
+    )
+    if result.program_versions_then != result.program_versions_now:
+        print(_wrap("Program versions differ between the two runs, so this is a real comparison."))
+    else:
+        print(
+            _c(
+                _wrap(
+                    "Program versions are identical, so any difference here is model "
+                    "variance rather than a change you made."
+                ),
+                DIM,
+            )
+        )
+    print()
+    return 0
 
 
 async def _cmd_migrate(council: Council, args: argparse.Namespace) -> int:
@@ -379,6 +519,7 @@ async def _cmd_ask(council: Council, args: argparse.Namespace) -> int:
         preset=args.preset,
         depth=args.depth,
         context_notes=args.notes,
+        project_id=args.project_id,
     )
 
     result: Deliberation | None = None
