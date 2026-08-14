@@ -1,0 +1,58 @@
+# Daily IPO deadline alerts — the half that carries the real edge.
+#
+# Mainboard allotments averaged +13.5% from issue price to listing across 176
+# IPOs, and the only way to lose that is to forget to apply. This runs whether
+# or not any machine of yours is switched on.
+#
+# Needs no market feed, so it needs no Angel credentials — just a push topic.
+
+name: IPO calendar
+
+on:
+  schedule:
+    # 02:30 UTC = 08:00 IST, every day. GitHub's scheduler can lag by a few
+    # minutes under load, which is immaterial for a deadline measured in hours.
+    - cron: "30 2 * * *"
+  workflow_dispatch:        # lets you run it by hand from the Actions tab
+
+concurrency:
+  group: ipo-calendar
+  cancel-in-progress: false
+
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install
+        # Only what the calendar needs. Installing LightGBM here would add
+        # minutes to a job that never fits a model.
+        run: pip install --quiet requests
+
+      - name: Scan and push
+        env:
+          NTFY_TOPIC: ${{ secrets.NTFY_TOPIC }}
+        run: python -m stockseer.cli ipo calendar --refresh --notify
+
+      - name: Report
+        if: failure()
+        env:
+          NTFY_TOPIC: ${{ secrets.NTFY_TOPIC }}
+        # A silent failure is the dangerous one: you would assume "no alert"
+        # means "no IPO closing today" rather than "the scan broke".
+        run: |
+          python - <<'PY'
+          from stockseer.push import push
+          push("StockSeer calendar failed",
+               "The daily IPO scan errored. Check the Actions tab — "
+               "you may be missing a deadline.",
+               urgency="act", kind="test")
+          PY

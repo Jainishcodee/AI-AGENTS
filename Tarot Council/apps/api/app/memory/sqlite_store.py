@@ -39,12 +39,13 @@ from ..schemas.cards import (
     Project,
     Resolution,
 )
+from ..schemas.checkpoint import Checkpoint
 from ..schemas.common import ModuleId
 from ..schemas.council import Deliberation
 
 log = get_logger(__name__)
 
-SCHEMA_VERSION = 2
+SCHEMA_VERSION = 3
 
 MIGRATIONS: dict[int, list[str]] = {
     1: [
@@ -140,6 +141,22 @@ MIGRATIONS: dict[int, list[str]] = {
         "CREATE INDEX ix_cards_project ON cards (project_id)",
         "CREATE INDEX ix_mem_project ON memories (project_id, module)",
     ],
+    3: [
+        # Resumable runs. A free tier meters requests per minute, so a deliberation can
+        # outlive its quota window; without this, everything already paid for is lost.
+        """
+        CREATE TABLE checkpoints (
+            deliberation_id TEXT PRIMARY KEY,
+            created_at      TEXT NOT NULL,
+            updated_at      TEXT NOT NULL,
+            phase           TEXT NOT NULL,
+            question        TEXT NOT NULL,
+            calls           INTEGER NOT NULL DEFAULT 0,
+            doc             TEXT NOT NULL
+        )
+        """,
+        "CREATE INDEX ix_ckpt_phase ON checkpoints (phase, updated_at DESC)",
+    ],
 }
 
 STOPWORDS = frozenset(
@@ -232,7 +249,8 @@ class SQLiteStore:
     async def list_deliberations(self, limit: int = 50) -> list[Deliberation]:
         def read() -> list[Deliberation]:
             rows = self._conn.execute(
-                "SELECT doc FROM deliberations ORDER BY created_at DESC LIMIT ?", (limit,)
+                "SELECT doc FROM deliberations ORDER BY created_at DESC, rowid DESC LIMIT ?",
+                (limit,),
             ).fetchall()
             return [Deliberation.model_validate_json(r["doc"]) for r in rows]
 
@@ -292,21 +310,35 @@ class SQLiteStore:
 
         # `status` is a Literal, never user text, so it selects a branch rather than
         # being interpolated. `today` is always a bound parameter.
+        #
+        # Every ordering carries `rowid DESC` as a tie-breaker. Windows' clock
+        # granularity is ~15.6 ms, so a burst of decisions shares one `created_at`,
+        # and SQLite breaks such ties however it likes — which made "newest first"
+        # silently return the oldest.
         DUE = "(resolved = 0 AND check_on IS NOT NULL AND check_on <= ?)"
 
         if status == "resolved":
-            sql = "SELECT doc FROM cards WHERE resolved = 1 ORDER BY created_at DESC LIMIT ?"
+            sql = (
+                "SELECT doc FROM cards WHERE resolved = 1 "
+                "ORDER BY created_at DESC, rowid DESC LIMIT ?"
+            )
             params: list[Any] = [limit]
         elif status == "due":
-            sql = f"SELECT doc FROM cards WHERE {DUE} ORDER BY check_on ASC LIMIT ?"
+            sql = f"SELECT doc FROM cards WHERE {DUE} ORDER BY check_on ASC, rowid DESC LIMIT ?"
             params = [today, limit]
         elif status == "open":
-            sql = f"SELECT doc FROM cards WHERE resolved = 0 AND NOT {DUE} ORDER BY created_at DESC LIMIT ?"
+            sql = (
+                f"SELECT doc FROM cards WHERE resolved = 0 AND NOT {DUE} "
+                "ORDER BY created_at DESC, rowid DESC LIMIT ?"
+            )
             params = [today, limit]
         else:
             # Due first, then newest — what both the card list and the reminder path
             # want, ordered in SQL rather than sorted in Python.
-            sql = f"SELECT doc FROM cards ORDER BY {DUE} DESC, created_at DESC LIMIT ?"
+            sql = (
+                f"SELECT doc FROM cards ORDER BY {DUE} DESC, created_at DESC, rowid DESC "
+                "LIMIT ?"
+            )
             params = [today, limit]
 
         def read() -> list[DecisionCard]:
@@ -482,6 +514,71 @@ class SQLiteStore:
             priors=await self.priors(module, exclude_cards=exclude_cards),
         )
 
+    # ---------------------------------------------------------- checkpoints --
+
+    async def save_checkpoint(self, checkpoint: Checkpoint) -> None:
+        """One upsert per artifact. Negligible against an LLM call, which is what makes
+        checkpointing at artifact granularity affordable at all."""
+
+        def write() -> None:
+            with self._conn:
+                self._conn.execute(
+                    """
+                    INSERT INTO checkpoints
+                        (deliberation_id, created_at, updated_at, phase, question, calls, doc)
+                    VALUES (?, ?, ?, ?, ?, ?, ?)
+                    ON CONFLICT(deliberation_id) DO UPDATE SET
+                        updated_at=excluded.updated_at,
+                        phase=excluded.phase,
+                        calls=excluded.calls,
+                        doc=excluded.doc
+                    """,
+                    (
+                        checkpoint.deliberation_id,
+                        checkpoint.created_at.isoformat(),
+                        checkpoint.updated_at.isoformat(),
+                        checkpoint.phase,
+                        checkpoint.request.question,
+                        checkpoint.usage.calls,
+                        checkpoint.model_dump_json(),
+                    ),
+                )
+
+        await self._run(write)
+
+    async def get_checkpoint(self, deliberation_id: str) -> Checkpoint | None:
+        def read() -> Checkpoint | None:
+            row = self._conn.execute(
+                "SELECT doc FROM checkpoints WHERE deliberation_id = ?", (deliberation_id,)
+            ).fetchone()
+            return Checkpoint.model_validate_json(row["doc"]) if row else None
+
+        return await self._run(read)
+
+    async def list_checkpoints(self, limit: int = 20) -> list[Checkpoint]:
+        def read() -> list[Checkpoint]:
+            rows = self._conn.execute(
+                """
+                SELECT doc FROM checkpoints
+                WHERE phase != 'done'
+                ORDER BY updated_at DESC, rowid DESC
+                LIMIT ?
+                """,
+                (limit,),
+            ).fetchall()
+            return [Checkpoint.model_validate_json(r["doc"]) for r in rows]
+
+        return await self._run(read)
+
+    async def delete_checkpoint(self, deliberation_id: str) -> None:
+        def write() -> None:
+            with self._conn:
+                self._conn.execute(
+                    "DELETE FROM checkpoints WHERE deliberation_id = ?", (deliberation_id,)
+                )
+
+        await self._run(write)
+
     # ------------------------------------------------------------- projects --
 
     async def save_project(self, project: Project) -> None:
@@ -530,7 +627,8 @@ class SQLiteStore:
     async def cards_in_project(self, project_id: str, limit: int = 200) -> list[DecisionCard]:
         def read() -> list[DecisionCard]:
             rows = self._conn.execute(
-                "SELECT doc FROM cards WHERE project_id = ? ORDER BY created_at DESC LIMIT ?",
+                "SELECT doc FROM cards WHERE project_id = ? "
+                "ORDER BY created_at DESC, rowid DESC LIMIT ?",
                 (project_id, limit),
             ).fetchall()
             return [DecisionCard.model_validate_json(r["doc"]) for r in rows]

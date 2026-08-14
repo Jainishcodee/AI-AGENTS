@@ -182,6 +182,32 @@ async def test_a_card_with_no_expected_outcome_is_never_due(store):
     assert [c.id for c in await store.list_cards(status="open")] == ["c1"]
 
 
+async def test_identical_timestamps_still_order_newest_first(store):
+    """Windows' clock granularity is ~15.6 ms, so a burst of decisions shares one
+    `created_at`. Without a tie-breaker, "newest first" silently returned the oldest —
+    which is how a flaky test caught a real ordering bug in the history view.
+    """
+    stamped = datetime(2026, 5, 1, 12, 0, 0, tzinfo=timezone.utc)
+    for index in range(5):
+        card = make_card(f"c{index}")
+        card.created_at = stamped  # deliberately identical
+        await store.save_card(card)
+
+    listed = [c.id for c in await store.list_cards()]
+    assert listed == ["c4", "c3", "c2", "c1", "c0"], (
+        "cards saved with the same timestamp must still come back newest-first"
+    )
+
+
+async def test_identical_timestamps_order_deliberations_too(store):
+    stamped = datetime(2026, 5, 1, 12, 0, 0, tzinfo=timezone.utc)
+    for index in range(3):
+        delib = make_deliberation(f"d{index}")
+        delib.created_at = stamped
+        await store.save_deliberation(delib)
+    assert [d.id for d in await store.list_deliberations()] == ["d2", "d1", "d0"]
+
+
 async def test_limit_is_respected(store):
     for index in range(10):
         await store.save_card(make_card(f"c{index}"))

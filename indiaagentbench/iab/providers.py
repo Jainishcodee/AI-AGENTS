@@ -2,10 +2,22 @@
 
 Every provider returns the same shape:
 
-    {"text": str, "tool_calls": [{"name": str, "args": dict}], "model": str}
+    {"text": str, "tool_calls": [{"id": str, "name": str, "args": dict}], "model": str}
 
-so the runner never branches on vendor. Adding a provider means adding a class
-here and a line in ENDPOINTS -- nothing downstream changes.
+and accepts history in one internal format, which each provider translates to
+its own wire format:
+
+    {"role": "user",      "content": str}
+    {"role": "assistant", "content": str, "tool_calls": [...as above...]}
+    {"role": "tool",      "tool_call_id": str, "name": str, "content": str}
+
+The translation is the whole point of this module. OpenAI-compatible APIs need
+assistant tool calls as {id, type, function:{name, arguments}} with `arguments`
+as a JSON *string*, and every tool result must carry a matching `tool_call_id`;
+Gemini needs functionCall/functionResponse parts and no ids at all. Forwarding
+the internal format straight to either one fails on the first tool result --
+which is exactly the bug this module was rewritten to fix, and which the mock
+provider hid because it ignores history entirely.
 
 Two failure modes are distinguished, and the distinction matters more than it
 looks: `RateLimited` means back off and retry the same endpoint, `QuotaDead`
@@ -18,6 +30,10 @@ import os
 import time
 
 import requests
+
+from .common import load_env
+
+load_env()   # keys from indiaagentbench/.env; real env vars still win
 
 
 class ProviderError(Exception):
@@ -34,6 +50,22 @@ class RateLimited(ProviderError):
 
 class QuotaDead(ProviderError):
     """Terminal for today: daily allowance is gone."""
+
+
+class Transient(ProviderError):
+    """Network blip: retry the same endpoint. Not the endpoint's fault.
+
+    Long free-tier runs drop connections. Treating that as an endpoint failure
+    would burn through healthy hosts over a momentary TCP reset.
+    """
+
+
+def _post(url, **kw):
+    """requests.post with network faults mapped into the retry taxonomy."""
+    try:
+        return requests.post(url, **kw)
+    except requests.exceptions.RequestException as e:
+        raise Transient(f"{type(e).__name__}: {str(e)[:200]}") from e
 
 
 class Provider:
@@ -56,28 +88,32 @@ class OpenAICompat(Provider):
 
     name = "openai-compat"
 
-    def chat(self, system, messages, tools):
-        payload = {
+    def payload(self, system, messages, tools):
+        return {
             "model": self.model,
-            "messages": [{"role": "system", "content": system}] + messages,
+            "messages": [{"role": "system", "content": system}] + to_openai(messages),
             "tools": [{"type": "function",
                        "function": {"name": t["name"], "description": t["description"],
                                     "parameters": t["input_schema"]}}
                       for t in tools],
             "temperature": 0,
         }
-        r = requests.post(f"{self.base_url}/chat/completions",
-                          headers={"Authorization": f"Bearer {self.api_key}"},
-                          json=payload, timeout=120)
+
+    def chat(self, system, messages, tools):
+        r = _post(f"{self.base_url}/chat/completions",
+                  headers={"Authorization": f"Bearer {self.api_key}"},
+                  json=self.payload(system, messages, tools), timeout=120)
         self._raise_for_limits(r)
         if r.status_code >= 400:
             raise ProviderError(f"{self.model} HTTP {r.status_code}: {r.text[:400]}")
 
         msg = r.json()["choices"][0]["message"]
         calls = []
-        for tc in msg.get("tool_calls") or []:
+        for n, tc in enumerate(msg.get("tool_calls") or []):
             fn = tc.get("function", {})
-            calls.append({"name": fn.get("name", ""), "args": _loads(fn.get("arguments"))})
+            calls.append({"id": tc.get("id") or f"call_{n}",
+                          "name": fn.get("name", ""),
+                          "args": _loads(fn.get("arguments"))})
         return {"text": msg.get("content") or "", "tool_calls": calls, "model": self.model}
 
     @staticmethod
@@ -96,18 +132,18 @@ class Gemini(Provider):
     name = "gemini"
     ROOT = "https://generativelanguage.googleapis.com/v1beta/models"
 
-    def chat(self, system, messages, tools):
-        payload = {
+    def payload(self, system, messages, tools):
+        return {
             "systemInstruction": {"parts": [{"text": system}]},
-            "contents": _to_gemini(messages),
-            "tools": [{"functionDeclarations": [
-                {"name": t["name"], "description": t["description"],
-                 "parameters": _strip_schema(t["input_schema"])} for t in tools]}],
+            "contents": to_gemini(messages),
+            "tools": [{"functionDeclarations": [_declare(t) for t in tools]}],
             "generationConfig": {"temperature": 0},
         }
-        r = requests.post(f"{self.ROOT}/{self.model}:generateContent",
-                          headers={"x-goog-api-key": self.api_key},
-                          json=payload, timeout=120)
+
+    def chat(self, system, messages, tools):
+        r = _post(f"{self.ROOT}/{self.model}:generateContent",
+                  headers={"x-goog-api-key": self.api_key},
+                  json=self.payload(system, messages, tools), timeout=120)
         if r.status_code == 429:
             body = r.text.lower()
             if "perday" in body.replace("_", "") or "daily" in body:
@@ -119,9 +155,12 @@ class Gemini(Provider):
         cands = r.json().get("candidates") or [{}]
         parts = cands[0].get("content", {}).get("parts", []) or []
         text = "".join(p.get("text", "") for p in parts)
-        calls = [{"name": p["functionCall"]["name"],
+        # Gemini has no tool-call ids, so synthesise stable ones. The runner
+        # needs them to pair results back to calls in the internal format.
+        calls = [{"id": f"call_{n}",
+                  "name": p["functionCall"]["name"],
                   "args": dict(p["functionCall"].get("args") or {})}
-                 for p in parts if "functionCall" in p]
+                 for n, p in enumerate(p for p in parts if "functionCall" in p)]
         return {"text": text, "tool_calls": calls, "model": self.model}
 
 
@@ -141,13 +180,19 @@ class Mock(Provider):
         self.i = 0
 
     def chat(self, system, messages, tools):
+        # Record what the runner handed us so tests can assert on history shape.
+        # The mock ignoring `messages` is precisely how a broken wire format
+        # survived 53 green tests once already.
+        self.seen = list(messages)
         if self.i >= len(self.script):
             return {"text": "done", "tool_calls": [], "model": self.model}
         turn = self.script[self.i]
         self.i += 1
         if isinstance(turn, str):
             return {"text": turn, "tool_calls": [], "model": self.model}
-        return {"text": "", "tool_calls": list(turn), "model": self.model}
+        calls = [{"id": tc.get("id") or f"call_{self.i}_{n}", **tc}
+                 for n, tc in enumerate(turn)]
+        return {"text": "", "tool_calls": calls, "model": self.model}
 
 
 # --------------------------------------------------------------------------
@@ -172,6 +217,36 @@ def _retry_after(r):
         return None
 
 
+def to_openai(messages):
+    """Internal format -> OpenAI chat-completions wire format.
+
+    Two things here are mandatory rather than cosmetic: `arguments` must be a
+    JSON *string*, not an object, and every tool message must carry the
+    `tool_call_id` of the call it answers. Omitting either produces a 400 on the
+    first tool result -- which is every task in this benchmark.
+    """
+    out = []
+    for m in messages:
+        role = m["role"]
+        if role == "tool":
+            out.append({"role": "tool",
+                        "tool_call_id": m["tool_call_id"],
+                        "name": m.get("name", ""),
+                        "content": m["content"]})
+        elif role == "assistant":
+            msg = {"role": "assistant", "content": m.get("content") or None}
+            if m.get("tool_calls"):
+                msg["tool_calls"] = [
+                    {"id": tc["id"], "type": "function",
+                     "function": {"name": tc["name"],
+                                  "arguments": json.dumps(tc["args"], ensure_ascii=False)}}
+                    for tc in m["tool_calls"]]
+            out.append(msg)
+        else:
+            out.append({"role": "user", "content": m["content"]})
+    return out
+
+
 def _strip_schema(schema):
     """Gemini rejects several JSON Schema keywords that the others accept."""
     if not isinstance(schema, dict):
@@ -182,22 +257,40 @@ def _strip_schema(schema):
         out["properties"] = {k: _strip_schema(v) for k, v in out["properties"].items()}
     if "items" in out:
         out["items"] = _strip_schema(out["items"])
-    if not out.get("properties") and out.get("type") == "object":
-        # Gemini rejects an object schema with no properties (our no-arg tools).
-        out["properties"] = {}
     return out
 
 
-def _to_gemini(messages):
-    """OpenAI-style message list -> Gemini contents."""
+def _declare(tool):
+    """Gemini function declaration. Omits `parameters` for no-argument tools.
+
+    An object schema with an empty `properties` map is rejected, and several
+    tools here (current_time, list_schemes) genuinely take no arguments.
+    """
+    d = {"name": tool["name"], "description": tool["description"]}
+    schema = _strip_schema(tool["input_schema"])
+    if schema.get("properties"):
+        d["parameters"] = schema
+    return d
+
+
+def to_gemini(messages):
+    """Internal format -> Gemini contents.
+
+    Gemini pairs a functionResponse to its call by name rather than by id, and
+    expects all responses to one model turn grouped into a single user content.
+    Emitting them as separate contents breaks parallel tool calls.
+    """
     out = []
     for m in messages:
         role = m["role"]
         if role == "tool":
-            out.append({"role": "user", "parts": [{"functionResponse": {
-                "name": m.get("name", "tool"),
-                "response": {"result": m["content"]},
-            }}]})
+            part = {"functionResponse": {"name": m.get("name", "tool"),
+                                         "response": {"result": m["content"]}}}
+            prev = out[-1] if out else None
+            if prev and prev["role"] == "user" and "functionResponse" in prev["parts"][0]:
+                prev["parts"].append(part)
+            else:
+                out.append({"role": "user", "parts": [part]})
         elif role == "assistant":
             parts = []
             if m.get("content"):
@@ -219,21 +312,32 @@ def _to_gemini(messages):
 # the model is the thing being measured and substituting one for another would
 # quietly corrupt the comparison. This is the key difference from the reelflow
 # rotator it grew out of, where any model that answered was acceptable.
+#   verified 2026-08-03:
+#   - sarvam-30b and sarvam-m are BOTH deprecated upstream. sarvam-105b is the
+#     live Sarvam chat model, on their own /v1. Groq does not host any Sarvam
+#     model -- it serves 11 open-weight Llama/gpt-oss/Qwen models.
+#   - BharatGen Param2 is bharatgenai/Param2-17B-A2.4B-Thinking on HuggingFace,
+#     tool calling supported, reachable via HF Inference Providers. Not on
+#     OpenRouter.
+#   Model IDs marked UNCONFIRMED still need a live 1-call check before a full
+#   run; `python -m iab.check_endpoints` does exactly that.
 ENDPOINTS = {
-    "sarvam-30b": [
-        ("openai-compat", "https://api.groq.com/openai/v1", "GROQ_API_KEY", "sarvam-30b"),
-        ("openai-compat", "https://openrouter.ai/api/v1", "OPENROUTER_API_KEY", "sarvamai/sarvam-30b"),
+    "sarvam-105b": [
+        ("openai-compat", "https://api.sarvam.ai/v1", "SARVAM_API_KEY", "sarvam-105b"),
     ],
     "param2-17b": [
-        ("openai-compat", "https://openrouter.ai/api/v1", "OPENROUTER_API_KEY", "bharatgen/param2-17b"),
+        ("openai-compat", "https://router.huggingface.co/v1", "HF_TOKEN",
+         "bharatgenai/Param2-17B-A2.4B-Thinking"),   # UNCONFIRMED routing
     ],
     "gemini-flash": [
         ("gemini", None, "GEMINI_API_KEY", "gemini-2.5-flash"),
         ("gemini", None, "GEMINI_API_KEY", "gemini-3.5-flash"),
     ],
     "llama-70b": [
-        ("openai-compat", "https://api.groq.com/openai/v1", "GROQ_API_KEY", "llama-3.3-70b-versatile"),
-        ("openai-compat", "https://api.cerebras.ai/v1", "CEREBRAS_API_KEY", "llama-3.3-70b"),
+        ("openai-compat", "https://api.groq.com/openai/v1", "GROQ_API_KEY",
+         "llama-3.3-70b-versatile"),
+        ("openai-compat", "https://api.cerebras.ai/v1", "CEREBRAS_API_KEY",
+         "llama-3.3-70b"),                            # UNCONFIRMED id
     ],
 }
 

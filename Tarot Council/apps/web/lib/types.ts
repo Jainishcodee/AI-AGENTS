@@ -236,6 +236,7 @@ export interface TraceGraph {
 
 export type EventType =
   | "run_started"
+  | "checkpointed"
   | "injection_applied"
   | "stage_started"
   | "intake_complete"

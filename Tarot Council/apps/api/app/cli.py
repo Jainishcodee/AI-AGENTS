@@ -23,7 +23,7 @@ from .core.config import get_settings
 from .core.errors import CognitiveOSError
 from .core.logging import setup_logging
 from .council import Council
-from .learning import priors
+from .learning import divergence, priors
 from .learning.scoring import CHANCE_BRIER
 from .memory.store import InMemoryStore
 from .programs import loader
@@ -85,6 +85,9 @@ COMMANDS = (
     "migrate",
     "projects",
     "replay",
+    "divergence",
+    "resume",
+    "brief",
 )
 
 
@@ -112,12 +115,6 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     )
     ask.add_argument("--depth", choices=("quick", "standard", "deep"), default=None)
     ask.add_argument("--notes", default="", help="Extra context: constraints, actors, values.")
-    ask.add_argument(
-        "--project",
-        default=None,
-        dest="project_id",
-        help="Group under an ongoing situation, and prefer its memories on recall.",
-    )
     ask.add_argument(
         "--project",
         default=None,
@@ -196,23 +193,47 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     )
     replay.add_argument("card_id")
 
+    divergence_cmd = sub.add_parser(
+        "divergence",
+        help="Measure whether the modules actually reason differently, or merely sound "
+        "different.",
+    )
+    divergence_cmd.add_argument(
+        "--live",
+        action="store_true",
+        help="Also run the decision battery. Costs real calls and minutes; without this "
+        "only the spec-level checks run.",
+    )
+    divergence_cmd.add_argument(
+        "--limit", type=int, default=None, help="Use only the first N battery decisions."
+    )
+    divergence_cmd.add_argument("--depth", choices=("quick", "standard", "deep"), default="standard")
+    divergence_cmd.add_argument("--preset", default="full")
+
+    resume_cmd = sub.add_parser(
+        "resume",
+        help="Continue a deliberation that stopped part-way, reusing what it already paid "
+        "for. With no id, lists what is resumable.",
+    )
+    resume_cmd.add_argument("deliberation_id", nargs="?", default=None)
+    resume_cmd.add_argument(
+        "--discard", action="store_true", help="Throw the checkpoint away instead."
+    )
+
+    brief = sub.add_parser(
+        "brief",
+        help="A ~90-second spoken briefing of a decision: the recommendation, and each "
+        "dissenting module in its own voice.",
+    )
+    brief.add_argument("deliberation_id")
+    brief.add_argument(
+        "--speak", action="store_true", help="Also synthesise audio (needs edge-tts)."
+    )
+    brief.add_argument("--out", default=None, help="Where to write the audio.")
+
     migrate = sub.add_parser(
         "migrate", help="Import legacy JSON-file history into the SQLite store."
     )
-
-    projects = sub.add_parser("projects", help="Ongoing situations decisions belong to.")
-    projects.add_argument(
-        "--new", default=None, metavar="NAME", help="Create a project with this name."
-    )
-    projects.add_argument("--brief", default="", help="What the situation actually is.")
-    projects.add_argument("--close", default=None, metavar="ID", help="Close a project.")
-
-    replay = sub.add_parser(
-        "replay",
-        help="Re-decide a resolved card against today's programs and score it against "
-        "what actually happened.",
-    )
-    replay.add_argument("card_id")
     migrate.add_argument(
         "--from-dir",
         default=None,
@@ -268,6 +289,9 @@ async def _run(args: argparse.Namespace) -> int:
             "migrate": _cmd_migrate,
             "projects": _cmd_projects,
             "replay": _cmd_replay,
+            "divergence": _cmd_divergence,
+            "resume": _cmd_resume,
+            "brief": _cmd_brief,
         }[args.command]
         code = await handler(council, args)
         if not args.json:
@@ -383,20 +407,266 @@ async def _cmd_replay(council: Council, args: argparse.Namespace) -> int:
             "decision whose outcome is already known."
         )
     )
-    if result.program_versions_then != result.program_versions_now:
-        print(_wrap("Program versions differ between the two runs, so this is a real comparison."))
+    changed = result.versions_changed
+    if changed:
+        detail = ", ".join(f"{m} v{then}→v{now}" for m, (then, now) in sorted(changed.items()))
+        print(_wrap(f"Program versions moved ({detail}), so this measures your change."))
     else:
         print(
             _c(
                 _wrap(
-                    "Program versions are identical, so any difference here is model "
-                    "variance rather than a change you made."
+                    "No program version changed, so any difference above is model "
+                    "variance, not a change you made. Bump a module's `version` and "
+                    "replay again to measure an edit."
                 ),
                 DIM,
             )
         )
     print()
     return 0
+
+
+async def _cmd_brief(council: Council, args: argparse.Namespace) -> int:
+    """Print (and optionally speak) a listenable briefing.
+
+    The script is produced whether or not a speech engine is installed — it is the half
+    that carries the thinking, and a missing optional dependency should degrade the
+    feature rather than break the command.
+    """
+    from pathlib import Path
+
+    from .voice import briefing as voice
+
+    found = await council.store.get_deliberation(args.deliberation_id)
+    if found is None:
+        print(f"no such deliberation: {args.deliberation_id}", file=sys.stderr)
+        return 1
+    try:
+        script = voice.build(found)
+    except ValueError as exc:
+        print(f"{exc}", file=sys.stderr)
+        return 1
+
+    if args.json:
+        print(
+            json.dumps(
+                {
+                    "deliberation_id": script.deliberation_id,
+                    "estimated_seconds": script.estimated_seconds,
+                    "lines": [
+                        {"module": l.module, "voice": l.voice, "text": l.text}
+                        for l in script.lines
+                    ],
+                },
+                indent=2,
+            )
+        )
+        return 0
+
+    print()
+    print(RULE)
+    print(_c(f"briefing · about {script.estimated_seconds} seconds", BOLD))
+    print(RULE)
+    for line in script.lines:
+        who = "" if line.module == "narrator" else f"{line.module}: "
+        print(_wrap(f"{who}{line.text}"))
+    print()
+
+    if not args.speak:
+        print(_c(_wrap("Add --speak to hear it. Needs `pip install edge-tts` (free)."), DIM))
+        return 0
+
+    if not voice.engine_available():
+        print(
+            _wrap(
+                "No speech engine installed. `pip install edge-tts` — it is free and needs "
+                "no key. The script above is unaffected."
+            ),
+            file=sys.stderr,
+        )
+        return 1
+
+    out_dir = Path(args.out) if args.out else get_settings().store_dir / "briefings"
+    audio = await voice.synthesise(script, out_dir)
+    if audio is None:
+        print(_wrap("Synthesis failed; the script above is still good."), file=sys.stderr)
+        return 1
+    print(_wrap(f"audio: {audio}"))
+    return 0
+
+
+async def _cmd_resume(council: Council, args: argparse.Namespace) -> int:
+    """List or continue unfinished deliberations."""
+    if args.discard and args.deliberation_id:
+        await council.discard(args.deliberation_id)
+        print(_wrap(f"discarded the checkpoint for {args.deliberation_id}"))
+        return 0
+
+    if not args.deliberation_id:
+        pending = await council.resumable()
+        if args.json:
+            print(json.dumps([c.model_dump(mode="json") for c in pending], indent=2, default=str))
+            return 0
+        if not pending:
+            print(_wrap("Nothing unfinished. Every deliberation ran to completion."))
+            return 0
+        print(_c("unfinished deliberations", BOLD))
+        for checkpoint in pending:
+            print(
+                f"{GLYPH['arrow']} {_c(checkpoint.deliberation_id, BOLD)}  "
+                f"{_clip(checkpoint.request.question, 52)}"
+            )
+            print(_c(_wrap(checkpoint.describe(), indent="    "), DIM))
+            if checkpoint.failure:
+                print(_c(_wrap(f"stopped because: {checkpoint.failure[:120]}", indent="    "), DIM))
+        print()
+        print(_c(_wrap("Continue one with: app.cli resume <id>"), DIM))
+        return 0
+
+    result: Deliberation | None = None
+    try:
+        async for event in council.resume(args.deliberation_id):
+            if event.type == "done":
+                result = Deliberation.model_validate(event.payload["deliberation"])
+            elif event.type == "error":
+                level = "warning" if event.payload.get("recoverable") else "error"
+                print(_c(f"[{level}] {event.payload.get('message')}", DIM), file=sys.stderr)
+            elif not args.quiet:
+                _progress(event)
+    except KeyError:
+        print(f"nothing to resume for {args.deliberation_id}", file=sys.stderr)
+        return 1
+    except CognitiveOSError as exc:
+        print(f"{exc}", file=sys.stderr)
+        return 1
+
+    if result is None:
+        print("the resumed run did not finish either", file=sys.stderr)
+        return 1
+    if args.json:
+        print(result.model_dump_json(indent=2))
+    else:
+        _report(result)
+    return 0
+
+
+async def _cmd_divergence(council: Council, args: argparse.Namespace) -> int:
+    """Is this six algorithms or six voices?
+
+    The structural half is free and always runs. The live half is opt-in because it runs
+    the whole battery — on a free tier that is minutes of wall clock and real quota.
+    """
+    structure = divergence.structural()
+    live = None
+    if args.live:
+        items = divergence.battery(args.limit)
+        print(
+            _c(
+                f"running {len(items)} battery decisions at {args.depth} depth "
+                f"({args.preset})… this costs real calls",
+                DIM,
+            ),
+            file=sys.stderr,
+        )
+        live = await divergence.measure(
+            council, limit=args.limit, depth=args.depth, preset=args.preset
+        )
+
+    if args.json:
+        print(
+            json.dumps(
+                {
+                    "structural": structure.model_dump(mode="json"),
+                    "live": live.model_dump(mode="json") if live else None,
+                },
+                indent=2,
+            )
+        )
+        return 0 if structure.ok and (live is None or not live.failing) else 1
+
+    print()
+    print(_c("REPRESENTATION — what each module produces that nothing else does", BOLD))
+    for module in structure.modules:
+        mark = GLYPH["ok"] if module.distinct else GLYPH["gone"]
+        print(f"  {mark} {module.module:<14}{len(module.unique_artifacts)} unique")
+        print(_c(_wrap(", ".join(module.unique_artifacts), indent="      "), DIM))
+
+    shared = {k: v for k, v in structure.artifact_owners.items() if len(v) > 1}
+    print()
+    if shared:
+        print(_c("artifact kinds produced by more than one module", BOLD))
+        for kind, owners in shared.items():
+            print(_wrap(f"{kind}: {', '.join(owners)}"))
+    else:
+        print(_wrap("No artifact kind is produced by two modules — representations are distinct."))
+
+    print()
+    print(_c("CRITIQUE TOPOLOGY", BOLD))
+    for module in structure.modules:
+        print(
+            f"  {module.module:<14}critiques {len(module.critiques)}, "
+            f"critiqued by {len(module.critiqued_by)}, "
+            f"{module.biases_detected_elsewhere} of its biases watched elsewhere"
+        )
+
+    if structure.problems:
+        print()
+        print(_c("STRUCTURAL PROBLEMS", BOLD))
+        for problem in structure.problems:
+            print(_wrap(f"{GLYPH['gone']} {problem}"))
+
+    if live is None:
+        print()
+        print(
+            _c(
+                _wrap(
+                    "Spec-level checks only. Whether the modules actually reach different "
+                    "conclusions needs real runs: add --live (and expect it to take a "
+                    "while on a free key)."
+                ),
+                DIM,
+            )
+        )
+        return 0 if structure.ok else 1
+
+    print()
+    print(_c(f"BEHAVIOUR over {len(live.battery)} decisions", BOLD))
+    print(
+        _c(
+            f"  {'module':<14}{'dissents':>9}{'named':>7}{'crits':>7}{'accepted':>10}{'overlap':>9}",
+            BOLD,
+        )
+    )
+    for module in live.modules:
+        overlap = (
+            f"{module.stance_similarity:.2f}" if module.stance_similarity is not None else "—"
+        )
+        mark = " " if module.passes else GLYPH["gone"]
+        print(
+            f"{mark} {module.module:<14}{module.dissents:>9}{module.disagreements:>7}"
+            f"{module.critiques_raised:>7}{module.critiques_accepted:>10}{overlap:>9}"
+        )
+
+    print()
+    if live.mean_stance_similarity is not None:
+        verdict = (
+            "distinct conclusions"
+            if live.mean_stance_similarity <= 0.6
+            else "SUSPICIOUSLY SIMILAR — the modules may have collapsed into one voice"
+        )
+        print(_wrap(f"mean pairwise stance overlap: {live.mean_stance_similarity:.2f} — {verdict}"))
+    for note in live.notes:
+        print(_c(_wrap(note), DIM))
+
+    if live.failing:
+        print()
+        print(_c("MODULES THAT DID NOT EARN THEIR PLACE", BOLD))
+        for module in live.modules:
+            for problem in module.problems:
+                print(_wrap(f"{module.module}: {problem}"))
+
+    print()
+    return 0 if structure.ok and not live.failing else 1
 
 
 async def _cmd_migrate(council: Council, args: argparse.Namespace) -> int:

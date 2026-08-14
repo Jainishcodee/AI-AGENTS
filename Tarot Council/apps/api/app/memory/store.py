@@ -31,6 +31,7 @@ from ..schemas.cards import (
     Project,
     Resolution,
 )
+from ..schemas.checkpoint import Checkpoint
 from ..schemas.common import ModuleId
 from ..schemas.council import Deliberation
 
@@ -85,6 +86,14 @@ class MemoryStore(Protocol):
 
     async def list_projects(self) -> list[Project]: ...
 
+    async def save_checkpoint(self, checkpoint: Checkpoint) -> None: ...
+
+    async def get_checkpoint(self, deliberation_id: str) -> Checkpoint | None: ...
+
+    async def list_checkpoints(self, limit: int = 20) -> list[Checkpoint]: ...
+
+    async def delete_checkpoint(self, deliberation_id: str) -> None: ...
+
 
 class InMemoryStore:
     """Default for tests and for `--no-persist` runs."""
@@ -94,6 +103,7 @@ class InMemoryStore:
         self._cards: dict[str, DecisionCard] = {}
         self._memories: dict[ModuleId, list[Memory]] = {}
         self._projects: dict[str, Project] = {}
+        self._checkpoints: dict[str, Checkpoint] = {}
 
     async def save_deliberation(self, deliberation: Deliberation) -> None:
         self._deliberations[deliberation.id] = deliberation
@@ -102,8 +112,12 @@ class InMemoryStore:
         return self._deliberations.get(deliberation_id)
 
     async def list_deliberations(self, limit: int = 50) -> list[Deliberation]:
-        ordered = sorted(self._deliberations.values(), key=lambda d: d.created_at, reverse=True)
-        return ordered[:limit]
+        # Insertion order breaks timestamp ties — see `list_cards`.
+        indexed = sorted(
+            enumerate(self._deliberations.values()),
+            key=lambda pair: (-pair[1].created_at.timestamp(), -pair[0]),
+        )
+        return [item for _index, item in indexed[:limit]]
 
     async def save_card(self, card: DecisionCard) -> None:
         self._cards[card.id] = card
@@ -115,13 +129,18 @@ class InMemoryStore:
         self, limit: int = 50, status: CardStatus | None = None
     ) -> list[DecisionCard]:
         today = date.today()
-        cards = list(self._cards.values())
+        # Insertion order is the tie-breaker, and it is not optional: Windows' clock
+        # granularity is ~15.6 ms, so several decisions taken in one burst share an
+        # identical `created_at`. Sorting on the timestamp alone leaves those ties
+        # unbroken, and a stable sort then returns the *oldest* first — which is the
+        # opposite of what "newest" means.
+        indexed = list(enumerate(self._cards.values()))
         if status is not None:
-            cards = [c for c in cards if c.status(today) == status]
+            indexed = [(i, c) for i, c in indexed if c.status(today) == status]
         # Due first, then newest. A card whose check-in date has passed is the only
         # thing in here actively asking for attention, so it goes to the top.
-        cards.sort(key=lambda c: (c.status(today) != "due", -c.created_at.timestamp()))
-        return cards[:limit]
+        indexed.sort(key=lambda pair: (pair[1].status(today) != "due", -pair[1].created_at.timestamp(), -pair[0]))
+        return [card for _index, card in indexed[:limit]]
 
     async def recall(
         self,
@@ -226,6 +245,19 @@ class InMemoryStore:
 
     async def list_projects(self) -> list[Project]:
         return sorted(self._projects.values(), key=lambda p: p.created_at, reverse=True)
+
+    async def save_checkpoint(self, checkpoint: Checkpoint) -> None:
+        self._checkpoints[checkpoint.deliberation_id] = checkpoint
+
+    async def get_checkpoint(self, deliberation_id: str) -> Checkpoint | None:
+        return self._checkpoints.get(deliberation_id)
+
+    async def list_checkpoints(self, limit: int = 20) -> list[Checkpoint]:
+        live = [c for c in self._checkpoints.values() if c.phase != "done"]
+        return sorted(live, key=lambda c: c.updated_at, reverse=True)[:limit]
+
+    async def delete_checkpoint(self, deliberation_id: str) -> None:
+        self._checkpoints.pop(deliberation_id, None)
 
 
 class FileStore(InMemoryStore):

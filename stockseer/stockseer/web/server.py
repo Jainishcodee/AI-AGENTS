@@ -12,6 +12,7 @@ import contextlib
 import io
 import json
 import logging
+import os
 import threading
 import traceback
 import uuid
@@ -93,10 +94,40 @@ def asdict_notif(n) -> dict:
     return {**asdict(n), "vibration": n.vibration}
 
 
+_FEED_RETRY_AFTER: dict[str, float] = {}
+_UPGRADE_EVERY = 120.0          # seconds between attempts to get back to Angel
+
+
 def _feed(kind: str = "auto"):
-    if kind not in _FEED_CACHE:
-        _FEED_CACHE[kind] = get_feed(kind)
-    return _FEED_CACHE[kind]
+    """Cached feed, but keep trying to climb back to real-time.
+
+    SmartAPI returns a spurious AG8004 often enough that a single bad probe at
+    startup used to pin the whole session to 15-minute delayed Yahoo data. On an
+    ordinary day that is a nuisance; on listing morning you would be acting on
+    quarter-hour-old prices without noticing. So a degraded feed is retried
+    rather than accepted.
+    """
+    import time as _t
+
+    feed = _FEED_CACHE.get(kind)
+    if feed is None:
+        _FEED_CACHE[kind] = feed = get_feed(kind)
+        return feed
+
+    if kind == "auto" and getattr(feed, "delayed_seconds", 0) > 60:
+        now = _t.time()
+        if now >= _FEED_RETRY_AFTER.get(kind, 0.0):
+            _FEED_RETRY_AFTER[kind] = now + _UPGRADE_EVERY
+            try:
+                from ..live.angel import AngelFeed
+
+                upgraded = AngelFeed.from_env()
+                log.info("recovered real-time feed: %s", upgraded.describe())
+                _FEED_CACHE[kind] = upgraded
+                return upgraded
+            except Exception as exc:
+                log.debug("still on delayed data (%s)", exc)
+    return feed
 
 
 def _load_state() -> dict:
@@ -115,8 +146,36 @@ def _save_state(state: dict) -> None:
 
 
 # --------------------------------------------------------------------------- #
+def _auth_token() -> str:
+    """Shared secret required on /api/* when the server is publicly reachable.
+
+    Set STOCKSEER_TOKEN (in .env or the environment) to switch it on. Empty
+    means no auth, which is correct on a private network -- Tailscale or your
+    own LAN -- and dangerous over a public tunnel.
+    """
+    from ..live.angel import _load_dotenv
+
+    _load_dotenv()
+    return os.environ.get("STOCKSEER_TOKEN", "").strip()
+
+
 def create_app() -> Flask:
     app = Flask(__name__, static_folder=None)
+    token = _auth_token()
+
+    @app.before_request
+    def _check_token():
+        if not token or not request.path.startswith("/api/"):
+            return None
+        # /api/ping stays open so discovery can still identify the server
+        # without holding the secret.
+        if request.path == "/api/ping":
+            return None
+        supplied = (request.headers.get("X-StockSeer-Token")
+                    or request.args.get("token", ""))
+        if supplied != token:
+            return jsonify({"error": "unauthorized"}), 401
+        return None
 
     # ---------------------------------------------------------------- pages
     @app.get("/")
@@ -126,6 +185,18 @@ def create_app() -> Flask:
     @app.get("/static/<path:name>")
     def static_files(name):
         return send_from_directory(STATIC, name)
+
+    @app.get("/api/ping")
+    def ping():
+        """Identify this server, instantly.
+
+        Deliberately does no work -- no broker login, no cache read. Phones
+        discover the PC by sweeping a /24, so this gets hit ~250 times in a few
+        seconds and must never block on a SmartAPI session.
+        """
+        from .. import __version__
+
+        return jsonify({"app": "stockseer", "version": __version__})
 
     # ---------------------------------------------------------------- state
     @app.get("/api/state")
@@ -515,9 +586,67 @@ HANDLERS: dict[str, Callable[[dict], Any]] = {
 }
 
 
+def lan_addresses() -> list[tuple[str, str]]:
+    """Every address this machine is reachable at, with its interface name.
+
+    Needed because "which IP does my phone use" has no obvious answer: a laptop
+    on USB tethering, wifi and a VM adapter has three or four, and only one of
+    them routes to the phone.
+    """
+    import socket
+
+    out: list[tuple[str, str]] = []
+    try:
+        import subprocess
+
+        # PowerShell knows the interface names; socket alone only gives numbers.
+        res = subprocess.run(
+            ["powershell", "-NoProfile", "-Command",
+             "Get-NetIPAddress -AddressFamily IPv4 | "
+             "Where-Object { $_.IPAddress -ne '127.0.0.1' } | "
+             "ForEach-Object { $_.IPAddress + '|' + $_.InterfaceAlias }"],
+            capture_output=True, text=True, timeout=10,
+        )
+        for line in res.stdout.splitlines():
+            if "|" in line:
+                ip, _, iface = line.strip().partition("|")
+                if ip and not ip.startswith("169.254."):   # link-local: not routable
+                    out.append((ip, iface))
+    except Exception:
+        pass
+
+    if not out:
+        try:
+            out = [(socket.gethostbyname(socket.gethostname()), "primary")]
+        except Exception:
+            pass
+    return out
+
+
 def serve(host: str = "127.0.0.1", port: int = 8765, debug: bool = False) -> None:
     app = create_app()
-    print(f"\n  StockSeer dashboard  ->  http://{host}:{port}\n")
-    print(f"  feed: {_feed().describe()}")
+    lan = host in ("0.0.0.0", "::")
+
+    print(f"\n  StockSeer dashboard")
+    print(f"  on this PC   http://127.0.0.1:{port}")
+    if lan:
+        print("\n  reachable from your phone at one of these"
+              " (same network as the PC):")
+        for ip, iface in lan_addresses():
+            hint = ""
+            if ip.startswith(("192.168.42.", "192.168.43.", "10.")):
+                hint = "   <- likely the USB/wifi tether"
+            elif ip.startswith("192.168.56."):
+                hint = "   <- VirtualBox, not this one"
+            print(f"    http://{ip}:{port}{hint}")
+        print("\n  If the phone still cannot connect, Windows Firewall is"
+              "\n  blocking it. In an ADMIN PowerShell, once:")
+        print(f"    New-NetFirewallRule -DisplayName 'StockSeer' -Direction Inbound"
+              f" -LocalPort {port} -Protocol TCP -Action Allow")
+    else:
+        print(f"\n  Bound to loopback only -- your phone CANNOT reach this.")
+        print(f"  Restart with:  python -m stockseer.cli ui --lan")
+
+    print(f"\n  feed: {_feed().describe()}")
     print("  Ctrl+C to stop\n")
     app.run(host=host, port=port, debug=debug, threaded=True)

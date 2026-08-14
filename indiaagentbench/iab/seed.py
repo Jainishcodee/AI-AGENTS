@@ -92,66 +92,75 @@ def citizen(cid, name, district, state, age, **kw):
 CITIZENS = [
     # PM-KISAN: clean pass.
     citizen("C001", "Ramesh Patil", "Nashik", "Maharashtra", 52,
-            land_hectares=1.2, aliases=["Ramesh Bhau Patil"],
+            land_hectares=1.2, aliases=["Ramesh Bhau Patil", "रमेश पाटील", "ரமேஷ் படேல்"],
             documents=["aadhaar", "land_record", "bank_account"]),
 
     # PM-KISAN: excluded as an income tax payer, despite holding land.
     citizen("C002", "Sunita Devi", "Patna", "Bihar", 47,
             land_hectares=0.8, is_taxpayer=True,
+            aliases=["सुनीता देवी", "சுனிதா தேவி"],
             documents=["aadhaar", "land_record", "bank_account"]),
 
     # PM-KISAN: excluded as a practising professional.
     citizen("C003", "Anil Verma", "Kanpur", "Uttar Pradesh", 45,
-            land_hectares=2.0, profession="Doctor", aliases=["Dr Anil Verma"],
+            land_hectares=2.0, profession="Doctor", aliases=["Dr Anil Verma", "अनिल वर्मा", "அனில் வர்மா"],
             documents=["aadhaar", "land_record", "bank_account"]),
 
     # PM-JAY: clean pass.
     citizen("C004", "Meena Kumari", "Gaya", "Bihar", 38,
-            secc_deprived=True, documents=["aadhaar", "ration_card"]),
+            secc_deprived=True, aliases=["मीना कुमारी", "மீனா குமாரி"],
+            documents=["aadhaar", "ration_card"]),
 
     # NSP: clean pass.
     citizen("C005", "Karthik Raman", "Madurai", "Tamil Nadu", 19,
-            category="SC", family_income=180000, enrolled=True, aliases=["Karthik R"],
+            category="SC", family_income=180000, enrolled=True, aliases=["Karthik R", "कार्तिक रमन", "கார்த்திக் ராமன்"],
             documents=["income_certificate", "caste_certificate", "enrollment_proof",
                        "bank_account"]),
 
     # NSP: excluded on category.
     citizen("C006", "Priya Nair", "Ernakulam", "Kerala", 20,
             category="GEN", family_income=150000, enrolled=True,
+            aliases=["प्रिया नायर", "பிரியா நாயர்"],
             documents=["income_certificate", "enrollment_proof", "bank_account"]),
 
     # NSP: excluded on the income ceiling. Shares a district with C005 so that
     # district alone cannot disambiguate -- the agent has to use the name.
     citizen("C007", "Lakshmi Narayanan", "Madurai", "Tamil Nadu", 21,
             category="ST", family_income=300000, enrolled=True,
+            aliases=["लक्ष्मी नारायणन", "லட்சுமி நாராயணன்"],
             documents=["income_certificate", "caste_certificate", "enrollment_proof"]),
 
     # PM-KISAN: Group D government employee, which is the *exception* to the
     # government-employee exclusion. Eligible. Agents routinely get this wrong.
     citizen("C008", "Ravi Shankar", "Nashik", "Maharashtra", 50,
             land_hectares=0.5, govt_employee=True, group_d=True,
+            aliases=["रवि शंकर", "ரவி சங்கர்"],
             documents=["aadhaar", "land_record", "bank_account"]),
 
     # PM-KISAN: excluded on the Rs 10000 pension threshold.
     citizen("C009", "Sushila Bai", "Nashik", "Maharashtra", 66,
             land_hectares=1.0, pension_monthly=12000,
+            aliases=["सुशीला बाई", "சுசீலா பாய்"],
             documents=["aadhaar", "land_record", "bank_account"]),
 
     # PM-JAY: SECC-listed but already covered by ESIC, so excluded.
     citizen("C010", "Arjun Yadav", "Patna", "Bihar", 41,
             secc_deprived=True, esic_or_cghs=True,
+            aliases=["अर्जुन यादव", "அர்ஜுன் யாதவ்"],
             documents=["aadhaar", "ration_card"]),
 
     # NSP: eligible on the rules but missing the bank account on file. The
     # agent should surface the gap rather than submit an incomplete application.
     citizen("C011", "Fatima Begum", "Hyderabad", "Telangana", 18,
             category="OBC", family_income=90000, enrolled=True,
+            aliases=["फ़ातिमा बेगम", "பாத்திமா பேகம்"],
             documents=["income_certificate", "caste_certificate", "enrollment_proof"]),
 
     # NSP renewal: marks below the 50 percent bar.
     citizen("C012", "Deepak Bhosale", "Kolhapur", "Maharashtra", 22,
             category="OBC", family_income=140000, enrolled=True,
             renewal=True, previous_marks=42,
+            aliases=["दीपक भोसले", "தீபக் போசலே"],
             documents=["income_certificate", "caste_certificate", "enrollment_proof",
                        "bank_account"]),
 ]

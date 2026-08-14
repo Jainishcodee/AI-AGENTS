@@ -446,12 +446,46 @@ def cmd_ipo(a: argparse.Namespace) -> int:
         run_intraday_study(feed, ipos, interval=a.interval, days_back=a.days)
         return 0
 
+    if a.action == "autorun":
+        # Entry point for Task Scheduler. Cheap and silent on the ~350 days a
+        # year when nothing lists, so it can be armed daily and forgotten.
+        from datetime import datetime
+
+        from .ipo.calendar import notify_today
+        from .ipo.registry import listing_today
+
+        pushed = notify_today(refresh=True)
+        print(f" calendar: queued {len(pushed)} alert(s)")
+
+        today = listing_today()
+        if not today:
+            print(" nothing lists today; exiting.")
+            return 0
+
+        print(f" listing today: {', '.join(i.symbol for i in today)}")
+        if datetime.now().hour >= 16:
+            print(" market closed; not starting the watcher.")
+            return 0
+
+        from .ipo.watcher import WatchConfig, run
+        from .live.feed import get_feed
+
+        cfg = WatchConfig(capital=a.capital, stop_pct=a.stop_pct,
+                          target_pct=a.target_pct, near_pct=a.near_pct,
+                          poll_seconds=a.poll, confirm_minutes=a.confirm)
+        try:
+            run(feed=get_feed(a.feed), config=cfg)
+        except KeyboardInterrupt:
+            print("\n stopped.")
+        return 0
+
     if a.action == "watch":
         from .ipo.watcher import WatchConfig, run
         from .live.feed import get_feed
 
-        cfg = WatchConfig(stop_pct=a.stop_pct, trail_pct=a.trail_pct,
-                          take_profit_pct=a.take_profit, poll_seconds=a.poll,
+        cfg = WatchConfig(capital=a.capital, stop_pct=a.stop_pct,
+                          target_pct=a.target_pct, trail_pct=a.trail_pct,
+                          near_pct=a.near_pct, poll_seconds=a.poll,
                           confirm_minutes=a.confirm)
         syms = [s.strip() for s in a.symbols.split(",")] if a.symbols else None
         try:
@@ -479,11 +513,35 @@ def cmd_notify(a: argparse.Namespace) -> int:
             print(f" {n.created_at[:16]}  [{flag:<6}] {n.urgency:<8} {n.title}")
         return 0
     if a.action == "test":
+        from .push import configured, describe, self_test
+
         n = h.alert("test", a.urgency, "StockSeer test alert",
                     "If your phone buzzed, Jarvis is wired up correctly.",
                     dedupe_key=None)
-        print(f"\n queued: {n.title}  (urgency {n.urgency}, "
-              f"vibration {n.vibration})\n")
+        print(f"\n queued for Jarvis: {n.title}  (vibration {n.vibration})")
+        print(f" {describe()}")
+        if configured():
+            res = self_test()
+            for urgency, ok in res.items():
+                print(f"   ntfy {urgency:<9} {'sent' if ok else 'FAILED'}")
+            print("\n Three notifications should have arrived on your phone,"
+                  "\n each buzzing more insistently than the last.\n")
+        else:
+            print("\n No push topic set. Alerts only reach Jarvis while your PC"
+                  "\n is on and reachable. Set NTFY_TOPIC in .env for 24x7"
+                  "\n delivery with the PC off.\n")
+        return 0
+
+    if a.action == "push":
+        from .push import configured, describe, self_test
+
+        print(f"\n {describe()}")
+        if not configured():
+            print(" Set NTFY_TOPIC in .env first.\n")
+            return 1
+        for urgency, ok in self_test().items():
+            print(f"   {urgency:<9} {'sent' if ok else 'FAILED'}")
+        print()
         return 0
     if a.action == "clear":
         h.clear()
@@ -495,6 +553,8 @@ def cmd_notify(a: argparse.Namespace) -> int:
 def cmd_ui(a: argparse.Namespace) -> int:
     from .web.server import serve
 
+    if a.lan:
+        a.host = "0.0.0.0"
     if not a.no_open:
         import threading
         import webbrowser
@@ -622,7 +682,8 @@ def main(argv: list[str] | None = None) -> int:
 
     p = sub.add_parser("ipo", help="IPO calendar, listing studies, and the live watcher")
     p.add_argument("action", nargs="?", default="calendar",
-                   choices=["calendar", "upcoming", "refresh", "study", "morning", "watch"])
+                   choices=["calendar", "upcoming", "refresh", "study", "morning",
+                            "watch", "autorun"])
     p.add_argument("--refresh", action="store_true", help="re-fetch from NSE")
     p.add_argument("--notify", action="store_true", help="queue alerts for Jarvis")
     p.add_argument("--mainboard-only", action="store_true",
@@ -632,18 +693,25 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--interval", default="5m")
     p.add_argument("--feed", default="auto", choices=["auto", "angel", "yahoo"])
     p.add_argument("--symbols", default=None, help="override which IPOs to watch")
-    p.add_argument("--stop-pct", type=float, default=0.04)
-    p.add_argument("--trail-pct", type=float, default=0.03)
-    p.add_argument("--take-profit", type=float, default=0.08)
+    p.add_argument("--capital", type=float, default=40_000.0,
+                   help="sizes the quantity and rupee amounts in alerts")
+    p.add_argument("--target-pct", type=float, default=0.035,
+                   help="measured average best exit before 11:00 was +3.35%%")
+    p.add_argument("--stop-pct", type=float, default=0.030,
+                   help="measured average dip before 11:00 was -2.80%%")
+    p.add_argument("--trail-pct", type=float, default=0.025)
+    p.add_argument("--near-pct", type=float, default=0.008,
+                   help="how early to warn before a level is reached")
     p.add_argument("--confirm", type=int, default=5,
-                   help="minutes it must hold above the open before an entry alert")
-    p.add_argument("--poll", type=int, default=20)
+                   help="minutes it must hold above the open before a buy alert")
+    p.add_argument("--poll", type=int, default=10,
+                   help="seconds between price checks while a position is open")
     p.add_argument("--once", action="store_true")
     p.set_defaults(func=cmd_ipo)
 
     p = sub.add_parser("notify", help="alert queue that Jarvis polls")
     p.add_argument("action", nargs="?", default="pending",
-                   choices=["pending", "recent", "test", "clear"])
+                   choices=["pending", "recent", "test", "push", "clear"])
     p.add_argument("--urgency", default="act", choices=["info", "act", "critical"])
     p.add_argument("--limit", type=int, default=25)
     p.set_defaults(func=cmd_notify)
@@ -651,6 +719,9 @@ def main(argv: list[str] | None = None) -> int:
     p = sub.add_parser("ui", help="launch the web dashboard (every command, clickable)")
     p.add_argument("--port", type=int, default=8765)
     p.add_argument("--host", default="127.0.0.1")
+    p.add_argument("--lan", action="store_true",
+                   help="bind all interfaces so your phone can reach it "
+                        "(required for Jarvis alerts)")
     p.add_argument("--no-open", action="store_true", help="do not open a browser")
     p.set_defaults(func=cmd_ui)
 

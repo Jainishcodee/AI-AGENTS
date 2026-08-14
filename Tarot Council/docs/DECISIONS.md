@@ -534,6 +534,89 @@ machine: `mongod` runs permanently and WiredTiger reserves a cache of
 edition has no vector search either — Atlas Search is Atlas-only — so the recall story
 would have been the same text indexing, for the price of a resident service.
 
+---
+
+## ADR-025 — A replay must not be able to read its own answer
+
+**Decision.** `POST /cards/{id}/replay` re-decides a resolved card against today's
+programs and grades the result against the outcome that actually happened. For the
+duration of that run, **every memory extracted from that card and every prior computed
+from it is withheld** — `MemoryStore.recall` and `.priors` both take an `exclude_cards`
+set. The response reports how many of each were withheld.
+
+**Why replay exists at all.** ADR-018 forbids the system tuning itself from its own
+scoring, which leaves an obvious question: how do you ever improve a module? The answer
+is this. With the outcome already known, re-running an old decision measures whether a
+changed program would have done better. It turns the resolved corpus into a test set for
+the council itself — deliberate, measured, human-initiated change instead of drift.
+
+**Why the guard is load-bearing rather than tidy.** Memories extracted from a card
+*describe what happened*: "the offer arrived nine days later" is a memory the analyst
+would be handed while being asked to predict whether the offer arrives. Priors computed
+from the card encode the verdict directly. Without the exclusion, a replay scores well by
+reading the answer, and every backtest is worthless while looking rigorous — which is
+worse than having no backtest, because it would be believed.
+
+**Reporting the withheld count** matters for the same reason. A replay that excluded
+nothing is not evidence of a clean run; it may mean nothing was extracted from that card
+in the first place. Surfacing the number lets the result be weighed rather than trusted.
+
+**Given up.** The replay is slightly *worse* informed than a fresh deliberation today
+would be — it cannot use legitimate general knowledge that happens to have come from this
+card. Correct trade: a pessimistic measurement is usable, an optimistic one is not. It
+also means a replay is not a prediction of what the council would say now, only of what
+it would have said then; the distinction is worth keeping in mind when reading one.
+
+**Also enforced:** the original card and deliberation are never mutated by a replay
+(ADR-022), and the replay's grading writes to a throwaway card so the original's scoring
+history survives untouched.
+
+---
+
+## ADR-026 — Divergence is measured, and the instrument is tested against failures
+
+**Decision.** The claim that these are six algorithms rather than six voices is
+falsifiable, so `learning/divergence.py` measures it. Split by cost: a **structural**
+half that reads only the specs (artifact distinctness, critique topology, bias-detector
+coverage) and runs in CI on every commit; and a **behavioural** half that runs a fixed
+eight-decision battery and is opt-in, because on a free tier it is minutes and real
+quota.
+
+**Why measure at all.** ADR-002 asserts that forced artifacts produce divergence and
+ADR-011 asserts that separate executions make it real. Those are claims about the system,
+and until this existed the only evidence for them was that the output *read* as different
+— which is exactly the impression a well-written persona produces without any of the
+machinery. A product whose central claim rests on an impression has no central claim.
+
+**Reusing synthesis rather than building a second detector.** Dissent is counted from
+`minority_opinions` and `disagreements`, and critique yield from `Revision.accepted` —
+all of which synthesis already produces. A separate disagreement detector could
+contradict the first, and then neither would be trustworthy. The cost is that a lazy
+synthesis under-reports divergence, so **stance similarity** is included as the one
+independent signal: crude word overlap, computed from the text, needing no judgement.
+`LIMITATION` is printed in every report rather than buried here.
+
+**The part that matters most is that the harness fails things.** An instrument only ever
+pointed at a passing case is not known to detect anything, so the tests construct a
+cloned module, a module nobody critiques, one that never dissents, one whose critiques
+are never accepted — and run the harness against the **mock council**, whose six modules
+genuinely are one voice. It reports 1.00 stance overlap and fails all six. That result is
+the evidence the instrument works; without it the passing score on the real six would
+mean nothing.
+
+**Given up.** Word overlap is a poor semantic measure and will occasionally call two
+genuinely different stances similar because they share vocabulary. Accepted: the
+alternative is an LLM judge, which needs its own calibration, costs a call per pair, and
+could be wrong in ways nobody would notice. A cheap check that cannot be gamed by
+phrasing beats an expensive one nobody audits. The threshold (0.6) is a floor for
+catching collapse, not a target to optimise.
+
+**One structural finding worth recording.** `strategist` is critiqued by five modules but
+critiques only two. That is per its spec and defensible — its concerns barely intersect
+with the analyst's or optimizer's — but it means the module holding the most authority
+over "who really decides" is the least active check on others. Worth revisiting if its
+calibration scores come in weak.
+
 **The argument that actually decided it:** SQLite is the only one of the three whose
 storage layer can be **verified in CI against a real database**. `tests/test_sqlite_store.py`
 opens a temp file and exercises migrations, status filtering, BM25 ranking, trigger-
@@ -546,6 +629,15 @@ Phase 3 makes the product defensible with.
 unblocked), no network access, and no vector index. When there are real users the
 `MemoryStore` protocol makes Postgres a swap rather than a rewrite — which is exactly
 what ADR-008 was actually protecting, and it still holds.
+
+**One correctness detail found the hard way.** Every `ORDER BY created_at DESC` carries
+`rowid DESC` as a tie-breaker, and the in-memory store tie-breaks on insertion order.
+Windows' clock advances in ~15.6 ms steps, so several decisions taken in one burst share
+an identical `created_at` — and with the tie unbroken, "newest first" silently returned
+the *oldest*. It surfaced as a flaky test rather than a failing one, which is the usual
+way a real ordering bug announces itself. `tests/test_store_ordering.py` pins the
+behaviour across all three stores, including that an update (recording an outcome on an
+old card) must not reorder history.
 
 **Also given up, deliberately:** hand-rolled term overlap in Python, replaced by FTS5.
 Stemming now works — "negotiating" finds "negotiation" — and BM25 ranks better than my

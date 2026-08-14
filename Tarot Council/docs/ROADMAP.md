@@ -117,18 +117,36 @@ test with a person in it, and it has not been run.
 - [x] Recall injected into stage 1 as attributed, arguable evidence
 - [x] `app.cli migrate` imports legacy JSON history; idempotent upserts, so running
       it twice neither duplicates nor clobbers newer rows
-- [ ] Projects: decisions grouped under an ongoing situation
-- [ ] Replay a card against its recorded `program_versions`
+- [x] **Projects** — decisions grouped under an ongoing situation. `POST /projects`,
+      `app.cli projects --new`, `ask --project <id>`. Cards, deliberations *and*
+      memories carry the project, and recall prefers same-project memories, which is
+      what stops a side project bleeding into a salary conversation.
+- [x] **Replay** — `POST /cards/{id}/replay`, `app.cli replay <card>`. Re-decides a
+      resolved card against today's programs and grades it against the outcome that
+      actually happened, reporting each module's verdict then versus now.
 
-**Verified.** 27 tests against a **real database** in a temp file — migrations,
+      This is how a module gets improved without the drift ADR-018 forbids: the
+      resolved corpus becomes a test set for the council itself. The correctness
+      problem is leakage and it is severe — memories extracted from the card describe
+      what happened, priors computed from it encode the verdict — so both are withheld
+      for the duration and the withheld count is reported (ADR-025).
+
+**Verified.** Tests against a **real database** in a temp file — migrations,
 idempotent re-open, WAL, status filtering, BM25 ranking, stemming, module scoping,
 hostile FTS input, trigger-maintained deletes, timezone round-tripping, and a
-two-process restart proving history survives. About two seconds, no service.
+two-process restart proving history survives. Plus the replay leak guard, asserted
+against *both* store implementations, because `recall` is written twice — once in Python
+and once in SQL — and a guarantee holding in only one of them is not a guarantee.
 
-**Exit criterion — partially met.** Persistence and per-module extraction work. The
-full criterion — a follow-up two weeks later where the psychologist recalls the
-emotional context while the analyst recalls the facts — needs two weeks and real
-decisions.
+A flaky test here turned out to be a real bug: Windows' clock advances in ~15.6 ms steps,
+so a burst of decisions shares one `created_at`, and with the tie unbroken "newest first"
+returned the oldest. Fixed with `rowid DESC` / insertion-order tie-breakers and pinned by
+`tests/test_store_ordering.py` across all three stores.
+
+**Exit criterion — partially met.** Persistence, projects, per-module extraction and
+replay all work. The full criterion — a follow-up two weeks later where the psychologist
+recalls the emotional context while the analyst recalls the facts — needs two weeks and
+real decisions.
 
 ---
 
@@ -229,12 +247,21 @@ outcome corpus is not.
 
 ---
 
-## Phase 5 — Marketplace
+## Phase 5 — Marketplace *(harness built)*
 
+- [x] **Divergence harness** — `learning/divergence.py`, `GET /divergence`,
+      `app.cli divergence [--live]` (ADR-026). Structural half — artifact distinctness,
+      critique topology, bias-detector coverage — reads only the specs and runs in CI.
+      Behavioural half runs the eight-decision battery in `learning/battery.yaml` and
+      measures dissent, critique yield and stance similarity.
+
+      Built before the marketplace on purpose: it is a quality gate for the existing six,
+      not just plumbing for future modules. It reports that each of the six owns six
+      unique artifact types with zero overlap — and, crucially, that the **mock council
+      fails it** at 1.00 stance overlap. That failure is the evidence the instrument
+      detects anything at all; without it, a passing score on the real six would mean
+      nothing.
 - [ ] Module builder over `AgentProgram` — stages, artifacts, biases, metrics; no code
-- [ ] Automated divergence harness (`SPEC-FORMAT.md` §"Authoring a new module"):
-      representation distinctness, conclusion divergence on a fixed battery,
-      critique yield. A module that passes none is a voice, not a mind.
 - [ ] Sharing, forking, versioning of modules, presets, and whole councils
 - [ ] Domain councils: hiring, medical, legal, product
 

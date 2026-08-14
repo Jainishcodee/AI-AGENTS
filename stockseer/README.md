@@ -20,6 +20,12 @@ are impossible, and it prints the honest number even when the honest number is
 pip install -r requirements.txt
 ```
 
+## Phone alerts
+
+IPO deadlines and listing-day alerts vibrate your phone through the Jarvis app.
+**[docs/FLOW.md](docs/FLOW.md) is the complete walkthrough** — diagrams of what
+connects to what, every API call, every vibration scenario, and troubleshooting.
+
 ## The dashboard
 
 ```powershell

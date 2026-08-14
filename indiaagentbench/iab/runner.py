@@ -53,7 +53,9 @@ def run_task(task, rotator, max_steps=MAX_STEPS):
                          "tool_calls": reply["tool_calls"]})
         for call in reply["tool_calls"]:
             result = env.call(call["name"], call["args"])
-            messages.append({"role": "tool", "name": call["name"],
+            messages.append({"role": "tool",
+                             "tool_call_id": call["id"],
+                             "name": call["name"],
                              "content": json.dumps(result, ensure_ascii=False)})
             transcript.append({"role": "tool", "name": call["name"],
                                "args": call["args"], "result": result})

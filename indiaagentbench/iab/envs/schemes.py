@@ -233,19 +233,33 @@ class SchemeEnv(Env):
         return {"code": str(code).upper(), **s}
 
     def t_search_citizen(self, name, district=None):
+        """Name lookup, with district as a *soft* filter.
+
+        District narrows the result set only when it actually matches something.
+        This is deliberate experimental design, not leniency: in the non-English
+        conditions a user naming their district in Devanagari or Tamil would
+        otherwise zero out every scheme task at the first tool call, and a floor
+        effect at step one would erase exactly the trajectory-depth signal the
+        benchmark exists to measure. Disambiguation stays meaningful because the
+        two Madurai students are still separated by name alone.
+        """
         q = str(name).strip().lower()
         hits = []
         for c in self.db["citizens"]:
             names = [c["name"].lower()] + [a.lower() for a in c.get("aliases", [])]
-            if not any(q == n or q in n for n in names):
-                continue
-            if district and c["district"].lower() != str(district).strip().lower():
-                continue
-            hits.append({"citizen_id": c["citizen_id"], "name": c["name"],
-                         "district": c["district"], "age": c["age"]})
+            if any(q == n or q in n or n in q for n in names):
+                hits.append({"citizen_id": c["citizen_id"], "name": c["name"],
+                             "district": c["district"], "age": c["age"]})
         if not hits:
-            raise ToolError(f"no citizen found matching '{name}'"
-                            + (f" in {district}" if district else ""))
+            raise ToolError(f"no citizen found matching '{name}'")
+
+        if district:
+            d = str(district).strip().lower()
+            narrowed = [h for h in hits if h["district"].lower() == d]
+            if narrowed:
+                return {"matches": narrowed}
+            return {"matches": hits,
+                    "note": f"no record in district '{district}'; showing all name matches"}
         return {"matches": hits}
 
     def t_get_citizen(self, citizen_id):

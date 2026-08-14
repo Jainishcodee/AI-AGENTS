@@ -1,0 +1,88 @@
+# The divergence battery: a fixed set of decisions used to measure whether the modules
+# actually reason differently.
+#
+# Chosen so that no single algorithm is obviously right on all of them. Each has a real
+# tradeoff, names its actors, and states a constraint — because a module with missing
+# required inputs abstains, and an abstention is not a disagreement. A battery of vague
+# questions would measure nothing except which module is most willing to guess.
+#
+# Deliberately spread across domains so per-domain divergence is visible: a module can
+# be indispensable on negotiation and redundant on money, and one number across both
+# would hide it.
+#
+# Edit freely — but changing an item invalidates comparisons against earlier runs, so
+# treat it like changing a benchmark rather than fixing a typo.
+
+- id: written_offer
+  question: >
+    Should I quit my internship to work on my own product? My manager keeps promising a
+    full-time offer but nothing is in writing, and I have four months of savings.
+  notes: >
+    Six months into a six-month internship. Manager is friendly but disorganised and has
+    missed two promised dates. Savings are four months at current spend. I care about not
+    burning the bridge because the industry is small.
+  domains: [career, finance]
+
+- id: cto_title
+  question: >
+    My best engineer wants the CTO title. My cofounder thinks it is premature and has
+    threatened to reduce his own equity if I agree. We close a seed round in six weeks.
+  notes: >
+    Four people. The engineer has two competing offers. The cofounder holds 40% and has
+    been with me two years. Investors have not asked about titles.
+  domains: [startup, negotiation, leadership]
+
+- id: three_projects
+  question: >
+    I have three half-finished side projects and a full-time job. I keep switching every
+    week and shipping nothing.
+  notes: >
+    Roughly eight hours a week available. None of the three has users. I have done this
+    same cycle for about a year.
+  domains: [productivity, time_management]
+
+- id: underperformer
+  question: >
+    One of my four engineers has been underperforming for three months. She is well
+    liked, and the team is already stretched. Do I manage her out?
+  notes: >
+    Output is roughly half the others'. Two teammates have quietly complained. She has
+    a visa tied to this job. No formal performance process exists yet.
+  domains: [leadership, relationships]
+
+- id: counteroffer
+  question: >
+    I accepted a job offer last week. My current employer has now counter-offered with
+    more money and a promotion. Do I stay?
+  notes: >
+    The new role is a step up in scope but a smaller company. I have already told the new
+    employer yes verbally, nothing signed. My manager here is the reason I was leaving.
+  domains: [career, negotiation]
+
+- id: move_city
+  question: >
+    Should I move to another city for a job that pays 40% more? My partner's work is
+    here, and my parents are ageing nearby.
+  notes: >
+    Partner is mid-career and could probably move but does not want to. Parents are in
+    their seventies, both independent for now. The pay difference is real after cost of
+    living.
+  domains: [life, relationships, finance]
+
+- id: rewrite
+  question: >
+    Our main service is slow and hard to change. The team wants a rewrite. We have
+    paying customers and two months of runway extension riding on a new feature.
+  notes: >
+    Five engineers. The rewrite estimate is four months, which historically means seven.
+    The feature is promised to two enterprise customers.
+  domains: [business, startup, productivity]
+
+- id: cofounder_split
+  question: >
+    My cofounder has stopped doing the work but still holds half the company. Do I raise
+    it now or wait until after we raise?
+  notes: >
+    No vesting cliff was ever set up. He is going through a divorce. We have two months
+    of runway and an investor conversation scheduled in three weeks.
+  domains: [startup, relationships, negotiation]

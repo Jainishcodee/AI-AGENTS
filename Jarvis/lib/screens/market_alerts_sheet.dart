@@ -39,6 +39,8 @@ class MarketAlertsSheet extends StatefulWidget {
 class _MarketAlertsSheetState extends State<MarketAlertsSheet> {
   late final TextEditingController _url =
       TextEditingController(text: widget.service.baseUrl);
+  late final TextEditingController _token =
+      TextEditingController(text: widget.service.token);
   late bool _enabled = widget.service.enabled;
 
   String? _status;
@@ -54,6 +56,7 @@ class _MarketAlertsSheetState extends State<MarketAlertsSheet> {
   @override
   void dispose() {
     _url.dispose();
+    _token.dispose();
     super.dispose();
   }
 
@@ -76,15 +79,31 @@ class _MarketAlertsSheetState extends State<MarketAlertsSheet> {
     }
   }
 
+  Future<void> _find() => _run('Searching your network', () async {
+        final found = await widget.service.discover();
+        if (found == null) {
+          return 'No PC found.\n\n'
+              'On the PC, check that it is running:\n'
+              '  python -m stockseer.cli ui --lan\n\n'
+              'The --lan part matters — without it the dashboard only accepts '
+              'connections from the PC itself.';
+        }
+        _url.text = found;
+        _loadCalendar();
+        return 'Found it at $found\n${await widget.service.testConnection()}';
+      });
+
   Future<void> _save() => _run('Saving', () async {
-        await widget.service.configure(url: _url.text, on: _enabled);
+        await widget.service
+            .configure(url: _url.text, on: _enabled, secret: _token.text);
         final msg = await widget.service.testConnection();
         _loadCalendar();
         return msg;
       });
 
   Future<void> _testAlert() => _run('Sending', () async {
-        await widget.service.configure(url: _url.text, on: _enabled);
+        await widget.service
+            .configure(url: _url.text, on: _enabled, secret: _token.text);
         final res = await http
             .post(Uri.parse('${widget.service.baseUrl}/api/notify/test'))
             .timeout(const Duration(seconds: 8));
@@ -152,15 +171,44 @@ class _MarketAlertsSheetState extends State<MarketAlertsSheet> {
             ),
             const SizedBox(height: 8),
 
+            SizedBox(
+              width: double.infinity,
+              child: FilledButton.icon(
+                onPressed: _busy ? null : _find,
+                icon: const Icon(Icons.wifi_find, size: 18),
+                label: const Text('Find my PC automatically'),
+              ),
+            ),
+            const SizedBox(height: 6),
+            const Text(
+              'Scans your network for StockSeer. Jarvis also re-finds the PC on '
+              'its own if the address changes, so you should rarely need this.',
+              style: TextStyle(color: Colors.white38, fontSize: 11),
+            ),
+            const SizedBox(height: 16),
+
             TextField(
               controller: _url,
               keyboardType: TextInputType.url,
               autocorrect: false,
               style: const TextStyle(color: Colors.white),
               decoration: const InputDecoration(
-                labelText: "PC address",
-                hintText: 'http://192.168.1.5:8765',
-                helperText: 'Find it with: ipconfig | findstr IPv4',
+                labelText: "PC address (set automatically)",
+                hintText: 'http://10.109.110.62:8765',
+                helperText: 'Only needed if the search cannot find it',
+                helperStyle: TextStyle(color: Colors.white38, fontSize: 11),
+              ),
+            ),
+            const SizedBox(height: 12),
+
+            TextField(
+              controller: _token,
+              autocorrect: false,
+              obscureText: true,
+              style: const TextStyle(color: Colors.white),
+              decoration: const InputDecoration(
+                labelText: 'Access code (only for remote access)',
+                helperText: 'Leave blank on your own wifi or Tailscale',
                 helperStyle: TextStyle(color: Colors.white38, fontSize: 11),
               ),
             ),
@@ -169,7 +217,7 @@ class _MarketAlertsSheetState extends State<MarketAlertsSheet> {
             Row(
               children: [
                 Expanded(
-                  child: FilledButton(
+                  child: OutlinedButton(
                     onPressed: _busy ? null : _save,
                     child: const Text('Save & test'),
                   ),

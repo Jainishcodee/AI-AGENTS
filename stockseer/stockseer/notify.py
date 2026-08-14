@@ -27,12 +27,19 @@ STORE = Path(__file__).resolve().parent.parent / "artifacts" / "notifications.js
 _LOCK = threading.Lock()
 
 # Android vibration patterns, in milliseconds: [wait, buzz, wait, buzz, ...].
-# Urgency is carried by the pattern so the phone is readable from a pocket --
-# you should know whether to look before you look.
+#
+# Every pattern runs 2-3 seconds. A market alert competes with a pocket, a
+# conversation, and a phone lying face-down on a desk -- a 200ms tick loses all
+# three. Long enough to notice, and the *rhythm* carries the urgency so you know
+# whether to look before you look:
+#
+#   info      two slow buzzes            ~2.1s   an FYI
+#   act       three heavy buzzes         ~2.9s   a decision is due
+#   critical  six rapid pulses           ~3.2s   money is moving right now
 PATTERNS = {
-    "info":     [0, 220],
-    "act":      [0, 420, 180, 420],
-    "critical": [0, 700, 200, 700, 200, 700],
+    "info":     [0, 900, 300, 900],
+    "act":      [0, 800, 250, 800, 250, 800],
+    "critical": [0, 400, 150, 400, 150, 400, 150, 400, 150, 400, 150, 400],
 }
 
 
@@ -98,6 +105,17 @@ class NotificationHub:
             self.items.append(notif)
             self._save()
         log.info("[%s] %s", notif.urgency, notif.title)
+
+        # Fan out to the phone directly, if a relay is configured. Done after
+        # the local save so a push failure can never lose the alert: Jarvis can
+        # still collect it from the queue when the PC is next reachable.
+        try:
+            from .push import configured, push_notification
+
+            if configured():
+                push_notification(notif)
+        except Exception as exc:
+            log.debug("push transport unavailable: %s", exc)
         return notif
 
     def alert(self, kind: str, urgency: str, title: str, body: str,

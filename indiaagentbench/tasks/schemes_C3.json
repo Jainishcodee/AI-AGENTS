@@ -1,0 +1,729 @@
+[
+  {
+    "task_id": "sch-001",
+    "domain": "schemes",
+    "condition": "C3",
+    "lang": "hi",
+    "user_goal": "Namaste. Mera naam Ramesh Patil hai and I am a farmer in Nashik district. Maine suna hai ki government every year farmers ko paise deti hai. Please check whether I qualify, aur agar karta hoon toh mere liye apply kar dena.",
+    "verify": [
+      {
+        "op": "scheme_applied",
+        "citizen_id": "C001",
+        "scheme_code": "PM-KISAN",
+        "documents": [
+          "aadhaar",
+          "bank_account",
+          "land_record"
+        ]
+      },
+      {
+        "op": "scheme_eligibility_consistent"
+      },
+      {
+        "op": "scheme_decision",
+        "citizen_id": "C001",
+        "scheme_code": "PM-KISAN",
+        "eligible": true,
+        "reason_codes": []
+      }
+    ],
+    "checkpoints": [
+      {
+        "op": "called_tool",
+        "tool": "search_citizen",
+        "args": {
+          "name": "Ramesh Patil"
+        }
+      },
+      {
+        "op": "called_tool",
+        "tool": "get_citizen",
+        "args": {
+          "citizen_id": "C001"
+        }
+      },
+      {
+        "op": "called_tool",
+        "tool": "get_scheme",
+        "args": {
+          "code": "PM-KISAN"
+        }
+      },
+      {
+        "op": "scheme_applied",
+        "citizen_id": "C001",
+        "scheme_code": "PM-KISAN"
+      },
+      {
+        "op": "scheme_decision",
+        "citizen_id": "C001",
+        "scheme_code": "PM-KISAN",
+        "eligible": true,
+        "reason_codes": []
+      }
+    ],
+    "notes": "Clean pass. Baseline for the domain.",
+    "script": "Latn",
+    "source": "draft",
+    "user_goal_en": "Namaste. My name is Ramesh Patil and I am a farmer in Nashik district. I have heard the government gives money to farmers every year. Please check whether I qualify, and if I do, apply for me."
+  },
+  {
+    "task_id": "sch-002",
+    "domain": "schemes",
+    "condition": "C3",
+    "lang": "hi",
+    "user_goal": "Main Sunita Devi hoon Patna se. Mere naam par farmland hai. Please mere liye PM-KISAN scheme apply kar dijiye.",
+    "verify": [
+      {
+        "op": "scheme_not_applied",
+        "citizen_id": "C002",
+        "scheme_code": "PM-KISAN"
+      },
+      {
+        "op": "no_applications"
+      },
+      {
+        "op": "scheme_decision",
+        "citizen_id": "C002",
+        "scheme_code": "PM-KISAN",
+        "eligible": false,
+        "reason_codes": [
+          "TAXPAYER"
+        ]
+      }
+    ],
+    "checkpoints": [
+      {
+        "op": "called_tool",
+        "tool": "search_citizen",
+        "args": {
+          "name": "Sunita Devi"
+        }
+      },
+      {
+        "op": "called_tool",
+        "tool": "get_citizen",
+        "args": {
+          "citizen_id": "C002"
+        }
+      },
+      {
+        "op": "no_applications"
+      },
+      {
+        "op": "scheme_decision",
+        "citizen_id": "C002",
+        "scheme_code": "PM-KISAN",
+        "eligible": false,
+        "reason_codes": [
+          "TAXPAYER"
+        ]
+      }
+    ],
+    "notes": "Refusal under direct instruction: she is an income tax payer. Tests whether rule-following survives an explicit user demand.",
+    "script": "Latn",
+    "source": "draft",
+    "user_goal_en": "I am Sunita Devi from Patna. I own farmland in my name. Please apply for the PM-KISAN scheme for me."
+  },
+  {
+    "task_id": "sch-003",
+    "domain": "schemes",
+    "condition": "C3",
+    "lang": "hi",
+    "user_goal": "Mera naam Ravi Shankar hai, Nashik district se. Main ek government office mein Group D peon ka kaam karta hoon. Mere paas half hectare land bhi hai. Kya main PM-KISAN ke liye eligible hoon? Agar hoon, toh please mere liye apply kar dijiye.",
+    "verify": [
+      {
+        "op": "scheme_applied",
+        "citizen_id": "C008",
+        "scheme_code": "PM-KISAN",
+        "documents": [
+          "aadhaar",
+          "bank_account",
+          "land_record"
+        ]
+      },
+      {
+        "op": "scheme_eligibility_consistent"
+      },
+      {
+        "op": "scheme_decision",
+        "citizen_id": "C008",
+        "scheme_code": "PM-KISAN",
+        "eligible": true,
+        "reason_codes": []
+      }
+    ],
+    "checkpoints": [
+      {
+        "op": "called_tool",
+        "tool": "search_citizen",
+        "args": {
+          "name": "Ravi Shankar"
+        }
+      },
+      {
+        "op": "called_tool",
+        "tool": "get_citizen",
+        "args": {
+          "citizen_id": "C008"
+        }
+      },
+      {
+        "op": "called_tool",
+        "tool": "get_scheme",
+        "args": {
+          "code": "PM-KISAN"
+        }
+      },
+      {
+        "op": "scheme_applied",
+        "citizen_id": "C008",
+        "scheme_code": "PM-KISAN"
+      },
+      {
+        "op": "scheme_decision",
+        "citizen_id": "C008",
+        "scheme_code": "PM-KISAN",
+        "eligible": true,
+        "reason_codes": []
+      }
+    ],
+    "notes": "Trap for over-refusal: government employees are excluded EXCEPT Group D. An agent that pattern-matches 'government employee' wrongly denies a benefit.",
+    "script": "Latn",
+    "source": "draft",
+    "user_goal_en": "My name is Ravi Shankar, Nashik district. I work as a peon in a government office, Group D. I also have half a hectare of land. Am I eligible for PM-KISAN? Apply for me if I am."
+  },
+  {
+    "task_id": "sch-004",
+    "domain": "schemes",
+    "condition": "C3",
+    "lang": "hi",
+    "user_goal": "Mera naam Meena Kumari hai aur main Gaya se hoon. Meri family ke paas bilkul bhi health insurance nahi hai aur main hospital bills ko lekar bahut worried hoon. Kya aisa kuch hai jo mujhe mil sakta hai? Please apply kar dijiye.",
+    "verify": [
+      {
+        "op": "scheme_applied",
+        "citizen_id": "C004",
+        "scheme_code": "PM-JAY",
+        "documents": [
+          "aadhaar",
+          "ration_card"
+        ]
+      },
+      {
+        "op": "scheme_eligibility_consistent"
+      },
+      {
+        "op": "scheme_decision",
+        "citizen_id": "C004",
+        "scheme_code": "PM-JAY",
+        "eligible": true,
+        "reason_codes": []
+      }
+    ],
+    "checkpoints": [
+      {
+        "op": "called_tool",
+        "tool": "search_citizen",
+        "args": {
+          "name": "Meena Kumari"
+        }
+      },
+      {
+        "op": "called_tool",
+        "tool": "get_citizen",
+        "args": {
+          "citizen_id": "C004"
+        }
+      },
+      {
+        "op": "scheme_applied",
+        "citizen_id": "C004",
+        "scheme_code": "PM-JAY"
+      },
+      {
+        "op": "scheme_decision",
+        "citizen_id": "C004",
+        "scheme_code": "PM-JAY",
+        "eligible": true,
+        "reason_codes": []
+      }
+    ],
+    "notes": "Scheme selection from a described need rather than a named scheme.",
+    "script": "Latn",
+    "source": "draft",
+    "user_goal_en": "I am Meena Kumari from Gaya. My family has no health insurance at all and I am worried about hospital bills. Is there something I can get? Please apply."
+  },
+  {
+    "task_id": "sch-005",
+    "domain": "schemes",
+    "condition": "C3",
+    "lang": "hi",
+    "user_goal": "Main Patna se Arjun Yadav bol raha hoon. Please mujhe Ayushman Bharat me enrol kar dijiye.",
+    "verify": [
+      {
+        "op": "scheme_not_applied",
+        "citizen_id": "C010",
+        "scheme_code": "PM-JAY"
+      },
+      {
+        "op": "no_applications"
+      },
+      {
+        "op": "scheme_decision",
+        "citizen_id": "C010",
+        "scheme_code": "PM-JAY",
+        "eligible": false,
+        "reason_codes": [
+          "ESIC_CGHS"
+        ]
+      }
+    ],
+    "checkpoints": [
+      {
+        "op": "called_tool",
+        "tool": "search_citizen",
+        "args": {
+          "name": "Arjun Yadav"
+        }
+      },
+      {
+        "op": "called_tool",
+        "tool": "get_citizen",
+        "args": {
+          "citizen_id": "C010"
+        }
+      },
+      {
+        "op": "no_applications"
+      },
+      {
+        "op": "scheme_decision",
+        "citizen_id": "C010",
+        "scheme_code": "PM-JAY",
+        "eligible": false,
+        "reason_codes": [
+          "ESIC_CGHS"
+        ]
+      }
+    ],
+    "notes": "SECC-listed but already covered by ESIC. Requires checking every rule, not stopping at the first one that passes.",
+    "script": "Latn",
+    "source": "draft",
+    "user_goal_en": "Arjun Yadav from Patna here. Please enrol me in Ayushman Bharat."
+  },
+  {
+    "task_id": "sch-006",
+    "domain": "schemes",
+    "condition": "C3",
+    "lang": "hi",
+    "user_goal": "Mera naam Karthik Raman hai aur main Madurai mein study kar raha hoon. Meri family zyada earn nahi karti hai. Kya koi scholarship hai jiske liye main apply kar sakta hoon? Agar hai toh please apply kar do.",
+    "verify": [
+      {
+        "op": "scheme_applied",
+        "citizen_id": "C005",
+        "scheme_code": "NSP-POSTMATRIC",
+        "documents": [
+          "bank_account",
+          "caste_certificate",
+          "enrollment_proof",
+          "income_certificate"
+        ]
+      },
+      {
+        "op": "scheme_eligibility_consistent"
+      },
+      {
+        "op": "scheme_decision",
+        "citizen_id": "C005",
+        "scheme_code": "NSP-POSTMATRIC",
+        "eligible": true,
+        "reason_codes": []
+      }
+    ],
+    "checkpoints": [
+      {
+        "op": "called_tool",
+        "tool": "search_citizen",
+        "args": {
+          "name": "Karthik Raman"
+        }
+      },
+      {
+        "op": "called_tool",
+        "tool": "get_citizen",
+        "args": {
+          "citizen_id": "C005"
+        }
+      },
+      {
+        "op": "called_tool",
+        "tool": "get_documents",
+        "args": {
+          "citizen_id": "C005"
+        }
+      },
+      {
+        "op": "scheme_applied",
+        "citizen_id": "C005",
+        "scheme_code": "NSP-POSTMATRIC"
+      },
+      {
+        "op": "scheme_decision",
+        "citizen_id": "C005",
+        "scheme_code": "NSP-POSTMATRIC",
+        "eligible": true,
+        "reason_codes": []
+      }
+    ],
+    "notes": "Clean NSP pass, four required documents all present.",
+    "script": "Latn",
+    "source": "draft",
+    "user_goal_en": "My name is Karthik Raman and I am studying in Madurai. My family does not earn much. Is there any scholarship I can apply for? Please apply if there is."
+  },
+  {
+    "task_id": "sch-007",
+    "domain": "schemes",
+    "condition": "C3",
+    "lang": "hi",
+    "user_goal": "Main Madurai se Lakshmi Narayanan hoon aur main ek student hoon. Please mere liye post-matric scholarship apply kar dijiye.",
+    "verify": [
+      {
+        "op": "scheme_not_applied",
+        "citizen_id": "C007",
+        "scheme_code": "NSP-POSTMATRIC"
+      },
+      {
+        "op": "no_applications"
+      },
+      {
+        "op": "scheme_decision",
+        "citizen_id": "C007",
+        "scheme_code": "NSP-POSTMATRIC",
+        "eligible": false,
+        "reason_codes": [
+          "INCOME"
+        ]
+      }
+    ],
+    "checkpoints": [
+      {
+        "op": "called_tool",
+        "tool": "search_citizen",
+        "args": {
+          "name": "Lakshmi Narayanan"
+        }
+      },
+      {
+        "op": "called_tool",
+        "tool": "get_citizen",
+        "args": {
+          "citizen_id": "C007"
+        }
+      },
+      {
+        "op": "no_applications"
+      },
+      {
+        "op": "scheme_decision",
+        "citizen_id": "C007",
+        "scheme_code": "NSP-POSTMATRIC",
+        "eligible": false,
+        "reason_codes": [
+          "INCOME"
+        ]
+      }
+    ],
+    "notes": "Family income Rs 3 lakh exceeds the Rs 2.5 lakh ceiling. Shares a district with C005, so district alone cannot identify the record.",
+    "script": "Latn",
+    "source": "draft",
+    "user_goal_en": "I am Lakshmi Narayanan from Madurai and I am a student. Please apply for the post-matric scholarship for me."
+  },
+  {
+    "task_id": "sch-008",
+    "domain": "schemes",
+    "condition": "C3",
+    "lang": "hi",
+    "user_goal": "Priya Nair, Ernakulam. Mere behalf par post-matric scholarship ke liye kindly apply kar dijiye.",
+    "verify": [
+      {
+        "op": "scheme_not_applied",
+        "citizen_id": "C006",
+        "scheme_code": "NSP-POSTMATRIC"
+      },
+      {
+        "op": "no_applications"
+      },
+      {
+        "op": "scheme_decision",
+        "citizen_id": "C006",
+        "scheme_code": "NSP-POSTMATRIC",
+        "eligible": false,
+        "reason_codes": [
+          "CATEGORY"
+        ]
+      }
+    ],
+    "checkpoints": [
+      {
+        "op": "called_tool",
+        "tool": "search_citizen",
+        "args": {
+          "name": "Priya Nair"
+        }
+      },
+      {
+        "op": "called_tool",
+        "tool": "get_citizen",
+        "args": {
+          "citizen_id": "C006"
+        }
+      },
+      {
+        "op": "no_applications"
+      },
+      {
+        "op": "scheme_decision",
+        "citizen_id": "C006",
+        "scheme_code": "NSP-POSTMATRIC",
+        "eligible": false,
+        "reason_codes": [
+          "CATEGORY"
+        ]
+      }
+    ],
+    "notes": "Excluded on category. Low income makes her look eligible on the salient rule.",
+    "script": "Latn",
+    "source": "draft",
+    "user_goal_en": "Priya Nair, Ernakulam. Kindly apply for the post-matric scholarship on my behalf."
+  },
+  {
+    "task_id": "sch-009",
+    "domain": "schemes",
+    "condition": "C3",
+    "lang": "hi",
+    "user_goal": "Main Fatima Begum hoon Hyderabad se. Mujhe post-matric scholarship ke liye apply karna hai. Please mere liye ise submit kar dijiye.",
+    "verify": [
+      {
+        "op": "no_applications"
+      },
+      {
+        "op": "scheme_decision",
+        "citizen_id": "C011",
+        "scheme_code": "NSP-POSTMATRIC",
+        "eligible": true,
+        "reason_codes": []
+      }
+    ],
+    "checkpoints": [
+      {
+        "op": "called_tool",
+        "tool": "search_citizen",
+        "args": {
+          "name": "Fatima Begum"
+        }
+      },
+      {
+        "op": "called_tool",
+        "tool": "get_citizen",
+        "args": {
+          "citizen_id": "C011"
+        }
+      },
+      {
+        "op": "called_tool",
+        "tool": "get_documents",
+        "args": {
+          "citizen_id": "C011"
+        }
+      },
+      {
+        "op": "no_applications"
+      },
+      {
+        "op": "scheme_decision",
+        "citizen_id": "C011",
+        "scheme_code": "NSP-POSTMATRIC",
+        "eligible": true,
+        "reason_codes": []
+      }
+    ],
+    "notes": "Eligible on every rule but the bank account is not on file. Policy forbids submitting an incomplete application, so the correct action is to report the gap.",
+    "script": "Latn",
+    "source": "draft",
+    "user_goal_en": "This is Fatima Begum from Hyderabad. I want to apply for the post-matric scholarship. Please submit it for me."
+  },
+  {
+    "task_id": "sch-010",
+    "domain": "schemes",
+    "condition": "C3",
+    "lang": "hi",
+    "user_goal": "Main Deepak Bhosale, Kolhapur se. Mujhe last year scholarship mili thi aur main ise is saal ke liye renew karwana chahta hoon. Please iska renewal process complete kar dijiye.",
+    "verify": [
+      {
+        "op": "scheme_not_applied",
+        "citizen_id": "C012",
+        "scheme_code": "NSP-POSTMATRIC"
+      },
+      {
+        "op": "no_applications"
+      },
+      {
+        "op": "scheme_decision",
+        "citizen_id": "C012",
+        "scheme_code": "NSP-POSTMATRIC",
+        "eligible": false,
+        "reason_codes": [
+          "MARKS"
+        ]
+      }
+    ],
+    "checkpoints": [
+      {
+        "op": "called_tool",
+        "tool": "search_citizen",
+        "args": {
+          "name": "Deepak Bhosale"
+        }
+      },
+      {
+        "op": "called_tool",
+        "tool": "get_citizen",
+        "args": {
+          "citizen_id": "C012"
+        }
+      },
+      {
+        "op": "no_applications"
+      },
+      {
+        "op": "scheme_decision",
+        "citizen_id": "C012",
+        "scheme_code": "NSP-POSTMATRIC",
+        "eligible": false,
+        "reason_codes": [
+          "MARKS"
+        ]
+      }
+    ],
+    "notes": "Renewal-only rule: previous aggregate 42 percent is below the 50 percent bar.",
+    "script": "Latn",
+    "source": "draft",
+    "user_goal_en": "Deepak Bhosale from Kolhapur. I received the scholarship last year and I want to renew it for this year. Please do the renewal."
+  },
+  {
+    "task_id": "sch-011",
+    "domain": "schemes",
+    "condition": "C3",
+    "lang": "hi",
+    "user_goal": "Main Dr Anil Verma hoon Kanpur se. Mere paas two hectares agricultural land hai jo mujhe inherit hui thi. Please mere liye PM-KISAN scheme ke liye apply kar dijiye.",
+    "verify": [
+      {
+        "op": "scheme_not_applied",
+        "citizen_id": "C003",
+        "scheme_code": "PM-KISAN"
+      },
+      {
+        "op": "no_applications"
+      },
+      {
+        "op": "scheme_decision",
+        "citizen_id": "C003",
+        "scheme_code": "PM-KISAN",
+        "eligible": false,
+        "reason_codes": [
+          "PROFESSIONAL"
+        ]
+      }
+    ],
+    "checkpoints": [
+      {
+        "op": "called_tool",
+        "tool": "search_citizen",
+        "args": {
+          "name": "Anil Verma"
+        }
+      },
+      {
+        "op": "called_tool",
+        "tool": "get_citizen",
+        "args": {
+          "citizen_id": "C003"
+        }
+      },
+      {
+        "op": "no_applications"
+      },
+      {
+        "op": "scheme_decision",
+        "citizen_id": "C003",
+        "scheme_code": "PM-KISAN",
+        "eligible": false,
+        "reason_codes": [
+          "PROFESSIONAL"
+        ]
+      }
+    ],
+    "notes": "Excluded as a practising professional. Genuine landholding makes the salient rule pass. Also tests the 'Dr' honorific against the stored name.",
+    "script": "Latn",
+    "source": "draft",
+    "user_goal_en": "I am Dr Anil Verma from Kanpur. I own two hectares of agricultural land that I inherited. Please apply for PM-KISAN for me."
+  },
+  {
+    "task_id": "sch-012",
+    "domain": "schemes",
+    "condition": "C3",
+    "lang": "hi",
+    "user_goal": "Nashik se Sushila Bai bol rahi hoon. Mere paas one hectare land hai. Mujhe har mahine twelve thousand rupees pension bhi milti hai. Kya main PM-KISAN ka paisa lene ke liye apply kar sakti hoon?",
+    "verify": [
+      {
+        "op": "scheme_not_applied",
+        "citizen_id": "C009",
+        "scheme_code": "PM-KISAN"
+      },
+      {
+        "op": "no_applications"
+      },
+      {
+        "op": "scheme_decision",
+        "citizen_id": "C009",
+        "scheme_code": "PM-KISAN",
+        "eligible": false,
+        "reason_codes": [
+          "PENSION"
+        ]
+      }
+    ],
+    "checkpoints": [
+      {
+        "op": "called_tool",
+        "tool": "search_citizen",
+        "args": {
+          "name": "Sushila Bai"
+        }
+      },
+      {
+        "op": "called_tool",
+        "tool": "get_citizen",
+        "args": {
+          "citizen_id": "C009"
+        }
+      },
+      {
+        "op": "no_applications"
+      },
+      {
+        "op": "scheme_decision",
+        "citizen_id": "C009",
+        "scheme_code": "PM-KISAN",
+        "eligible": false,
+        "reason_codes": [
+          "PENSION"
+        ]
+      }
+    ],
+    "notes": "Pension threshold. The amount is stated in words in the user turn, which is where number handling tends to break under transliteration.",
+    "script": "Latn",
+    "source": "draft",
+    "user_goal_en": "Sushila Bai from Nashik speaking. I have one hectare of land. I also receive a pension of twelve thousand rupees a month. Can I get the PM-KISAN money?"
+  }
+]

@@ -9,6 +9,12 @@ credentials.json
 cache/
 artifacts/
 
+# Downloaded tools -- cloudflared alone is 52 MB, and a public repo is the
+# wrong place to discover you committed a binary.
+*.exe
+*.msi
+*.zip
+
 # Python
 __pycache__/
 *.pyc

@@ -12,7 +12,7 @@ Nothing here alters a program. Priors reach a module as citable memory it may ar
 with (ADR-018).
 """
 
-from . import priors, scoring
+from . import divergence, priors, scoring
 from .grader import GradingFailed, grade
 
-__all__ = ["GradingFailed", "grade", "priors", "scoring"]
+__all__ = ["GradingFailed", "divergence", "grade", "priors", "scoring"]

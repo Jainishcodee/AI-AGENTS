@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
@@ -33,7 +34,15 @@ class StockAlertService {
 
   static const _kBaseUrl = 'stockseer_base_url';
   static const _kEnabled = 'stockseer_alerts_enabled';
+  static const _kToken = 'stockseer_token';
   static const _seenPrefix = 'stockseer_seen_';
+
+  /// Shared secret, required when the PC is reached over a public tunnel.
+  /// Empty on a private network (Tailscale, home LAN), where it is unnecessary.
+  String token = '';
+
+  Map<String, String> get _headers =>
+      token.isEmpty ? const {} : {'X-StockSeer-Token': token};
 
   /// The PC running `stockseer ui`, reachable on the same wifi.
   /// 10.0.2.2 is the host machine as seen from an Android emulator.
@@ -41,8 +50,15 @@ class StockAlertService {
   bool enabled = true;
   int pollSeconds = 20;
 
+  /// Cadence while a position is open. Between a "nearing stop" warning and the
+  /// stop itself there may only be seconds, so idle-speed polling would deliver
+  /// the warning after it stopped being useful.
+  int livePollSeconds = 5;
+
   Timer? _timer;
   bool _polling = false;
+  bool _livePosition = false;
+  int _consecutiveFailures = 0;
 
   /// Set by the UI so a tapped alert can open the right screen.
   void Function(Map<String, dynamic> alert)? onAlertTapped;
@@ -55,16 +71,25 @@ class StockAlertService {
   Future<void> init() async {
     final prefs = await SharedPreferences.getInstance();
     baseUrl = prefs.getString(_kBaseUrl) ?? baseUrl;
+    token = prefs.getString(_kToken) ?? '';
     enabled = prefs.getBool(_kEnabled) ?? true;
     await _reminders.init();
-    if (enabled) start();
+    if (enabled) {
+      start();
+      // Confirms the saved address, or finds the new one after a reconnect.
+      unawaited(discover());
+    }
   }
 
-  Future<void> configure({String? url, bool? on}) async {
+  Future<void> configure({String? url, bool? on, String? secret}) async {
     final prefs = await SharedPreferences.getInstance();
     if (url != null && url.trim().isNotEmpty) {
       baseUrl = url.trim().replaceAll(RegExp(r'/+$'), '');
       await prefs.setString(_kBaseUrl, baseUrl);
+    }
+    if (secret != null) {
+      token = secret.trim();
+      await prefs.setString(_kToken, token);
     }
     if (on != null) {
       enabled = on;
@@ -73,10 +98,35 @@ class StockAlertService {
     enabled ? start() : stop();
   }
 
+  /// A public tunnel or a Tailscale address is reachable from anywhere, so a
+  /// local subnet sweep would be pointless — and on mobile data it would scan
+  /// the carrier's network, which is both useless and rude.
+  bool get _isRemote {
+    final host = Uri.tryParse(baseUrl)?.host ?? '';
+    if (host.isEmpty) return false;
+    final private = RegExp(r'^(10\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.)');
+    // 100.64/10 is Tailscale's range: routable from anywhere, never sweepable.
+    return !private.hasMatch(host) || host.startsWith('100.');
+  }
+
   void start() {
-    _timer?.cancel();
-    _timer = Timer.periodic(Duration(seconds: pollSeconds), (_) => poll());
+    _restartTimer();
     poll();
+  }
+
+  void _restartTimer() {
+    _timer?.cancel();
+    final secs = _livePosition ? livePollSeconds : pollSeconds;
+    _timer = Timer.periodic(Duration(seconds: secs), (_) => poll());
+  }
+
+  /// Speed up while a trade is on, slow down once it closes.
+  void _setLive(bool live) {
+    if (live == _livePosition) return;
+    _livePosition = live;
+    _note(live ? 'position open — polling every ${livePollSeconds}s'
+        : 'position closed — back to ${pollSeconds}s');
+    _restartTimer();
   }
 
   void stop() => _timer?.cancel();
@@ -93,8 +143,12 @@ class StockAlertService {
     _polling = true;
     try {
       final res = await http
-          .get(Uri.parse('$baseUrl/api/notify/pending?limit=10'))
+          .get(Uri.parse('$baseUrl/api/notify/pending?limit=10'), headers: _headers)
           .timeout(const Duration(seconds: 8));
+      if (res.statusCode == 401) {
+        _note('rejected — the access code does not match the PC');
+        return;
+      }
       if (res.statusCode != 200) return;
 
       final items = (jsonDecode(res.body) as List).cast<Map<String, dynamic>>();
@@ -105,26 +159,47 @@ class StockAlertService {
         try {
           await _show(alert);
           delivered.add(alert['id'] as String);
+          // The alert kinds themselves tell us whether a trade is running, so
+          // no extra endpoint or shared state is needed to pace the polling.
+          switch (alert['kind']) {
+            case 'ipo_buy':
+              _setLive(true);
+            case 'ipo_exit':
+              _setLive(false);
+          }
         } catch (e) {
           debugPrint('stockseer: could not show alert ($e)');
         }
       }
       if (delivered.isNotEmpty) await _ack(delivered);
       _note('delivered ${delivered.length} alert(s)');
+      _consecutiveFailures = 0;
     } on TimeoutException {
-      // The PC is asleep or off the network. Normal; try again next tick.
+      await _onPollFailure();
     } catch (e) {
       debugPrint('stockseer: poll failed ($e)');
+      await _onPollFailure();
     } finally {
       _polling = false;
     }
+  }
+
+  /// A tethered PC gets a new DHCP address on every replug, so a saved URL goes
+  /// stale on its own. Rather than making that the user's problem, go and look
+  /// for the PC again after a few failures — the address is discoverable, so
+  /// asking a human to retype it is a design failure, not a configuration step.
+  Future<void> _onPollFailure() async {
+    _consecutiveFailures++;
+    if (_consecutiveFailures < 3 || _consecutiveFailures % 10 != 3) return;
+    final found = await discover();
+    if (found != null) _note('reconnected automatically');
   }
 
   Future<void> _ack(List<String> ids) async {
     try {
       await http
           .post(Uri.parse('$baseUrl/api/notify/ack'),
-              headers: {'Content-Type': 'application/json'},
+              headers: {'Content-Type': 'application/json', ..._headers},
               body: jsonEncode({'ids': ids}))
           .timeout(const Duration(seconds: 8));
     } catch (e) {
@@ -204,7 +279,7 @@ class StockAlertService {
     if (!enabled) return 0;
     try {
       final res = await http
-          .get(Uri.parse('$baseUrl/api/ipo/calendar'))
+          .get(Uri.parse('$baseUrl/api/ipo/calendar'), headers: _headers)
           .timeout(const Duration(seconds: 12));
       if (res.statusCode != 200) return 0;
 
@@ -297,14 +372,102 @@ class StockAlertService {
   Future<String> testConnection() async {
     try {
       final res = await http
-          .get(Uri.parse('$baseUrl/api/state'))
+          .get(Uri.parse('$baseUrl/api/state'), headers: _headers)
           .timeout(const Duration(seconds: 8));
+      if (res.statusCode == 401) {
+        return 'Reached the PC, but the access code is wrong.\n'
+            'It must match STOCKSEER_TOKEN in the PC\'s .env file.';
+      }
       if (res.statusCode != 200) return 'HTTP ${res.statusCode}';
       final feed = (jsonDecode(res.body) as Map)['feed'];
       return 'Connected — feed: $feed';
     } catch (e) {
       return 'Cannot reach $baseUrl\n$e';
     }
+  }
+
+  // ------------------------------------------------------------- discovery
+
+  /// Is StockSeer answering at this address?
+  ///
+  /// Checks the app name rather than just a 200, so a router admin page or some
+  /// other service on 8765 cannot be mistaken for the PC.
+  static Future<bool> _isStockSeer(String host, int port,
+      {Duration timeout = const Duration(milliseconds: 400)}) async {
+    try {
+      final res =
+          await http.get(Uri.parse('http://$host:$port/api/ping')).timeout(timeout);
+      if (res.statusCode != 200) return false;
+      return (jsonDecode(res.body) as Map)['app'] == 'stockseer';
+    } catch (_) {
+      return false;
+    }
+  }
+
+  /// Is StockSeer answering at this full URL? Tunnels need a longer timeout
+  /// than a LAN hop, and https is normal there.
+  Future<bool> _reachable(String url) async {
+    try {
+      final res = await http
+          .get(Uri.parse('$url/api/ping'))
+          .timeout(const Duration(seconds: 6));
+      if (res.statusCode != 200) return false;
+      return (jsonDecode(res.body) as Map)['app'] == 'stockseer';
+    } catch (_) {
+      return false;
+    }
+  }
+
+  /// Find the PC on any network this phone is attached to.
+  ///
+  /// Sweeps each interface's /24 rather than using mDNS: multicast is blocked
+  /// on a lot of home routers and on most tethering setups, which is exactly
+  /// where this has to work. 254 hosts at 400ms, 32 at a time, is a few seconds.
+  Future<String?> discover({int port = 8765}) async {
+    // The saved address usually still works — try it before sweeping anything.
+    if (await _reachable(baseUrl)) return baseUrl;
+    if (_isRemote) {
+      // Nothing to search for: a remote address either works or the PC is off.
+      _note('$baseUrl is not responding — is the PC awake?');
+      return null;
+    }
+
+    _note('searching the network for the PC…');
+    final subnets = <String>{};
+    try {
+      for (final iface in await NetworkInterface.list(
+          type: InternetAddressType.IPv4, includeLoopback: false)) {
+        for (final addr in iface.addresses) {
+          final parts = addr.address.split('.');
+          if (parts.length == 4 && !addr.address.startsWith('169.254.')) {
+            subnets.add('${parts[0]}.${parts[1]}.${parts[2]}');
+          }
+        }
+      }
+    } catch (e) {
+      debugPrint('stockseer: interface list failed ($e)');
+    }
+    if (subnets.isEmpty) return null;
+
+    for (final subnet in subnets) {
+      for (var start = 1; start < 255; start += 32) {
+        final batch = <Future<String?>>[];
+        for (var i = start; i < start + 32 && i < 255; i++) {
+          final host = '$subnet.$i';
+          batch.add(_isStockSeer(host, port).then((ok) => ok ? host : null));
+        }
+        final hit = (await Future.wait(batch)).firstWhere((h) => h != null,
+            orElse: () => null);
+        if (hit != null) {
+          final found = 'http://$hit:$port';
+          await configure(url: found);
+          _note('found the PC at $found');
+          return found;
+        }
+      }
+    }
+    _note('no PC found on ${subnets.join(", ")}.*');
+    return null;
   }
 
   void dispose() => _timer?.cancel();

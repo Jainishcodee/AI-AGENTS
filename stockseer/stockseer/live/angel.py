@@ -159,12 +159,27 @@ class AngelFeed(Feed):
             break
         raise AngelError(f"login failed ({capability}): {last}")
 
-    def check_entitlements(self) -> dict[str, bool]:
+    def check_entitlements(self, attempts: int = 3, pause: float = 2.0) -> dict[str, bool]:
         """Probe what each key can actually reach.
 
-        Done explicitly rather than on first use, so a half-entitled setup fails
-        loudly at startup instead of at 10:00 on listing day.
+        Retried, because SmartAPI intermittently returns ``AG8004`` on a healthy
+        key -- a rate limit or a momentary blip. Treating one bad probe as
+        permanent silently downgrades the whole session to 15-minute delayed
+        Yahoo data, and you find out on listing morning when the prices you are
+        acting on are a quarter of an hour stale.
         """
+        out: dict[str, bool] = {}
+        for attempt in range(attempts):
+            out = self._probe_once()
+            if all(out.values()):
+                break
+            if attempt < attempts - 1:
+                log.info("entitlement probe %s; retrying", out)
+                time.sleep(pause)
+        self._entitled = out
+        return out
+
+    def _probe_once(self) -> dict[str, bool]:
         exch, tsym, token = PROBE
         out = {}
         try:
@@ -184,7 +199,6 @@ class AngelFeed(Feed):
         except Exception as exc:
             log.debug("historical probe failed: %s", exc)
             out["historical"] = False
-        self._entitled = out
         return out
 
     @classmethod

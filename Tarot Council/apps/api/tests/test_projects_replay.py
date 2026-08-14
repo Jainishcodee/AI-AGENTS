@@ -287,6 +287,26 @@ async def test_replay_records_the_program_versions_on_both_sides(council):
     assert result.program_versions_now
     assert result.program_versions_now["strategist"] >= 1
 
+    # Nothing was edited between the two runs, so nothing should be reported as
+    # changed. Comparing the dicts wholesale would wrongly claim a change, because the
+    # card records every participant and the replay records only what ran.
+    assert result.versions_changed == {}
+    assert set(result.program_versions_then) != set(result.program_versions_now)
+
+
+async def test_versions_changed_reports_a_real_program_edit(council):
+    await council.run(
+        DeliberationRequest(question=QUESTION, depth="quick", preset="solo:analyst")
+    )
+    card = (await council.store.list_cards())[0]
+    await council.resolve(card.id, OUTCOME)
+
+    result = await council.replay(card.id)
+    # Simulate the analyst having been edited since the decision was taken.
+    result.program_versions_then = {**result.program_versions_then, "analyst": 1}
+    result.program_versions_now = {**result.program_versions_now, "analyst": 2}
+    assert result.versions_changed == {"analyst": (1, 2)}
+
 
 async def test_replay_does_not_disturb_the_original(council):
     await council.run(

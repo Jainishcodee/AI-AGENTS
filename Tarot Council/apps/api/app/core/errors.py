@@ -43,6 +43,29 @@ class ProviderError(CognitiveOSError):
         super().__init__(f"{provider}: {message}")
 
 
+class ProviderUnavailable(CognitiveOSError):
+    """The provider is gone — quota, auth, or outage — not one module struggling.
+
+    The distinction decides the correct response, and it only became available once
+    deliberations were resumable:
+
+    - `ArtifactInvalid` means *this* module could not produce a valid artifact twice in a
+      row. Abstaining and carrying on is right: five other perspectives still stand.
+    - This means nothing can run. Abstaining all six would produce a deliberation that
+      *completes* on nothing and writes a Decision Card recording it — worse than
+      stopping, because it looks like an answer.
+
+    Carries the partial `ModuleRun` so the work already paid for can be banked in a
+    checkpoint rather than thrown away with the exception.
+    """
+
+    def __init__(self, module: str, run: object, cause: Exception) -> None:
+        self.module = module
+        self.run = run
+        self.cause = cause
+        super().__init__(f"{module}: provider unavailable — {cause}")
+
+
 class ModuleAbstained(CognitiveOSError):
     """A module could not complete its program.
 

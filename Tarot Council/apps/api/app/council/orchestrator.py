@@ -16,7 +16,12 @@ from datetime import date, datetime, timedelta, timezone
 from pydantic import ValidationError
 
 from ..core.config import Depth, Settings, get_settings
-from ..core.errors import ArtifactInvalid, CognitiveOSError, ProviderError
+from ..core.errors import (
+    ArtifactInvalid,
+    CognitiveOSError,
+    ProviderError,
+    ProviderUnavailable,
+)
 from ..core.logging import get_logger
 from ..engine.executor import Engine
 from ..engine.mockfix import build_fixups
@@ -38,6 +43,7 @@ from ..schemas.cards import (
     ReplayResult,
     Resolution,
 )
+from ..schemas.checkpoint import Checkpoint
 from ..schemas.common import Verdict
 from ..schemas.council import (
     Critique,
@@ -291,6 +297,46 @@ class Council:
             ],
         )
 
+    # ----------------------------------------------------------- resumption --
+
+    async def _checkpoint(self, checkpoint: Checkpoint) -> None:
+        checkpoint.updated_at = datetime.now(timezone.utc)
+        try:
+            await self._store.save_checkpoint(checkpoint)
+        except Exception as exc:  # noqa: BLE001
+            # Never let bookkeeping kill a live deliberation. A lost checkpoint costs a
+            # replay; a crashed deliberation costs the whole run.
+            log.warning("could not write checkpoint %s: %s", checkpoint.deliberation_id, exc)
+
+    async def resumable(self, limit: int = 20) -> list[Checkpoint]:
+        return [c for c in await self._store.list_checkpoints(limit) if c.resumable]
+
+    async def resume(self, deliberation_id: str) -> AsyncIterator[Event]:
+        """Continue a deliberation that stopped part-way, reusing what it already paid for.
+
+        The motivating case is mundane and constant: on a free tier a `standard` run is
+        ~26 calls at 5 requests a minute, so a quota window or a closed laptop ends it
+        mid-flight. Before this, all of that work was lost.
+
+        Everything already produced is kept — finished modules, and finished *stages* of
+        unfinished modules. Intake is not re-run, because a fresh intake could yield a
+        different context and the existing artifacts were built against the old one.
+        """
+        checkpoint = await self._store.get_checkpoint(deliberation_id)
+        if checkpoint is None:
+            raise KeyError(deliberation_id)
+        if not checkpoint.resumable:
+            raise CognitiveOSError(
+                f"deliberation {deliberation_id} stopped in '{checkpoint.phase}', which is "
+                "not resumable"
+            )
+        log.info("resuming %s: %s", deliberation_id, checkpoint.describe())
+        async for event in self._stream(checkpoint.request, resume=checkpoint):
+            yield event
+
+    async def discard(self, deliberation_id: str) -> None:
+        await self._store.delete_checkpoint(deliberation_id)
+
     # -------------------------------------------------------------- re-runs --
 
     async def rerun_stage(
@@ -422,6 +468,14 @@ class Council:
 
     async def deliberate(self, request: DeliberationRequest) -> AsyncIterator[Event]:
         """Stream typed events. `run()` drains this, so there is one code path."""
+        async for event in self._stream(request):
+            yield event
+
+    async def _stream(
+        self, request: DeliberationRequest, *, resume: Checkpoint | None = None
+    ) -> AsyncIterator[Event]:
+        """The one streaming path. A fresh run and a resumed one differ only in whether
+        a checkpoint is handed in, so they cannot drift apart."""
         queue: asyncio.Queue[Event | None] = asyncio.Queue()
 
         async def emit(event: Event) -> None:
@@ -429,7 +483,7 @@ class Council:
 
         async def produce() -> None:
             try:
-                await self._run(request, emit)
+                await self._run(request, emit, resume=resume)
             except CognitiveOSError as exc:
                 await queue.put(ev("error", message=str(exc), recoverable=False))
             except Exception as exc:  # noqa: BLE001 - the stream must always close
@@ -465,7 +519,12 @@ class Council:
 
     # ------------------------------------------------------------- pipeline --
 
-    async def _run(self, request: DeliberationRequest, emit: Emit) -> None:
+    async def _run(
+        self,
+        request: DeliberationRequest,
+        emit: Emit,
+        resume: Checkpoint | None = None,
+    ) -> None:
         preset = loader.preset(request.preset or self._settings.default_preset)
         depth: Depth = request.depth or self._settings.default_depth
         programs = loader.programs()
@@ -476,8 +535,35 @@ class Council:
         live = self._live.open(run_id, request.question)
         await emit(ev("run_started", run_id=run_id, preset=preset.id, depth=depth))
 
+        # The deliberation id is minted here so the checkpoint and the finished
+        # transcript share it: resuming continues the same run rather than starting a
+        # lookalike.
+        checkpoint = resume or Checkpoint(
+            deliberation_id=uuid.uuid4().hex[:12],
+            request=request,
+            preset=preset.id,
+            depth=depth,
+            project_id=request.project_id,
+        )
+
         try:
-            await self._pipeline(request, preset, depth, programs, live, emit)
+            await self._pipeline(request, preset, depth, programs, live, emit, checkpoint)
+        except Exception as exc:  # noqa: BLE001 - record where it stopped, then re-raise
+            checkpoint.failure = str(exc)
+            checkpoint.updated_at = datetime.now(timezone.utc)
+            if checkpoint.resumable:
+                await self._store.save_checkpoint(checkpoint)
+                await emit(
+                    ev(
+                        "checkpointed",
+                        deliberation_id=checkpoint.deliberation_id,
+                        phase=checkpoint.phase,
+                        artifacts=checkpoint.artifacts_done,
+                        calls=checkpoint.usage.calls,
+                        detail=checkpoint.describe(),
+                    )
+                )
+            raise
         finally:
             self._live.close(run_id)
 
@@ -489,14 +575,22 @@ class Council:
         programs,
         live: LiveRun,
         emit: Emit,
+        checkpoint: Checkpoint,
     ) -> None:
         # ---- stage 0: intake -------------------------------------------------
-        await emit(ev("stage_started", phase="intake", label="Reading the question"))
-        context = await self._intake(request, emit)
+        # Skipped on resume: it is one cheap call, but re-running it could produce a
+        # different context, and then the artifacts already paid for would have been
+        # built against a context that no longer exists.
+        if checkpoint.context is None:
+            await emit(ev("stage_started", phase="intake", label="Reading the question"))
+            checkpoint.context = await self._intake(request, emit)
+            checkpoint.phase = "reason"
+            await self._checkpoint(checkpoint)
+        context = checkpoint.context
         await emit(ev("intake_complete", context=context.model_dump(mode="json")))
 
         deliberation = Deliberation(
-            id=uuid.uuid4().hex[:12],
+            id=checkpoint.deliberation_id,
             question=request.question,
             preset=preset.id,
             depth=depth,
@@ -507,12 +601,21 @@ class Council:
 
         # ---- stage 1: independent reasoning ---------------------------------
         running = [m for m in preset.running if m in programs]
+        already = {r.module for r in checkpoint.completed}
+        todo = [m for m in running if m not in already]
+        if already:
+            log.info("resuming: %s already finished", ", ".join(sorted(already)))
         await emit(
             ev(
                 "stage_started",
                 phase="reason",
-                label=f"{len(running)} modules reasoning independently",
-                modules=running,
+                label=(
+                    f"{len(todo)} modules reasoning independently"
+                    if not already
+                    else f"resuming {len(todo)} of {len(running)} modules"
+                ),
+                modules=todo,
+                resumed=sorted(already),
             )
         )
 
@@ -522,6 +625,17 @@ class Council:
             memory = await self._store.agent_memory(
                 module, context.question, project_id=request.project_id
             )
+            # Pick up mid-program where a previous attempt stopped. Only possible because
+            # every stage is a separately validated artifact (ADR-011) — otherwise a
+            # resume would have to redo the whole module.
+            partial = checkpoint.partial.get(module)
+            stage_ids = [stage.id for stage in program.stages]
+            resume_from = checkpoint.next_stage_for(module, stage_ids) if partial else None
+            if resume_from and resume_from != stage_ids[0]:
+                log.info("%s resuming from stage %s", module, resume_from)
+            else:
+                resume_from, partial = None, None
+
             # Isolation is structural: the only arguments are the program, the
             # context, and this module's own memory. There is no parameter through
             # which a sibling's output could arrive.
@@ -533,12 +647,41 @@ class Council:
                 memory=memory,
                 emit=emit,
                 live=live,
+                resume_from=resume_from,
+                seed=partial,
             )
 
-        results = await asyncio.gather(
-            *(run_module(m) for m in running), return_exceptions=True
-        )
-        for module, result in zip(running, results):
+        # Modules finished by an earlier attempt come back verbatim — that is the point
+        # of the checkpoint, and their usage is carried so the reported call count is the
+        # true cost of the decision rather than of this attempt.
+        deliberation.runs.extend(checkpoint.completed)
+        for finished in checkpoint.completed:
+            deliberation.usage.merge(finished.usage)
+
+        results = await asyncio.gather(*(run_module(m) for m in todo), return_exceptions=True)
+
+        # Bank *everything* the provider let us finish before deciding whether to stop —
+        # modules that completed as well as the partial stages of ones that did not.
+        # Order matters: raising before banking the successes would throw away exactly
+        # the work resumption exists to preserve.
+        outage: ProviderUnavailable | None = None
+        for module, result in zip(todo, results):
+            if isinstance(result, ProviderUnavailable):
+                partial = result.run
+                if getattr(partial, "artifacts", None):
+                    checkpoint.partial[module] = partial  # type: ignore[assignment]
+                    checkpoint.usage.merge(partial.usage)  # type: ignore[union-attr]
+                outage = outage or result
+            elif isinstance(result, ModuleRun):
+                checkpoint.completed.append(result)
+                checkpoint.partial.pop(module, None)
+                checkpoint.usage.merge(result.usage)
+
+        if outage is not None:
+            await self._checkpoint(checkpoint)
+            raise outage
+
+        for module, result in zip(todo, results):
             if isinstance(result, BaseException):
                 log.warning("%s failed outright: %s", module, result)
                 deliberation.runs.append(
@@ -551,12 +694,24 @@ class Council:
                     )
                 )
                 await emit(ev("module_abstained", module=module, reason=str(result)))
+                # An abstention is a result. Recording it stops a resume from retrying a
+                # module that has already failed twice at the same stage.
+                checkpoint.completed.append(deliberation.runs[-1])
+                checkpoint.partial.pop(module, None)
+                await self._checkpoint(checkpoint)
             else:
                 deliberation.runs.append(result)
                 deliberation.usage.merge(result.usage)
+                checkpoint.completed.append(result)
+                checkpoint.partial.pop(module, None)
+                checkpoint.usage.merge(result.usage)
+                await self._checkpoint(checkpoint)
 
         # ---- stages 2 & 3: critique and revision ----------------------------
-        for round_index in range(CRITIQUE_ROUNDS.get(depth, 1)):
+        checkpoint.phase = "critique"
+        await self._checkpoint(checkpoint)
+
+        for round_index in range(checkpoint.rounds_done, CRITIQUE_ROUNDS.get(depth, 1)):
             fresh = [r for r in deliberation.runs if not r.abstained and r.conclusion]
             if len(fresh) < 2:
                 break
@@ -567,16 +722,26 @@ class Council:
                     label=f"Critique round {round_index + 1}",
                 )
             )
+            deliberation.critiques.extend(checkpoint.critiques)
+            deliberation.revisions.extend(checkpoint.revisions)
             critiques = await self._critique(preset, programs, deliberation, emit)
             deliberation.critiques.extend(critiques)
+            checkpoint.critiques.extend(critiques)
+            await self._checkpoint(checkpoint)
             if not critiques:
                 break
 
             await emit(ev("stage_started", phase="revise", label="Revising confidence"))
+            checkpoint.phase = "revise"
             revisions = await self._revise(programs, deliberation, critiques, emit)
             deliberation.revisions.extend(revisions)
+            checkpoint.revisions.extend(revisions)
+            checkpoint.rounds_done = round_index + 1
+            await self._checkpoint(checkpoint)
 
         # ---- stage 4: synthesis ---------------------------------------------
+        checkpoint.phase = "synthesis"
+        await self._checkpoint(checkpoint)
         await emit(ev("stage_started", phase="synthesis", label="Synthesising"))
         synthesis = await self._synthesise(programs, deliberation, emit)
         deliberation.synthesis = synthesis
@@ -586,6 +751,11 @@ class Council:
         await emit(ev("trace_updated", **graph.model_dump(mode="json")))
 
         await self._store.save_deliberation(deliberation)
+
+        # Finished, so there is nothing to resume. Deleting rather than marking done
+        # keeps `list_checkpoints` honest about what is genuinely unfinished.
+        checkpoint.phase = "done"
+        await self._store.delete_checkpoint(checkpoint.deliberation_id)
 
         card: DecisionCard | None = None
         if synthesis is not None:

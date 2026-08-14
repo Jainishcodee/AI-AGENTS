@@ -1,18 +1,21 @@
-"""Listing-morning watcher.
+"""Listing-morning watcher: live tracking from the opening print to the exit.
 
-Designed around what the 38-listing study actually found, not around the story:
+The alert sequence, and why each step is where it is:
 
-* **53% of listings peak in their opening minute and fade.** So there is no
-  "buy at 10:00" alert. The watcher reports the opening print, then waits for
-  the stock to *prove* it is holding above it before suggesting an entry.
-* **11:00 is not special** -- the drift kept growing until the close. So there
-  is no forced 11:00 exit; a trailing stop rides whatever drift shows up.
-* **The tail is -20%** (lower circuit). So the stop is mandatory, not optional.
-* **The whole thing is a coin flip** (50% win rate, t = 1.02). Every alert
-  carries that number, so the decision is made with it in view.
+  1. ARM        ~5 min before listing. Heads-up, nothing to do yet.
+  2. LISTED     first traded price. Reports it. **Not a buy signal** -- 53% of
+                listings peak in their opening minute and fade, so acting here
+                is buying the high half the time.
+  3. BUY        only once it has held above the opening print for
+                `confirm_minutes`. Carries the buy price, the stop, the target,
+                the quantity your capital affords, and the rupee gain at target.
+  4. NEARING    price is closing on the target, or on the stop. Fires *before*
+                the level so there is time to act rather than read about it.
+  5. EXIT       target hit, stop hit, trailing stop, or the session ending.
 
-Mainboard IPOs open at 10:00 IST after a special pre-open auction; SME issues
-start with the normal 09:15 session.
+Every level is derived from the 38-listing study rather than round numbers:
+average best gain before 11:00 was +3.35%, average worst dip -2.80%. Those two
+numbers being so close is exactly why this is a coin flip, and the alerts say so.
 """
 
 from __future__ import annotations
@@ -27,19 +30,43 @@ from .registry import IPO, listing_today
 
 log = logging.getLogger(__name__)
 
-BASE_RATE = ("Listing-day base rate: 50% win at 11:00, t=1.02 over 38 listings. "
-             "53% of listings peak in their first minute and fade.")
+BASE_RATE = ("Base rate: 50% win at 11:00 over 38 listings (t=1.02). "
+             "53% peak in minute one and fade. This is a coin flip with a "
+             "small positive tilt -- size it accordingly.")
 
 
 @dataclass
 class WatchConfig:
-    confirm_minutes: int = 5        # how long it must hold above open to confirm
-    stop_pct: float = 0.04          # hard stop below entry
-    trail_pct: float = 0.03         # trail once in profit
-    take_profit_pct: float = 0.08   # bank a spike this big outright
-    poll_seconds: int = 20
-    arm_before_minutes: int = 5     # pre-listing heads-up
+    capital: float = 40_000.0       # used to quote quantity and rupee amounts
+    confirm_minutes: int = 5        # hold above the open this long before a buy alert
+    target_pct: float = 0.035       # ~ the measured average best exit (+3.35%)
+    stop_pct: float = 0.030         # just past the measured average dip (-2.80%)
+    trail_arm_pct: float = 0.015    # profit at which the trailing stop wakes up
+    trail_pct: float = 0.025        # give-back allowed from the high
+    breakeven_buffer: float = 0.002  # floor for an armed trail; covers costs
+    near_pct: float = 0.008         # warn this far from a level
+    poll_seconds: int = 10          # live tracking cadence once a position is on
+    idle_poll_seconds: int = 20     # before entry
     session_end: time = time(15, 15)
+
+
+@dataclass
+class Position:
+    entry: float
+    stop: float
+    target: float
+    qty: int
+    opened_at: datetime
+    peak: float = 0.0
+    closed: bool = False
+    warned_target: bool = False
+    warned_stop: bool = False
+
+    def gain(self, price: float) -> float:
+        return price / self.entry - 1.0
+
+    def rupees(self, price: float) -> float:
+        return (price - self.entry) * self.qty
 
 
 @dataclass
@@ -47,19 +74,16 @@ class WatchState:
     ipo: IPO
     opening_print: float | None = None
     opened_at: datetime | None = None
-    entry: float | None = None
-    peak: float | None = None
-    stopped: bool = False
-    booked: bool = False
+    position: Position | None = None
     history: list[tuple[datetime, float]] = field(default_factory=list)
 
     @property
-    def armed(self) -> bool:
-        return self.entry is not None and not (self.stopped or self.booked)
+    def live(self) -> bool:
+        return self.position is not None and not self.position.closed
 
 
 class ListingWatcher:
-    """Watches one IPO through its listing session."""
+    """Watches one IPO from its opening print through to an exit."""
 
     def __init__(self, ipo: IPO, feed, config: WatchConfig | None = None):
         self.ipo = ipo
@@ -69,170 +93,245 @@ class ListingWatcher:
         self._hub = hub()
 
     # ------------------------------------------------------------------ #
-    def _price(self) -> float | None:
+    def price(self) -> float | None:
         try:
             return float(self.feed.quote(self.ipo.yf_symbol).price)
         except Exception as exc:
             log.debug("%s: quote unavailable (%s)", self.ipo.symbol, exc)
             return None
 
+    def _key(self, tag: str) -> str:
+        return f"{tag}:{self.ipo.symbol}:{date.today().isoformat()}"
+
+    # ------------------------------------------------------------ 1. arm
     def arm(self) -> None:
         i = self.ipo
         self._hub.alert(
             kind="ipo_listing_soon", urgency="act",
             title=f"{i.symbol} lists shortly",
             body=(f"{i.company}\nIssue price Rs.{i.issue_price}\n"
-                  f"Watching for the opening print.\n\n{BASE_RATE}"),
-            symbol=i.symbol,
-            dedupe_key=f"arm:{i.symbol}:{date.today().isoformat()}",
+                  f"Watching for the opening print. Keep Jarvis open for live "
+                  f"tracking.\n\n{BASE_RATE}"),
+            symbol=i.symbol, dedupe_key=self._key("arm"),
             issue_price=i.issue_price,
         )
 
-    def on_open(self, price: float) -> None:
-        """First traded price seen. Reports, does not recommend."""
+    # --------------------------------------------------------- 2. listed
+    def _on_listed(self, price: float) -> None:
         st = self.state
         st.opening_print = price
         st.opened_at = datetime.now()
-        st.peak = price
 
         gain = (price / self.ipo.issue_price - 1.0) if self.ipo.issue_price else None
-        allot = (f"Allotment holders are up {gain * 100:+.1f}% on this print.\n"
+        allot = (f"Allotment holders are up {gain * 100:+.1f}%.\n"
                  if gain is not None else "")
         self._hub.alert(
             kind="ipo_listed", urgency="act",
             title=f"{self.ipo.symbol} listed at Rs.{price:,.2f}",
             body=(f"{self.ipo.company}\n{allot}"
-                  f"NOT a buy signal yet. Waiting {self.cfg.confirm_minutes} min to see "
-                  f"if it holds above the open -- 53% of listings peak in the "
-                  f"first minute and fade.\n\n{BASE_RATE}"),
-            symbol=self.ipo.symbol,
-            dedupe_key=f"listed:{self.ipo.symbol}:{date.today().isoformat()}",
+                  f"DO NOT BUY YET. Watching {self.cfg.confirm_minutes} min to see "
+                  f"if it holds above Rs.{price:,.2f} -- more than half of "
+                  f"listings peak right now and fall.\n\n"
+                  f"You will get a separate alert with a buy price if it holds."),
+            symbol=self.ipo.symbol, dedupe_key=self._key("listed"),
             opening_print=price, issue_price=self.ipo.issue_price,
         )
 
-    def _confirm(self, price: float) -> bool:
-        """Has it held above the opening print for the confirmation window?"""
+    def _held_above_open(self, price: float) -> bool:
         st = self.state
         if st.opened_at is None or st.opening_print is None:
             return False
-        elapsed = (datetime.now() - st.opened_at).total_seconds() / 60.0
-        if elapsed < self.cfg.confirm_minutes:
+        if (datetime.now() - st.opened_at).total_seconds() < self.cfg.confirm_minutes * 60:
             return False
-        recent = [p for t, p in st.history
+        window = [p for t, p in st.history
                   if (datetime.now() - t).total_seconds() <= self.cfg.confirm_minutes * 60]
-        return bool(recent) and price > st.opening_print and min(recent) > st.opening_print * 0.995
+        # Must be above the open now *and* never have broken meaningfully below
+        # it during the window -- a dip and recovery is not "holding".
+        return bool(window) and price > st.opening_print \
+            and min(window) >= st.opening_print * 0.995
 
-    def on_confirmed(self, price: float) -> None:
-        st = self.state
-        st.entry = price
-        st.peak = price
-        stop = price * (1 - self.cfg.stop_pct)
+    # ------------------------------------------------------------ 3. buy
+    def _on_buy(self, price: float) -> None:
+        cfg = self.cfg
+        qty = max(int(cfg.capital // price), 0)
+        if qty == 0:
+            log.warning("%s at Rs.%.2f exceeds capital Rs.%.0f",
+                        self.ipo.symbol, price, cfg.capital)
+            return
+
+        target = price * (1 + cfg.target_pct)
+        stop = price * (1 - cfg.stop_pct)
+        pos = Position(entry=price, stop=stop, target=target, qty=qty,
+                       opened_at=datetime.now(), peak=price)
+        self.state.position = pos
+
+        gain_rs = (target - price) * qty
+        loss_rs = (price - stop) * qty
         self._hub.alert(
-            kind="ipo_entry", urgency="critical",
-            title=f"{self.ipo.symbol} holding above open - entry window",
-            body=(f"Price Rs.{price:,.2f}, held above the Rs.{st.opening_print:,.2f} "
-                  f"open for {self.cfg.confirm_minutes} min.\n"
-                  f"If you take it: stop Rs.{stop:,.2f} (-{self.cfg.stop_pct * 100:.0f}%), "
-                  f"then a {self.cfg.trail_pct * 100:.0f}% trailing stop.\n"
-                  f"No fixed 11:00 exit -- the drift kept growing to the close.\n\n"
-                  f"{BASE_RATE}"),
-            symbol=self.ipo.symbol,
-            dedupe_key=f"entry:{self.ipo.symbol}:{date.today().isoformat()}",
-            price=price, stop=stop,
+            kind="ipo_buy", urgency="critical",
+            title=f"BUY {self.ipo.symbol} at Rs.{price:,.2f}",
+            body=(f"Held above the Rs.{self.state.opening_print:,.2f} open for "
+                  f"{cfg.confirm_minutes} min.\n\n"
+                  f"BUY    Rs.{price:,.2f}   x {qty} sh  = Rs.{price * qty:,.0f}\n"
+                  f"TARGET Rs.{target:,.2f}   +{cfg.target_pct * 100:.1f}%  "
+                  f"= +Rs.{gain_rs:,.0f}\n"
+                  f"STOP   Rs.{stop:,.2f}   -{cfg.stop_pct * 100:.1f}%  "
+                  f"= -Rs.{loss_rs:,.0f}\n\n"
+                  f"I will buzz before it reaches either. {BASE_RATE}"),
+            symbol=self.ipo.symbol, dedupe_key=self._key("buy"),
+            entry=price, target=target, stop=stop, qty=qty,
+            target_rupees=gain_rs, stop_rupees=-loss_rs,
         )
 
+    # -------------------------------------------------------- 4. nearing
+    def _check_warnings(self, price: float) -> None:
+        pos, cfg = self.state.position, self.cfg
+        if pos is None or pos.closed:
+            return
+
+        near_target = pos.target * (1 - cfg.near_pct)
+        near_stop = pos.stop * (1 + cfg.near_pct)
+
+        if not pos.warned_target and price >= near_target:
+            pos.warned_target = True
+            self._hub.alert(
+                kind="ipo_near_target", urgency="critical",
+                title=f"{self.ipo.symbol} nearing target - Rs.{price:,.2f}",
+                body=(f"Almost at Rs.{pos.target:,.2f}.\n"
+                      f"Unrealised: +Rs.{pos.rupees(price):,.0f} "
+                      f"({pos.gain(price) * 100:+.2f}%)\n\n"
+                      f"Get ready to sell. I will buzz again if it tags the "
+                      f"target or falls back."),
+                symbol=self.ipo.symbol, dedupe_key=self._key("near_target"),
+                price=price, target=pos.target,
+            )
+        elif not pos.warned_stop and price <= near_stop:
+            pos.warned_stop = True
+            self._hub.alert(
+                kind="ipo_near_stop", urgency="critical",
+                title=f"{self.ipo.symbol} falling - Rs.{price:,.2f}",
+                body=(f"Closing on the Rs.{pos.stop:,.2f} stop.\n"
+                      f"Unrealised: Rs.{pos.rupees(price):,.0f} "
+                      f"({pos.gain(price) * 100:+.2f}%)\n\n"
+                      f"Decide now. If it tags the stop I will buzz to exit."),
+                symbol=self.ipo.symbol, dedupe_key=self._key("near_stop"),
+                price=price, stop=pos.stop,
+            )
+
+    # ----------------------------------------------------------- 5. exit
+    def _exit(self, label: str, price: float, why: str) -> None:
+        pos = self.state.position
+        if pos is None:
+            return
+        pos.closed = True
+        self._hub.alert(
+            kind="ipo_exit", urgency="critical",
+            title=f"{label}: SELL {self.ipo.symbol} at Rs.{price:,.2f}",
+            body=(f"{why}\n\n"
+                  f"Entry Rs.{pos.entry:,.2f} -> Rs.{price:,.2f}\n"
+                  f"P&L   Rs.{pos.rupees(price):,.0f} "
+                  f"({pos.gain(price) * 100:+.2f}%) on {pos.qty} shares"),
+            symbol=self.ipo.symbol, dedupe_key=self._key(f"exit_{label}"),
+            price=price, pnl=pos.rupees(price), gain=pos.gain(price),
+        )
+
+    # ------------------------------------------------------------- loop
     def on_tick(self, price: float) -> None:
-        st = self.state
+        st, cfg = self.state, self.cfg
         st.history.append((datetime.now(), price))
 
         if st.opening_print is None:
-            self.on_open(price)
+            self._on_listed(price)
             return
-        if st.entry is None:
-            if self._confirm(price):
-                self.on_confirmed(price)
+        if st.position is None:
+            if self._held_above_open(price):
+                self._on_buy(price)
             return
-        if not st.armed:
+        if not st.live:
             return
 
-        st.peak = max(st.peak or price, price)
-        gain = price / st.entry - 1.0
-        hard_stop = st.entry * (1 - self.cfg.stop_pct)
-        trail_stop = st.peak * (1 - self.cfg.trail_pct)
+        pos = st.position
+        pos.peak = max(pos.peak, price)
+        self._check_warnings(price)
 
-        if gain >= self.cfg.take_profit_pct:
-            st.booked = True
-            self._fire_exit("TAKE PROFIT", price, gain,
-                            f"Up {gain * 100:+.1f}% -- bank it.")
-        elif price <= hard_stop:
-            st.stopped = True
-            self._fire_exit("STOP HIT", price, gain,
-                            f"Below the Rs.{hard_stop:,.2f} stop. Exit now.")
-        elif st.peak > st.entry and price <= trail_stop:
-            st.stopped = True
-            self._fire_exit("TRAILING STOP", price, gain,
-                            f"Off the Rs.{st.peak:,.2f} high by "
-                            f"{self.cfg.trail_pct * 100:.0f}%. Take what is left.")
-
-    def _fire_exit(self, label: str, price: float, gain: float, why: str) -> None:
-        self._hub.alert(
-            kind="ipo_exit", urgency="critical",
-            title=f"{label}: {self.ipo.symbol} at Rs.{price:,.2f}",
-            body=f"{why}\nP&L from entry: {gain * 100:+.2f}%",
-            symbol=self.ipo.symbol,
-            dedupe_key=f"exit:{self.ipo.symbol}:{date.today().isoformat()}",
-            price=price, gain=gain,
-        )
+        if price >= pos.target:
+            self._exit("TARGET HIT", price,
+                       f"Reached Rs.{pos.target:,.2f}. Book it.")
+        elif price <= pos.stop:
+            self._exit("STOP HIT", price,
+                       f"Broke Rs.{pos.stop:,.2f}. Exit -- this is the "
+                       f"-20% circuit tail the strategy has to respect.")
+        # Arms on any real profit, not on the target -- a target hit exits above,
+        # so gating the trail on the target would make it unreachable and let a
+        # +3% winner slide all the way back to the stop.
+        #
+        # Floored at breakeven-plus-costs: once you have been up 1.5%, a plain
+        # 2.5% give-back would still hand you a loss, which is the exact outcome
+        # a trailing stop exists to prevent.
+        elif pos.peak >= pos.entry * (1 + cfg.trail_arm_pct):
+            trail_at = max(pos.peak * (1 - cfg.trail_pct),
+                           pos.entry * (1 + cfg.breakeven_buffer))
+            if price <= trail_at:
+                self._exit("TRAILING STOP", price,
+                           f"Was up to Rs.{pos.peak:,.2f}, now back to "
+                           f"Rs.{trail_at:,.2f}. Take the gain rather than "
+                           f"riding it down to the stop.")
 
     def session_over(self) -> None:
+        if self.state.live and self.state.history:
+            self._exit("SESSION CLOSING", self.state.history[-1][1],
+                       "Square off before the close if this was intraday.")
+
+    def line(self, price: float) -> str:
         st = self.state
-        if st.armed and st.entry:
-            price = st.history[-1][1] if st.history else st.entry
-            self._fire_exit("SESSION CLOSING", price, price / st.entry - 1.0,
-                            "Square off before the close if this was intraday.")
+        if st.opening_print is None:
+            return "waiting for the opening print"
+        if st.position is None:
+            held = (datetime.now() - st.opened_at).total_seconds() / 60
+            return f"open {st.opening_print:,.2f}, {held:.0f}m - watching"
+        p = st.position
+        state = "CLOSED" if p.closed else "LIVE"
+        return (f"{state} in @ {p.entry:,.2f}  now {price:,.2f}  "
+                f"{p.gain(price) * 100:+.2f}%  Rs.{p.rupees(price):,.0f}  "
+                f"[stop {p.stop:,.2f} / tgt {p.target:,.2f}]")
 
 
 def run(symbols: list[str] | None = None, feed=None, config: WatchConfig | None = None,
         once: bool = False) -> None:
     """Watch every IPO listing today (or the given symbols)."""
     from ..live.feed import get_feed
+    from .registry import find
 
     cfg = config or WatchConfig()
     feed = feed or get_feed()
 
     ipos = listing_today()
     if symbols:
-        wanted = {s.upper().replace(".NS", "") for s in symbols}
-        from .registry import find
-        ipos = [i for i in (find(s) for s in wanted) if i] or ipos
-
+        picked = [find(s.strip()) for s in symbols]
+        ipos = [i for i in picked if i] or ipos
     if not ipos:
-        print(" No IPO lists today. Nothing to watch.")
-        print(" (The calendar command shows what is coming up.)")
+        print(" No IPO lists today, and no --symbols given.")
+        print(" `stockseer ipo calendar` shows what is coming up.")
         return
 
     watchers = [ListingWatcher(i, feed, cfg) for i in ipos]
-    print(f"\n Watching {len(watchers)} listing(s): "
-          f"{', '.join(w.ipo.symbol for w in watchers)}")
-    print(f" feed: {feed.describe()}")
-    print(f" stop {cfg.stop_pct * 100:.0f}%  trail {cfg.trail_pct * 100:.0f}%  "
-          f"take-profit {cfg.take_profit_pct * 100:.0f}%\n")
+    print(f"\n Watching {len(watchers)}: {', '.join(w.ipo.symbol for w in watchers)}")
+    print(f" feed {feed.describe()} | capital Rs.{cfg.capital:,.0f}")
+    print(f" target +{cfg.target_pct * 100:.1f}%  stop -{cfg.stop_pct * 100:.1f}%  "
+          f"warn {cfg.near_pct * 100:.1f}% early\n")
     for w in watchers:
         w.arm()
 
     while True:
         now = datetime.now()
+        any_live = False
         for w in watchers:
-            price = w._price()
+            price = w.price()
             if price is None:
                 continue
             w.on_tick(price)
-            st = w.state
-            tag = ("waiting" if st.entry is None else
-                   "done" if not st.armed else
-                   f"in @ {st.entry:,.2f}, now {price:,.2f} "
-                   f"({price / st.entry - 1:+.2%})")
-            print(f" [{now:%H:%M:%S}] {w.ipo.symbol:<12} {price:>10,.2f}  {tag}")
+            any_live = any_live or w.state.live
+            print(f" [{now:%H:%M:%S}] {w.ipo.symbol:<12}{price:>10,.2f}  {w.line(price)}")
 
         if now.time() >= cfg.session_end:
             for w in watchers:
@@ -241,4 +340,5 @@ def run(symbols: list[str] | None = None, feed=None, config: WatchConfig | None 
             return
         if once:
             return
-        _time.sleep(cfg.poll_seconds)
+        # Tighten the loop once real money is on the line.
+        _time.sleep(cfg.poll_seconds if any_live else cfg.idle_poll_seconds)

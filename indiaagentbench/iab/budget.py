@@ -13,7 +13,7 @@ why resumability is a hard requirement of this design rather than a convenience.
 """
 import time
 
-from .providers import ProviderError, QuotaDead, RateLimited, build
+from .providers import ProviderError, QuotaDead, RateLimited, Transient, build
 
 
 class AllEndpointsDead(Exception):
@@ -55,6 +55,9 @@ class Rotator:
         self.dead.add(old)
         self._provider = None
         self.i += 1
+        # Cooldown belongs to the endpoint that earned it. Carrying it across a
+        # failover would idle a fresh host for the dead one's backoff.
+        self._cooldown_until = 0.0
         if self.i < len(self.specs):
             self.log(f"    ! {self.model_name} endpoint {old} {why} -> falling back to {self.i}")
         else:
@@ -71,9 +74,12 @@ class Rotator:
                 time.sleep(wait)
             try:
                 return p.chat(system, messages, tools)
-            except RateLimited as e:
+            except (RateLimited, Transient) as e:
+                # Both mean "this host is fine, just wait" -- a dropped TCP
+                # connection must not cost an endpoint. Long free-tier runs
+                # drop connections routinely.
                 last = e
-                delay = min(e.retry_after or backoff, self.MAX_BACKOFF)
+                delay = min(getattr(e, "retry_after", None) or backoff, self.MAX_BACKOFF)
                 self._cooldown_until = time.time() + delay
                 backoff = min(backoff * 2, self.MAX_BACKOFF)
             except QuotaDead as e:

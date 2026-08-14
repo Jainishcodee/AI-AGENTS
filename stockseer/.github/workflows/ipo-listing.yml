@@ -1,0 +1,87 @@
+# Listing-morning watcher, running on GitHub's machines rather than yours.
+#
+# Starts before the 10:00 IST open, checks whether anything actually lists
+# today, and exits in seconds if not. On the ~15 days a year something does
+# list, it tracks live prices and pushes buy / target / stop alerts to your
+# phone until midday.
+#
+# Requires Angel One credentials (GitHub Secrets, encrypted, never in logs).
+
+name: IPO listing watch
+
+on:
+  schedule:
+    # 04:00 UTC = 09:30 IST. Deliberately 30 minutes before the 10:00 listing:
+    # GitHub's scheduler can lag several minutes under load, and being early
+    # costs nothing while being late costs the entry.
+    - cron: "0 4 * * 1-5"
+  workflow_dispatch:
+    inputs:
+      capital:
+        description: "Capital for position sizing (Rs)"
+        default: "40000"
+
+concurrency:
+  group: ipo-listing
+  cancel-in-progress: false
+
+jobs:
+  watch:
+    runs-on: ubuntu-latest
+    # Runs to ~12:00 IST. The study found the drift keeps building past 11:00,
+    # so there is no reason to stop the moment the popular exit time passes.
+    timeout-minutes: 160
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install
+        run: pip install --quiet requests pandas numpy smartapi-python pyotp logzero
+
+      - name: Is anything listing today?
+        id: check
+        env:
+          TZ: Asia/Kolkata
+        run: |
+          python - <<'PY' >> "$GITHUB_OUTPUT"
+          from stockseer.ipo.registry import listing_today
+          ipos = listing_today()
+          print(f"count={len(ipos)}")
+          print(f"symbols={','.join(i.symbol for i in ipos)}")
+          PY
+
+      - name: Nothing today
+        if: steps.check.outputs.count == '0'
+        run: echo "No IPO lists today. Exiting — this costs about 40 seconds."
+
+      - name: Watch the listing
+        if: steps.check.outputs.count != '0'
+        env:
+          TZ: Asia/Kolkata
+          ANGEL_API_KEY: ${{ secrets.ANGEL_API_KEY }}
+          ANGEL_CLIENT_ID: ${{ secrets.ANGEL_CLIENT_ID }}
+          ANGEL_PIN: ${{ secrets.ANGEL_PIN }}
+          ANGEL_TOTP_SECRET: ${{ secrets.ANGEL_TOTP_SECRET }}
+          NTFY_TOPIC: ${{ secrets.NTFY_TOPIC }}
+        run: |
+          echo "Listing today: ${{ steps.check.outputs.symbols }}"
+          python -m stockseer.cli ipo autorun \
+            --capital "${{ github.event.inputs.capital || '40000' }}"
+
+      - name: Report a failure
+        if: failure()
+        env:
+          NTFY_TOPIC: ${{ secrets.NTFY_TOPIC }}
+        run: |
+          python - <<'PY'
+          from stockseer.push import push
+          push("StockSeer watcher failed",
+               "The listing watcher errored. If you were waiting on a buy or "
+               "stop alert, it is NOT coming — check positions manually.",
+               urgency="critical", kind="test")
+          PY

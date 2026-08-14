@@ -94,9 +94,9 @@ belonging to one person are not.
 ## Status
 
 Phases 1–3 built and 4 underway: reasoning engine, web client, SQLite persistence,
-the calibration loop, stage re-run, mid-deliberation interjection, and an MCP
-server. 235 tests. See [docs/ROADMAP.md](docs/ROADMAP.md) for what each phase
-claims and what it does not.
+projects, the calibration loop, replay/backtesting, stage re-run, mid-deliberation
+interjection, an MCP server, and a divergence harness. 302 tests. See [docs/ROADMAP.md](docs/ROADMAP.md)
+for what each phase claims and — more usefully — what it does not.
 
 ## Documentation
 
@@ -108,7 +108,7 @@ Read in this order:
 | [SPEC-FORMAT.md](docs/SPEC-FORMAT.md) | the meta-spec: the seven questions every module must answer |
 | [ARTIFACTS.md](docs/ARTIFACTS.md) | the artifact registry and every machine-checked invariant |
 | [COUNCIL.md](docs/COUNCIL.md) | presets, critique routing, synthesis contract, Decision Cards, calibration |
-| [DECISIONS.md](docs/DECISIONS.md) | 24 ADRs, including what each one gave up |
+| [DECISIONS.md](docs/DECISIONS.md) | 26 ADRs, including what each one gave up |
 | `docs/agents/*.md` | the six formal reasoning specifications |
 
 ## Quick start
@@ -128,7 +128,7 @@ python -m app.cli --provider mock "Should I quit my internship?"
 # for real
 python -m app.cli --preset strategy --depth quick "Should I quit my internship?"
 
-pytest                                  # 235 tests, ~5s
+pytest                                  # 302 tests, ~4s
 uvicorn app.main:app --reload --port 8787
 ```
 
@@ -173,6 +173,38 @@ A run is addressable from its first event, so you can answer a gap the moment a 
 raises it. Every batch that has not started picks the fact up; batches in flight are
 left alone, so a stage's output is always explicable by the context it was handed. Late
 facts are labelled as late rather than merged silently.
+
+**Is it actually six minds, or six voices?**
+
+```powershell
+python -m app.cli divergence          # spec-level checks, instant
+python -m app.cli divergence --live   # runs the decision battery; costs real calls
+```
+
+The claim is falsifiable, so it is measured rather than asserted (ADR-026). The structural
+half checks that every module owns an artifact type nothing else produces — two modules
+with the same representation converge however differently they are phrased. The live half
+runs an eight-decision battery and measures dissent rate, critique yield, and word overlap
+between stances.
+
+The part worth trusting: the harness **fails the mock council**, whose six modules really
+are one voice, at 1.00 stance overlap. An instrument only ever pointed at a passing case
+is not known to detect anything.
+
+**Grouping a chain of decisions, and backtesting the council**
+
+```powershell
+python -m app.cli projects --new "Leaving the internship"
+python -m app.cli ask --project <id> "Should I ask for the offer in writing?"
+python -m app.cli replay <card-id>
+```
+
+Decisions in a project share memories, so an unrelated side project stops bleeding into a
+salary conversation. `replay` re-decides a *resolved* card against today's programs and
+grades it against what actually happened — the resolved corpus as a test set for the
+council itself. Memories and priors derived from that card are withheld for the run, and
+the count is reported, because otherwise a module scores well by reading its own answer
+(ADR-025).
 
 **Re-running without rewriting history**
 

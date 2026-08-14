@@ -190,15 +190,43 @@ countable, presented as evidence it may argue with rather than as instructions.
 The test of a good module is not that it sounds different. It is that it
 **changes a recommendation**.
 
-`tests/test_divergence.py` runs a fixed battery of decisions and asserts:
+This is measured, not judged — `learning/divergence.py`, exposed as
+`GET /divergence` and `app.cli divergence [--live]`. It is split by cost.
 
-1. **Representation distinctness** — the new module's primary artifact type is
-   not already produced by an existing module, or is produced over a materially
-   different entity set.
-2. **Conclusion divergence** — on ≥2 of the battery decisions, its stance is
-   opposed to the current majority.
-3. **Critique yield** — it raises critiques that at least one existing module
-   accepts in the revision stage.
+**Structural — free, runs in CI, no model involved.** These are properties of the
+YAML:
 
-A module that passes none of these is a voice, not a mind, and is rejected at
-review time. This is the bar the Phase 5 marketplace enforces automatically.
+1. **Representation distinctness** — the module must produce at least one artifact
+   type that nothing else produces. Two modules with the same representation
+   converge no matter how differently they are phrased (ADR-002), so this is the
+   cheapest real test there is.
+2. **It is critiqued by someone** — a module nobody critiques can never have its
+   declared biases caught, because a module is never shown its own (ADR-003).
+3. **It critiques someone** — otherwise it only ever defends itself.
+
+**Behavioural — needs a real council over the battery in `learning/battery.yaml`.**
+Eight decisions, each with a genuine tradeoff, named actors and a stated constraint
+— because a module missing a required input abstains, and an abstention is not a
+disagreement:
+
+4. **Conclusion divergence** — it must oppose the recommendation on ≥2 battery
+   decisions (appearing in `minority_opinions`), or be named in an explicit
+   `disagreement`.
+5. **Critique yield** — of the critiques it raises, at least one must be accepted
+   by another module in the revision stage. Attacks nobody concedes to are noise.
+6. **Stance similarity** — mean pairwise word overlap with the other modules'
+   stances must stay under 0.6.
+
+That last one is crude on purpose. It is a floor, not a judgement, and it exists to
+catch the one failure mode that reading a single output cannot reveal: six modules
+returning near-identical text. It is also the only signal here that is independent
+of the synthesiser — 4 and 5 are read from what synthesis already reported, which
+avoids a second, competing disagreement detector at the cost of under-reporting when
+a synthesis is lazy. `divergence.LIMITATION` says so in the report itself.
+
+A module that fails these is a voice, not a mind. `tests/test_divergence.py` asserts
+the six built-ins pass — and, more importantly, that the harness **fails things that
+deserve to fail**: a cloned module, a module nobody critiques, one that always agrees,
+one whose critiques are never accepted, and the mock council, whose six modules really
+are one voice. An instrument only ever pointed at a passing case is not known to
+detect anything.

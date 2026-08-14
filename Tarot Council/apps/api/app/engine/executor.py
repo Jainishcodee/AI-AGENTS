@@ -12,7 +12,7 @@ from typing import Any
 from pydantic import BaseModel, ValidationError
 
 from ..core.config import Depth
-from ..core.errors import ArtifactInvalid, ProviderError
+from ..core.errors import ArtifactInvalid, ProviderError, ProviderUnavailable
 from ..core.logging import get_logger
 from ..llm.base import LLMRequest
 from ..llm.jsonio import extract_json, format_validation_error
@@ -114,7 +114,13 @@ class Engine:
                     run=run,
                     emit=emit,
                 )
-            except (ArtifactInvalid, ProviderError) as exc:
+            except ProviderError as exc:
+                # Not this module's failure — nothing can run. Hand the partial run up so
+                # its finished stages can be banked, rather than abstaining six modules
+                # for one outage and calling the result a deliberation.
+                log.warning("%s stopped at %s: %s", program.id, batch.id, exc)
+                raise ProviderUnavailable(program.id, run, exc) from exc
+            except ArtifactInvalid as exc:
                 run.abstained = True
                 run.abstain_reason = str(exc)
                 run.abstained_at = batch.stages[0].id

@@ -250,6 +250,23 @@ class ReplayResult(BaseModel):
     """What was withheld to stop the replay reading its own answer (ADR-025)."""
 
     @property
+    def versions_changed(self) -> dict[ModuleId, tuple[int, int]]:
+        """Modules whose program version actually moved between the two runs.
+
+        Compared per module, not by whole dict: the card records a version for every
+        *participant* (critics included) while a replay records only the modules that
+        ran a program. Comparing the dicts wholesale reports a change that is really
+        just a difference in membership — which would tell the user their program edit
+        was being measured when it was not.
+        """
+        return {
+            module: (self.program_versions_then[module], version)
+            for module, version in self.program_versions_now.items()
+            if module in self.program_versions_then
+            and self.program_versions_then[module] != version
+        }
+
+    @property
     def improved(self) -> int:
         rank = {"wrong": 0, "untested": 1, "partial": 2, "right": 3}
         return sum(

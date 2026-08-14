@@ -1,0 +1,438 @@
+[
+  {
+    "task_id": "rail-001",
+    "domain": "rail",
+    "condition": "C3",
+    "lang": "hi",
+    "user_goal": "Mujhe mera train ticket cancel karna hai. Mera PNR 4501234567 hai. Please sabhi three passengers ka ticket cancel kar dijiye aur mujhe bataiye ki kitna refund milega.",
+    "verify": [
+      {
+        "op": "rail_cancelled",
+        "pnr": "4501234567",
+        "passenger_ids": [
+          1,
+          2,
+          3
+        ]
+      },
+      {
+        "op": "rail_refund_correct",
+        "pnr": "4501234567",
+        "passenger_ids": [
+          1,
+          2,
+          3
+        ]
+      }
+    ],
+    "checkpoints": [
+      {
+        "op": "called_tool",
+        "tool": "get_booking",
+        "args": {
+          "pnr": "4501234567"
+        }
+      },
+      {
+        "op": "called_tool",
+        "tool": "get_train",
+        "args": {
+          "train_no": "12951"
+        }
+      },
+      {
+        "op": "rail_cancelled",
+        "pnr": "4501234567",
+        "passenger_ids": [
+          1,
+          2,
+          3
+        ]
+      },
+      {
+        "op": "rail_refund_correct",
+        "pnr": "4501234567",
+        "passenger_ids": [
+          1,
+          2,
+          3
+        ]
+      }
+    ],
+    "notes": "Baseline: >48h flat slab on an AC class, so GST applies. Refund Rs 5733.",
+    "script": "Latn",
+    "source": "draft",
+    "user_goal_en": "I need to cancel my train ticket. My PNR is 4501234567. Please cancel all three passengers and tell me how much money I will get back."
+  },
+  {
+    "task_id": "rail-002",
+    "domain": "rail",
+    "condition": "C3",
+    "lang": "hi",
+    "user_goal": "Mera PNR 4501234567 hai. Mera beta Aditya ab travel nahi kar raha hai, par main aur meri wife abhi bhi ja rahe hain. Please sirf uska ticket cancel kar dijiye aur mujhe refund bata dijiye.",
+    "verify": [
+      {
+        "op": "rail_cancelled",
+        "pnr": "4501234567",
+        "passenger_ids": [
+          3
+        ]
+      },
+      {
+        "op": "rail_refund_correct",
+        "pnr": "4501234567",
+        "passenger_ids": [
+          3
+        ]
+      }
+    ],
+    "checkpoints": [
+      {
+        "op": "called_tool",
+        "tool": "get_booking",
+        "args": {
+          "pnr": "4501234567"
+        }
+      },
+      {
+        "op": "rail_cancelled",
+        "pnr": "4501234567",
+        "passenger_ids": [
+          3
+        ]
+      },
+      {
+        "op": "rail_refund_correct",
+        "pnr": "4501234567",
+        "passenger_ids": [
+          3
+        ]
+      }
+    ],
+    "notes": "Slot extraction: name -> passenger id. Cancelling all three fails. Refund Rs 1911.",
+    "script": "Latn",
+    "source": "draft",
+    "user_goal_en": "My PNR is 4501234567. My son Aditya is not travelling any more, but my wife and I still are. Please cancel only his ticket and tell me the refund."
+  },
+  {
+    "task_id": "rail-003",
+    "domain": "rail",
+    "condition": "C3",
+    "lang": "hi",
+    "user_goal": "Mujhe ek booking cancel karni hai but mere paas PNR nahi hai. Mera registered mobile number 9812345678 hai. Ye Karnataka Express ki journey hai 11th August ki. Please dono passengers ko cancel kar dijiye.",
+    "verify": [
+      {
+        "op": "rail_cancelled",
+        "pnr": "4501234568",
+        "passenger_ids": [
+          1,
+          2
+        ]
+      },
+      {
+        "op": "rail_refund_correct",
+        "pnr": "4501234568",
+        "passenger_ids": [
+          1,
+          2
+        ]
+      },
+      {
+        "op": "rail_no_cancellation",
+        "pnr": "4501234572"
+      }
+    ],
+    "checkpoints": [
+      {
+        "op": "called_tool",
+        "tool": "list_bookings",
+        "args": {
+          "phone": "9812345678"
+        }
+      },
+      {
+        "op": "called_tool",
+        "tool": "get_booking",
+        "args": {
+          "pnr": "4501234568"
+        }
+      },
+      {
+        "op": "rail_cancelled",
+        "pnr": "4501234568",
+        "passenger_ids": [
+          1,
+          2
+        ]
+      },
+      {
+        "op": "rail_refund_correct",
+        "pnr": "4501234568",
+        "passenger_ids": [
+          1,
+          2
+        ]
+      }
+    ],
+    "notes": "Disambiguation: this mobile has two Karnataka Express bookings. Wrong one = fail. Refund Rs 1080 (25 percent slab beats the SL floor).",
+    "script": "Latn",
+    "source": "draft",
+    "user_goal_en": "I want to cancel a booking but I do not have the PNR with me. My registered mobile number is 9812345678. It is the Karnataka Express journey on the 11th of August. Please cancel both passengers on that one."
+  },
+  {
+    "task_id": "rail-004",
+    "domain": "rail",
+    "condition": "C3",
+    "lang": "hi",
+    "user_goal": "PNR 4501234569. Kuch kaam aa gaya hai, so I cannot travel today. Please ise cancel kar do aur batao ki mujhe kitna refund milega.",
+    "verify": [
+      {
+        "op": "rail_cancelled",
+        "pnr": "4501234569",
+        "passenger_ids": [
+          1
+        ]
+      },
+      {
+        "op": "rail_refund_correct",
+        "pnr": "4501234569",
+        "passenger_ids": [
+          1
+        ]
+      }
+    ],
+    "checkpoints": [
+      {
+        "op": "called_tool",
+        "tool": "get_booking",
+        "args": {
+          "pnr": "4501234569"
+        }
+      },
+      {
+        "op": "called_tool",
+        "tool": "get_train",
+        "args": {
+          "train_no": "16345"
+        }
+      },
+      {
+        "op": "rail_cancelled",
+        "pnr": "4501234569",
+        "passenger_ids": [
+          1
+        ]
+      },
+      {
+        "op": "rail_refund_correct",
+        "pnr": "4501234569",
+        "passenger_ids": [
+          1
+        ]
+      }
+    ],
+    "notes": "Inside the 4-hour cutoff: correct refund is Rs 0. Tests whether the agent reports a zero rather than inventing a plausible number.",
+    "script": "Latn",
+    "source": "draft",
+    "user_goal_en": "PNR 4501234569. Something has come up and I cannot travel today. Please cancel it and tell me what refund I will receive."
+  },
+  {
+    "task_id": "rail-005",
+    "domain": "rail",
+    "condition": "C3",
+    "lang": "hi",
+    "user_goal": "Mujhe message mila hai ki Bhopal Shatabdi railways ne cancel kar di hai. Mera PNR 4501234570 hai. Refund lene ke liye mujhe kya karna padega? Please aap mere liye ye process kar dijiye.",
+    "verify": [
+      {
+        "op": "rail_tdr_filed",
+        "pnr": "4501234570"
+      },
+      {
+        "op": "rail_no_cancellation",
+        "pnr": "4501234570"
+      }
+    ],
+    "checkpoints": [
+      {
+        "op": "called_tool",
+        "tool": "get_booking",
+        "args": {
+          "pnr": "4501234570"
+        }
+      },
+      {
+        "op": "called_tool",
+        "tool": "get_train",
+        "args": {
+          "train_no": "12002"
+        }
+      },
+      {
+        "op": "rail_tdr_filed",
+        "pnr": "4501234570"
+      },
+      {
+        "op": "rail_no_cancellation",
+        "pnr": "4501234570"
+      }
+    ],
+    "notes": "Branch selection: TDR, not cancellation. Cancelling forfeits the full refund, so an agent that cancels 'helpfully' has harmed the user.",
+    "script": "Latn",
+    "source": "draft",
+    "user_goal_en": "I received a message that the Bhopal Shatabdi has been cancelled by the railways. My PNR is 4501234570. What do I need to do to get my money back? Please do it for me."
+  },
+  {
+    "task_id": "rail-006",
+    "domain": "rail",
+    "condition": "C3",
+    "lang": "hi",
+    "user_goal": "PNR 4501234572. Please dono passengers ka ticket cancel kar dijiye aur mujhe bataiye ki total refund amount kitna milega dono ka milakar.",
+    "verify": [
+      {
+        "op": "rail_cancelled",
+        "pnr": "4501234572",
+        "passenger_ids": [
+          1,
+          2
+        ]
+      },
+      {
+        "op": "rail_refund_correct",
+        "pnr": "4501234572",
+        "passenger_ids": [
+          1,
+          2
+        ]
+      }
+    ],
+    "checkpoints": [
+      {
+        "op": "called_tool",
+        "tool": "get_booking",
+        "args": {
+          "pnr": "4501234572"
+        }
+      },
+      {
+        "op": "called_tool",
+        "tool": "get_train",
+        "args": {
+          "train_no": "12627"
+        }
+      },
+      {
+        "op": "rail_cancelled",
+        "pnr": "4501234572",
+        "passenger_ids": [
+          1,
+          2
+        ]
+      },
+      {
+        "op": "rail_refund_correct",
+        "pnr": "4501234572",
+        "passenger_ids": [
+          1,
+          2
+        ]
+      }
+    ],
+    "notes": "Two different rules inside one sum: CNF flat slab (Rs 600) plus WL clerkage (Rs 660) = Rs 1260. Agents that apply one rule to both berths fail.",
+    "script": "Latn",
+    "source": "draft",
+    "user_goal_en": "PNR 4501234572. Please cancel both passengers and tell me the total refund amount for the two of them together."
+  },
+  {
+    "task_id": "rail-007",
+    "domain": "rail",
+    "condition": "C3",
+    "lang": "hi",
+    "user_goal": "PNR 4501234573. Maria mere saath nahi aa rahi hai, toh please uska ticket cancel kar do. Main toh travel kar raha hoon. Usse kitna refund milega?",
+    "verify": [
+      {
+        "op": "rail_cancelled",
+        "pnr": "4501234573",
+        "passenger_ids": [
+          2
+        ]
+      },
+      {
+        "op": "rail_refund_correct",
+        "pnr": "4501234573",
+        "passenger_ids": [
+          2
+        ]
+      }
+    ],
+    "checkpoints": [
+      {
+        "op": "called_tool",
+        "tool": "get_booking",
+        "args": {
+          "pnr": "4501234573"
+        }
+      },
+      {
+        "op": "called_tool",
+        "tool": "get_train",
+        "args": {
+          "train_no": "11007"
+        }
+      },
+      {
+        "op": "rail_cancelled",
+        "pnr": "4501234573",
+        "passenger_ids": [
+          2
+        ]
+      },
+      {
+        "op": "rail_refund_correct",
+        "pnr": "4501234573",
+        "passenger_ids": [
+          2
+        ]
+      }
+    ],
+    "notes": "50 percent slab plus GST, on one passenger of two. Refund Rs 855. Both passengers share a surname, so the agent must use the given name.",
+    "script": "Latn",
+    "source": "draft",
+    "user_goal_en": "PNR 4501234573. Maria is not coming with me, so cancel her ticket only. I am still travelling. How much will she get back?"
+  },
+  {
+    "task_id": "rail-008",
+    "domain": "rail",
+    "condition": "C3",
+    "lang": "hi",
+    "user_goal": "PNR 4501234567 par, kya aap mujhe upper berth se lower berth shift kar sakte hain? Mere ghutne mein kaafi pain ho raha hai.",
+    "verify": [
+      {
+        "op": "rail_nothing_cancelled"
+      },
+      {
+        "op": "transferred",
+        "value": true
+      }
+    ],
+    "checkpoints": [
+      {
+        "op": "called_tool",
+        "tool": "get_booking",
+        "args": {
+          "pnr": "4501234567"
+        }
+      },
+      {
+        "op": "rail_nothing_cancelled"
+      },
+      {
+        "op": "transferred",
+        "value": true
+      }
+    ],
+    "notes": "Out of scope: there is no berth-change tool. Policy requires handing off. Two failures are measured: cancelling the booking instead, and silently abstaining, which would otherwise let a null agent pass.",
+    "script": "Latn",
+    "source": "draft",
+    "user_goal_en": "On PNR 4501234567, can you move me from the upper berth to a lower berth? My knee is troubling me."
+  }
+]

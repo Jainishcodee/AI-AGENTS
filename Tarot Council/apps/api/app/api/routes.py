@@ -12,7 +12,7 @@ from ..core.errors import CognitiveOSError, ProgramInvalid
 from ..council import Council
 from ..council.live import Injection
 from ..engine.planner import call_estimate
-from ..learning import priors
+from ..learning import divergence, priors
 from ..learning.scoring import CHANCE_BRIER
 from ..programs import loader
 from ..schemas.cards import (
@@ -25,6 +25,7 @@ from ..schemas.cards import (
     Resolution,
 )
 from ..schemas.common import Verdict
+from ..schemas.divergence import StructuralReport
 from ..schemas.council import Deliberation, DeliberationRequest
 from ..schemas.events import sse
 
@@ -278,6 +279,70 @@ async def inject(request: Request, run_id: str, body: InjectRequest) -> dict[str
             ),
         ) from exc
     return {"run_id": run_id, "queued": count}
+
+
+@router.get("/council/resumable")
+async def resumable(request: Request) -> list[dict[str, object]]:
+    """Deliberations that stopped part-way and still have work banked.
+
+    The common cause is not a crash: on a free tier a `standard` run is ~26 calls at 5
+    requests a minute, so a quota window or a closed laptop ends one mid-flight (ADR-020).
+    """
+    return [
+        {
+            "deliberation_id": c.deliberation_id,
+            "question": c.request.question,
+            "phase": c.phase,
+            "artifacts_done": c.artifacts_done,
+            "calls_spent": c.usage.calls,
+            "updated_at": c.updated_at,
+            "failure": c.failure,
+            "detail": c.describe(),
+        }
+        for c in await _council(request).resumable()
+    ]
+
+
+@router.post("/council/resumable/{deliberation_id}/resume")
+async def resume(request: Request, deliberation_id: str) -> StreamingResponse:
+    """Continue where it stopped, reusing every artifact already paid for.
+
+    Streams the same event types as a fresh deliberation — one code path, so a resumed
+    run cannot drift from a normal one.
+    """
+    council = _council(request)
+
+    async def stream() -> AsyncIterator[str]:
+        async for event in council.resume(deliberation_id):
+            yield sse(event)
+
+    return StreamingResponse(
+        stream(),
+        media_type="text/event-stream",
+        headers={"cache-control": "no-cache", "x-accel-buffering": "no"},
+    )
+
+
+@router.delete("/council/resumable/{deliberation_id}")
+async def discard_checkpoint(request: Request, deliberation_id: str) -> dict[str, str]:
+    await _council(request).discard(deliberation_id)
+    return {"discarded": deliberation_id}
+
+
+@router.get("/divergence")
+async def divergence_structural() -> StructuralReport:
+    """Do these modules actually represent problems differently?
+
+    Reads only the specs, so it is instant. Artifact distinctness and critique topology
+    are properties of the YAML: a module producing no artifact type that nothing else
+    produces will converge with its twin however differently it is phrased (ADR-002), and
+    a module nobody critiques can never have its declared biases caught (ADR-003).
+
+    The live half — dissent rate, critique yield, stance similarity over a battery of
+    real decisions — needs a model and minutes, so it lives on the CLI
+    (`app.cli divergence --live`) rather than behind a web request.
+    """
+    return divergence.structural()
 
 
 @router.get("/projects")

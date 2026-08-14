@@ -123,7 +123,11 @@ iab/
   providers.py     Gemini / OpenAI-compatible / Mock, one normalised interface
   budget.py        endpoint rotation across hosts of the *same* model
   runner.py        resumable evaluation loop
-tests/             53 tests, no network, no API key
+  translate.py     C2-C5 generation, with a human-override layer
+  validate_conditions.py  quality gates + editable review sheet
+  script_utils.py  script purity and code-mix density
+  check_endpoints.py      one-call liveness probe per model
+tests/             85 tests, no network, no API key
 ```
 
 ## Running it
@@ -154,14 +158,21 @@ Set whichever of these you have: `GROQ_API_KEY`, `CEREBRAS_API_KEY`,
 
 ## Status
 
-- [x] Environments, rules, seeds, verifiers, harness, 53 tests
+- [x] Environments, rules, seeds, verifiers, harness, **85 tests**
 - [x] C1 (English): 20 tasks — 8 rail, 12 schemes
+- [x] Condition pipeline: generation, quality gates, human-override layer
+- [x] C2/C3 (Hindi + Hinglish): 40 tasks drafted, 0 hard failures
+- [ ] **Native-speaker sign-off on C2/C3** — 40 drafts outstanding. Open
+      `review_hindi.html`, edit in place, download the override files. This is
+      the credibility blocker: unvalidated MT sinks the result regardless of how
+      sound the rest is.
+- [ ] C4/C5 (Tamil) — needs a Tamil validator lined up first
 - [ ] Expand C1 to ~80 tasks
-- [ ] C2–C5 generation + **native-speaker validation** (the credibility blocker:
-      unvalidated machine translation would sink the result regardless of how
-      good the rest is)
 - [ ] Full run, survival curves, H1/H2 analysis
 - [ ] Preprint, HuggingFace dataset, leaderboard
+
+See [docs/SETUP_KEYS.md](docs/SETUP_KEYS.md) for API keys, and run
+`python -m iab.check_endpoints` to see which models are actually usable.
 
 ## Prior work this builds on
 
