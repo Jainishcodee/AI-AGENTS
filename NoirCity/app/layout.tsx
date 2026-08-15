@@ -56,7 +56,7 @@ const figures = IBM_Plex_Mono({
 export const metadata: Metadata = {
   title: "Noir City",
   description:
-    "A detective game set in Backlund, 1984. Work the case alone or with five others, on one shared clock.",
+    "A detective game set in Marrowgate, 1984. Work the case alone or with five others, on one shared clock.",
 };
 
 // Next injects `width=device-width, initial-scale=1` already; this is here for

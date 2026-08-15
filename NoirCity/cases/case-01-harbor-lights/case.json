@@ -1,7 +1,7 @@
 {
   "id": "harbor-lights",
   "title": "Harbor Lights",
-  "cityId": "backlund",
+  "cityId": "marrowgate",
   "brief": "They pulled Tommy Vance out of No. 4 Dry Dock on Tuesday morning, and the dock has been drained since the middle of last month. The police wrote it up as a fall and closed it in a day. His sister does not believe them, and she has scraped together forty pounds to say so. You have until Friday.",
   "timeBudget": 48,
   "sessionMinutes": 90,
@@ -13,7 +13,7 @@
       "name": "Arthur Pell",
       "occupation": "Shipping agent, Pell & Co.",
       "summary": "Sits on two charitable boards and never raises his voice. Handles consignments for half the estuary and has never once been audited.",
-      "alibi": "At the Exchange until seven, then home to Hillston. His clerk will confirm it, and his clerk needs the job."
+      "alibi": "At the Exchange until seven, then home to Harrowfield. His clerk will confirm it, and his clerk needs the job."
     },
     {
       "id": "s_rourke",
@@ -39,7 +39,7 @@
     {
       "id": "s_kessler",
       "name": "Sgt. Bram Kessler",
-      "occupation": "Coldbath division, Backlund Police",
+      "occupation": "Coldbath division, Marrowgate Police",
       "summary": "Wrote the report that closed the case in a single afternoon. Has a house nobody on a sergeant's pay could carry.",
       "alibi": "On shift. The duty book says so, and he keeps the duty book."
     }
@@ -269,8 +269,8 @@
     {
       "id": "n_ashe",
       "name": "Wilbur Ashe",
-      "role": "Filing clerk, the Backlund Exchange",
-      "locationId": "loc_lm_the_backlund_exchange",
+      "role": "Filing clerk, the Marrowgate Exchange",
+      "locationId": "loc_lm_the_marrowgate_exchange",
       "questions": [
         {
           "id": "q_general",
@@ -374,7 +374,7 @@
       "searchCost": 2
     },
     {
-      "cityLocationId": "loc_lm_the_backlund_exchange",
+      "cityLocationId": "loc_lm_the_marrowgate_exchange",
       "description": "A trading floor that empties at three, and a basement of carbons going back forty years. Every consignment in the estuary passes through this room on paper before it passes through the water.",
       "clues": [
         "c_carbon"
@@ -457,7 +457,7 @@
       "c_signet"
     ],
     "epilogue": "Pell does not run, and he does not shout. He sits behind his desk with his hands flat on the blotter while the Assize Courts men read the manifest back to him, and the only thing he says is that the containers were a clerical matter. Vance had come to him on the Monday with the tally book, because Vance was an honest man and thought an honest question would settle it. Pell walked him down to the Merrow to check the count, held him under against the hull until he stopped, and had two of his own men carry him to a dock that had been dry for three weeks — because a drowning in an empty dock is absurd, and absurd things get written up as falls. Kessler wrote it up as a fall. He is off the force by the spring and never charged. Rourke keeps the hiring list. Nell Cavanagh does not collect on the policy, because a murder voids it, and she tells you she is glad, and you believe about half of that.",
-    "failureEpilogue": "The name you gave them was not the name on the manifest, and Arthur Pell reads about it over breakfast in Hillston. Three containers came off the Merrow on the fourteenth and never existed, and now they never will — the carbons go into a stove in the Exchange basement within the week, and the clerk who would have identified the hand takes a post in another city and does not leave an address. Somebody serves eleven years. It is not the man who held Tommy Vance under. Nell Cavanagh does not ask for the forty pounds back, which is worse than if she had.",
+    "failureEpilogue": "The name you gave them was not the name on the manifest, and Arthur Pell reads about it over breakfast in Harrowfield. Three containers came off the Merrow on the fourteenth and never existed, and now they never will — the carbons go into a stove in the Exchange basement within the week, and the clerk who would have identified the hand takes a post in another city and does not leave an address. Somebody serves eleven years. It is not the man who held Tommy Vance under. Nell Cavanagh does not ask for the forty pounds back, which is worse than if she had.",
     "keyPoints": [
       {
         "id": "kp_manifest",

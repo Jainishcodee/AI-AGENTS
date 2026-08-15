@@ -3,7 +3,7 @@
  *
  * Every action costs hours, and those hours move a date and time that appears on
  * each journal entry. It is what turns a list of actions into a case file: not
- * "searched the parlour" but "Friday, 25 May 1984, 11:20 — 85 Sodela Walk".
+ * "searched the parlour" but "Friday, 25 May 1984, 11:20 — 85 Threadneedle Walk".
  *
  * Deliberately free of `Date` arithmetic on the game's part: the case declares a
  * start, the state carries elapsed hours, and this renders the two together. No

@@ -1,7 +1,7 @@
 {
   "id": "the-bell-does-not-lie",
   "title": "The Bell Does Not Lie",
-  "cityId": "backlund",
+  "cityId": "marrowgate",
   "brief": "Alderman Cornelius Reeve went into the library at the Delgado Assembly Rooms during a subscription dinner and did not come out. Nine people were in the building and every one of them can tell you exactly where they stood when the Bell of Order struck nine, because that is the sort of evening it was. All nine accounts agree. That is the first thing about this case that ought to worry you.",
   "timeBudget": 44,
   "sessionMinutes": 75,
@@ -18,7 +18,7 @@
     {
       "id": "s_lyne",
       "name": "Hesper Lyne",
-      "occupation": "Alderman, Cherwood ward",
+      "occupation": "Alderman, Ravensgate ward",
       "summary": "Wanted Reeve's committee chair and made no secret of it. Wrote him a letter last month that the recipient described to three people as a threat.",
       "alibi": "On the terrace with a cigar when the bell went. The steward saw her go out and saw her come back."
     },
@@ -171,7 +171,7 @@
       "id": "c_marchmont_note",
       "type": "document",
       "title": "A demand, politely worded",
-      "body": "Reeve to Lady Marchmont, a fortnight ago: I have carried this since the spring and I am afraid I have carried it as far as I intend to. Four hundred pounds against a house in Hillston she cannot afford to lose twice.",
+      "body": "Reeve to Lady Marchmont, a fortnight ago: I have carried this since the spring and I am afraid I have carried it as far as I intend to. Four hundred pounds against a house in Harrowfield she cannot afford to lose twice.",
       "isRedHerring": true,
       "implicates": "s_marchmont"
     },
@@ -359,7 +359,7 @@
     },
     {
       "cityLocationId": "loc_lm_the_bell_of_order",
-      "description": "Cast in a year nobody agrees on, and the only clock in Backlund that everybody trusts without checking. The striking train is behind a door that has not been locked in living memory.",
+      "description": "Cast in a year nobody agrees on, and the only clock in Marrowgate that everybody trusts without checking. The striking train is behind a door that has not been locked in living memory.",
       "clues": [
         "c_bell_jam",
         "c_maintenance_log"
@@ -373,7 +373,7 @@
       "searchCost": 2
     },
     {
-      "cityLocationId": "loc_lm_backlund_city_hall",
+      "cityLocationId": "loc_lm_marrowgate_city_hall",
       "description": "Granite steps and a committee room where four contracts were awarded in eighteen months. The minute books are public, which is the sort of thing nobody remembers until somebody asks.",
       "clues": [
         "c_committee_ledger"
@@ -390,7 +390,7 @@
     },
     {
       "cityLocationId": "loc_0396",
-      "description": "Voss & Delgado, Attorneys. Reeve's solicitors, and the only people in Backlund who kept copies of his correspondence when he did not.",
+      "description": "Voss & Delgado, Attorneys. Reeve's solicitors, and the only people in Marrowgate who kept copies of his correspondence when he did not.",
       "clues": [
         "c_lyne_letter",
         "c_marchmont_note"
@@ -427,7 +427,7 @@
       "searchCost": 3
     },
     {
-      "cityLocationId": "loc_lm_empress_road_station",
+      "cityLocationId": "loc_lm_sovereign_road_station",
       "description": "The northern line's last stop, two streets from the Assembly Rooms. Half the dinner arrived through it and every one of them set their watch by the bell on the way past.",
       "clues": [],
       "searchCost": 2
@@ -442,7 +442,7 @@
       "c_maintenance_log"
     ],
     "epilogue": "The evening was never wrong. The clock was.\n\nCassian Vole wound the Bell of Order on the Tuesday, as he had every Tuesday for two years without being paid or thanked, and he left a folded subscription card in the striking train. It does not stop a bell. It releases it early. On the Thursday the Bell of Order struck nine at eight forty-one, and nine people at a subscription dinner built the entire evening on it — including the four who gave him his alibi, who were telling the exact truth and had no idea what they were telling it about.\n\nReeve went into the library at a few minutes before the bell, which everyone understood as a few minutes before nine and which was in fact around half past eight. Vole followed him in, took up the lamp by its base the way you pick up a thing you mean to swing, and was at the long table by ten to. Everyone remembers him arriving just after the bell. Everyone is right. Just after the bell was eight forty-one.\n\nThe coroner never budged. A quarter to nine, she said, and ten minutes either side, and she said it in the witness box exactly as she promised. The defence spent two days trying to move her and moved her by nothing at all.\n\nHe is convicted on the winding book. Twelve years of small unpaid courtesies, and the last of them hanged him.",
-    "failureEpilogue": "The Assizes hear a great deal about a letter, a cellar book, and four hundred pounds owed against a house in Hillston, and rather less about a folded subscription card that nobody thought to look for. The Bell of Order is serviced in the spring by a firm that is actually paid for it, and the card comes out of the striking train and goes into a bin, and the bell keeps better time thereafter, and nobody remarks on it.\n\nCassian Vole gives evidence for the prosecution. He is described in two newspapers as the dead man's most loyal servant, and he weeps in the box, and it is not entirely an act — he did admire him. He takes a post with the Cherwood ward in the autumn and winds their clocks too, as a courtesy, because nobody else will pay to.",
+    "failureEpilogue": "The Assizes hear a great deal about a letter, a cellar book, and four hundred pounds owed against a house in Harrowfield, and rather less about a folded subscription card that nobody thought to look for. The Bell of Order is serviced in the spring by a firm that is actually paid for it, and the card comes out of the striking train and goes into a bin, and the bell keeps better time thereafter, and nobody remarks on it.\n\nCassian Vole gives evidence for the prosecution. He is described in two newspapers as the dead man's most loyal servant, and he weeps in the box, and it is not entirely an act — he did admire him. He takes a post with the Ravensgate ward in the autumn and winds their clocks too, as a courtesy, because nobody else will pay to.",
     "keyPoints": [
       {
         "id": "kp_time",

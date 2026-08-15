@@ -71,13 +71,13 @@ describe("case 00 - The Quiet Room", () => {
   const c = loadCase("case-00-the-quiet-room");
 
   const script: Action[] = [
-    { type: "travel", locationId: "loc_0269" },
+    { type: "travel", locationId: "loc_0360" },
     { type: "search" },
     { type: "interview", npcId: "n_sabine", questionId: "q_night" },
     { type: "lab", clueId: "c_teacup" },
     { type: "travel", locationId: "loc_0023" },
     { type: "search" },
-    { type: "travel", locationId: "loc_0272" },
+    { type: "travel", locationId: "loc_0385" },
     { type: "search" },
   ];
 
@@ -186,7 +186,7 @@ describe("case 01 - Harbor Lights", () => {
     { type: "travel", locationId: "loc_lm_no_4_dry_dock" },
     { type: "search" },
     { type: "lab", clueId: "c_paint_flake" },
-    { type: "travel", locationId: "loc_lm_the_backlund_exchange" },
+    { type: "travel", locationId: "loc_lm_the_marrowgate_exchange" },
     { type: "search" },
     { type: "interview", npcId: "n_ashe", questionId: "q_manifest" },
     { type: "travel", locationId: "loc_1098" },

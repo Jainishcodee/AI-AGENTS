@@ -129,6 +129,7 @@ export function Investigation({
     return [...seen];
   }, [feed, hereId]);
 
+
   const travelCostTo = (id: string) =>
     index ? travelCost(index, hereId, id) : 0;
 

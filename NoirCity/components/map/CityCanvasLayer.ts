@@ -22,6 +22,25 @@ export interface CityLayerState {
   focusedId: string | null;
 }
 
+/**
+ * A drive in progress.
+ *
+ * Held apart from `CityLayerState` because it changes sixty times a second
+ * while the rest changes once an action. Pushing it through `setState` would
+ * mean rebuilding the visited Set on every frame of every journey.
+ *
+ * Coordinates are city metres, not pixels - the view can pan underneath a drive
+ * and the line has to stay pinned to the streets rather than to the screen.
+ */
+export interface TravelState {
+  fromX: number;
+  fromY: number;
+  toX: number;
+  toY: number;
+  /** 0 at the kerb outside, 1 on arrival. */
+  t: number;
+}
+
 const EMPTY_STATE: CityLayerState = {
   visited: new Set(),
   hereId: null,
@@ -65,8 +84,22 @@ export class CityCanvasLayer extends L.Layer {
     super();
   }
 
+  private travel: TravelState | null = null;
+
   setState(next: CityLayerState) {
     this.state = next;
+    this.redraw();
+  }
+
+  /**
+   * Advances or clears the drive.
+   *
+   * `redraw` coalesces through one rAF, so being called every frame by the
+   * animation and again by Leaflet's own pan on the same frame still costs a
+   * single draw.
+   */
+  setTravel(next: TravelState | null) {
+    this.travel = next;
     this.redraw();
   }
 
@@ -474,11 +507,69 @@ export class CityCanvasLayer extends L.Layer {
       ctx.fillText(loc.name, sx, ly);
     }
 
+    // --- the drive --------------------------------------------------------
+    // Drawn before the markers so the car passes under a label rather than
+    // over it, and so the destination pin stays the brightest thing on screen.
+    const drive = this.travel;
+    if (drive) {
+      const ax = t.x(drive.fromX);
+      const ay = t.y(drive.fromY);
+      const bx = t.x(drive.toX);
+      const by = t.y(drive.toY);
+      // Eased so the car pulls away and settles rather than tracking at a
+      // constant speed, which reads as a cursor rather than a vehicle.
+      const e = drive.t < 0.5
+        ? 2 * drive.t * drive.t
+        : 1 - Math.pow(-2 * drive.t + 2, 2) / 2;
+      const hx = ax + (bx - ax) * e;
+      const hy = ay + (by - ay) * e;
+
+      // The whole route, faint - you can see where you are going the moment
+      // you set off.
+      ctx.strokeStyle = MAP_COLORS.routeGhost;
+      ctx.lineWidth = 1;
+      ctx.setLineDash([5, 6]);
+      ctx.beginPath();
+      ctx.moveTo(ax, ay);
+      ctx.lineTo(bx, by);
+      ctx.stroke();
+      ctx.setLineDash([]);
+
+      // The part already driven, solid.
+      ctx.strokeStyle = MAP_COLORS.route;
+      ctx.lineWidth = 1.8;
+      ctx.lineCap = "round";
+      ctx.beginPath();
+      ctx.moveTo(ax, ay);
+      ctx.lineTo(hx, hy);
+      ctx.stroke();
+
+      // The car. A dot with a short warm wake behind it, so direction reads
+      // without drawing anything as literal as a vehicle at this scale.
+      const wake = ctx.createLinearGradient(ax, ay, hx, hy);
+      wake.addColorStop(0, "rgba(201,162,39,0)");
+      wake.addColorStop(1, MAP_COLORS.route);
+      ctx.strokeStyle = wake;
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      ctx.moveTo(ax + (hx - ax) * 0.82, ay + (hy - ay) * 0.82);
+      ctx.lineTo(hx, hy);
+      ctx.stroke();
+
+      ctx.beginPath();
+      ctx.arc(hx, hy, 3.4, 0, Math.PI * 2);
+      ctx.fillStyle = MAP_COLORS.here;
+      ctx.fill();
+    }
+
     // --- where the team is ------------------------------------------------
     const here = this.state.hereId
       ? city.locations.find((l) => l.id === this.state.hereId)
       : null;
-    if (here) {
+    // Mid-drive the team is not anywhere yet. The destination still gets its
+    // pin - that is what you are driving towards - but not the standing marker
+    // and its name, or the map would claim you had already arrived.
+    if (here && !drive) {
       this.drawMarker(
         ctx,
         t.x(here.x),

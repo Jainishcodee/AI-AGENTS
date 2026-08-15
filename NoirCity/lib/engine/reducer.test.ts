@@ -39,7 +39,7 @@ describe("travel cost", () => {
     expect(travelCost(cityIndex, "office", "shop")).toBe(2);
   });
 
-  it("adds the Tussock surcharge when the banks differ", () => {
+  it("adds the Ebb surcharge when the banks differ", () => {
     // office (north) -> dock (south), non-adjacent boroughs: 3 across town + 1 river.
     expect(travelCost(cityIndex, "office", "dock")).toBe(4);
   });

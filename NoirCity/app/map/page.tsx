@@ -7,7 +7,7 @@ import { useCity } from "@/lib/city/useCity";
 import { indexCity, travelCost, type CityLocation } from "@/lib/engine/citySchema";
 
 /**
- * The city with no case running - useful for finding your way around Backlund,
+ * The city with no case running - useful for finding your way around Marrowgate,
  * and for checking the map renderer without starting an investigation.
  */
 const CityMap = dynamic(() => import("@/components/map/CityMap"), {
@@ -67,11 +67,11 @@ export default function MapPage() {
             to sit on. On a desktop there is dark sky to spare and it does not. */}
         <div className="absolute left-3 top-3 z-[1000] select-none bg-ink/75 p-3 backdrop-blur-sm sm:left-6 sm:top-6 sm:bg-transparent sm:p-0 sm:backdrop-blur-none">
           <h1 className="font-serif text-xl tracking-[0.3em] text-bright sm:text-2xl sm:tracking-[0.35em]">
-            BACKLUND
+            MARROWGATE
           </h1>
           <p className="mt-1 text-[10px] tracking-[0.15em] text-faint sm:text-[11px] sm:tracking-[0.2em]">
             {city ? city.locations.length : "—"} LOCATIONS &middot;{" "}
-            {city?.boroughs.length ?? "—"}&nbsp;BOROUGHS &middot; THE TUSSOCK
+            {city?.boroughs.length ?? "—"}&nbsp;BOROUGHS &middot; THE EBB
           </p>
           <Link
             href="/"
@@ -132,7 +132,7 @@ export default function MapPage() {
                     <p className="mt-3 text-[11px] leading-relaxed text-faint">
                       From {here.name}.{" "}
                       {hereBorough?.bank !== borough?.bank
-                        ? "Crossing the Tussock costs an extra hour."
+                        ? "Crossing the Ebb costs an extra hour."
                         : "Same side of the river."}
                     </p>
                   )}

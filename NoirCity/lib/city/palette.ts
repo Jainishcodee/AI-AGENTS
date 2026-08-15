@@ -1,5 +1,5 @@
 /**
- * The map's whole colour vocabulary, in one place. Backlund at night: cold
+ * The map's whole colour vocabulary, in one place. Marrowgate at night: cold
  * water, a little sodium light on the main roads, everything else drained.
  *
  * This is the canvas half of the palette in `app/globals.css`, and the two are
@@ -54,13 +54,20 @@ export const MAP_COLORS = {
   chipEdgeVisited: "#2b2f36",
   chipGlyph: "#c6ccd5",
 
+  // --- a drive in progress -------------------------------------------------
+  // Gold, and this is the one addition to its three permitted uses: a drive is
+  // where you are, in transit. It lasts a second and a bit and then it is gone.
+  route: "#c9a227",
+  /** The rest of the journey, ahead of the car. */
+  routeGhost: "rgba(201, 162, 39, 0.28)",
+
   // --- atmosphere ---------------------------------------------------------
   // Not features of the city, but of the night it is sitting in. All three are
   // painted once per draw like everything else here - there is no animation
   // loop behind any of it.
   /** Sodium light spilling off the main roads. Very low alpha, laid wide. */
   avenueGlow: "rgba(198, 162, 96, 0.055)",
-  /** Mist coming off the Tussock, heaviest at the near bank. */
+  /** Mist coming off the Ebb, heaviest at the near bank. */
   riverFog: "rgba(150, 180, 196, 0.07)",
   /**
    * Corners of the plate, so the city does not end in a hard rectangle.

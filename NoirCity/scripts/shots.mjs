@@ -7,6 +7,7 @@
  *   node scripts/shots.mjs
  */
 import { chromium } from "playwright";
+import { enterStudy } from "./e2e-lib.mjs";
 import { mkdirSync } from "node:fs";
 
 const BASE = process.env.BASE_URL ?? "http://localhost:3000";
@@ -26,6 +27,7 @@ for (const [size, viewport] of Object.entries(SIZES)) {
     page.screenshot({ path: `${OUT}/${size}-${name}.png` });
 
   await page.goto(BASE, { waitUntil: "networkidle" });
+ await enterStudy(page);
   await shot("01-landing");
 
   await page.goto(`${BASE}/play/the-quiet-room`, { waitUntil: "networkidle" });

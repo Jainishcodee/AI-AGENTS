@@ -9,7 +9,7 @@
  *   node scripts/board-e2e.mjs <shot-dir>
  */
 import { chromium } from "playwright";
-import { travelTo } from "./e2e-lib.mjs";
+import {travelTo, enterStudy } from "./e2e-lib.mjs";
 
 const shots = process.argv[2] ?? ".";
 const BASE = process.env.BASE_URL ?? "http://localhost:3000";
@@ -24,6 +24,7 @@ page.on("pageerror", (e) => errors.push(String(e)));
 const log = (m) => console.log(`  ${m}`);
 
 await page.goto(BASE, { waitUntil: "networkidle" });
+ await enterStudy(page);
 await page
   .locator("li", { hasText: "The Quiet Room" })
   .getByRole("link", { name: /PLAY ALONE/ })
@@ -33,7 +34,7 @@ await page.waitForTimeout(1000);
 await page.getByRole("button", { name: "GET TO WORK" }).click();
 
 // Gather enough evidence that the board has something on it.
-await travelTo(page, "loc_0269");
+await travelTo(page, "loc_0360");
 await page.getByRole("button", { name: /SEARCH THIS PLACE/ }).click();
 await page.waitForTimeout(500);
 await page.getByRole("button", { name: /Take me through Thursday evening/ }).click();

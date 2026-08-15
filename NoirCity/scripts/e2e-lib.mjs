@@ -7,6 +7,24 @@
  */
 
 /**
+ * Gets past the title sequence.
+ *
+ * A fresh browser context has never seen it, so every suite that opens the
+ * landing page meets it first - exactly as a new player does. Pressing a key
+ * skips it, which is also how a player skips it, so this is not the test
+ * working around the game.
+ *
+ * Safe to call when there is no intro: the wait is swallowed.
+ */
+export async function enterStudy(page) {
+  const intro = page.getByTestId("intro");
+  if (await intro.count()) {
+    await page.keyboard.press("Escape");
+    await intro.waitFor({ state: "detached", timeout: 10000 }).catch(() => {});
+  }
+}
+
+/**
  * Travels to an address the way a player does: bring it on screen, click the
  * pin, open the card it puts up, drive over.
  *

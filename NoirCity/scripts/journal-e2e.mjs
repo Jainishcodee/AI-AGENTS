@@ -6,6 +6,7 @@
  *   node scripts/journal-e2e.mjs <shot-dir>
  */
 import { chromium } from "playwright";
+import { enterStudy } from "./e2e-lib.mjs";
 
 const shots = process.argv[2] ?? ".";
 const BASE = process.env.BASE_URL ?? "http://localhost:3000";
@@ -34,24 +35,24 @@ await page.getByRole("button", { name: "HERE", exact: true }).click();
 await page.waitForTimeout(400);
 
 const field = page.getByPlaceholder("176 Cannon Yard");
-await field.fill("85 Sodela");
+await field.fill("198 Threadneedle");
 await page.waitForTimeout(500);
 await page.screenshot({ path: `${shots}/02-address-book.png` });
 
-const matches = await page.locator("button", { hasText: "85 Sodela Walk" }).count();
-log(`typing "85 Sodela" offers ${matches} address(es)`);
+const matches = await page.locator("button", { hasText: "198 Threadneedle Circle" }).count();
+log(`typing "198 Threadneedle" offers ${matches} address(es)`);
 if (matches < 1) throw new Error("address book found nothing");
 
 // A nonsense address must say so rather than silently offering the world.
 await field.fill("999 Nowhere At All");
 await page.waitForTimeout(400);
-const noSuch = await page.getByText("No such address in Backlund").count();
+const noSuch = await page.getByText("No such address in Marrowgate").count();
 log(`nonsense address rejected: ${noSuch === 1}`);
 if (noSuch !== 1) throw new Error("bad address was not rejected");
 
-await field.fill("85 Sodela Walk");
+await field.fill("198 Threadneedle Circle");
 await page.waitForTimeout(400);
-await page.locator("button", { hasText: "85 Sodela Walk" }).first().click();
+await page.locator("button", { hasText: "198 Threadneedle Circle" }).first().click();
 await page.waitForTimeout(900);
 
 await page.getByRole("button", { name: /SEARCH THIS PLACE/ }).click();

@@ -3,7 +3,7 @@ import { indexCity, type City, type CityIndex } from "./citySchema";
 
 /**
  * A four-location toy city and a small case, built so the engine can be tested
- * without loading half a megabyte of Backlund. Two boroughs per bank, so the
+ * without loading half a megabyte of Marrowgate. Two boroughs per bank, so the
  * river surcharge is exercised.
  */
 

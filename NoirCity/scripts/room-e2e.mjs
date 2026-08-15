@@ -7,6 +7,7 @@
  *   node scripts/room-e2e.mjs <shot-dir>
  */
 import { chromium } from "playwright";
+import { enterStudy } from "./e2e-lib.mjs";
 import { readFileSync } from "node:fs";
 
 const shots = process.argv[2] ?? ".";
@@ -40,6 +41,7 @@ async function newPlayer(name) {
 // --- host opens a room -----------------------------------------------------
 const host = await newPlayer("host");
 await host.goto(BASE, { waitUntil: "networkidle" });
+await enterStudy(host);
 
 // The landing page carries two "Your name" fields - one per case card and one
 // in the join box - so both selectors have to be scoped to their own card.
@@ -66,6 +68,7 @@ await host.screenshot({ path: `${shots}/room-01-lobby.png` });
 // --- second player joins ---------------------------------------------------
 const guest = await newPlayer("guest");
 await guest.goto(BASE, { waitUntil: "networkidle" });
+await enterStudy(guest);
 const joinBox = guest.locator("section", { hasText: "SOMEBODY GAVE YOU A CODE" });
 await joinBox.getByPlaceholder("CODE").fill(code);
 await joinBox.getByPlaceholder("Your name").fill("Spade");
@@ -106,15 +109,15 @@ await host.waitForTimeout(1500);
 // --- the guest acts, the host must see it -----------------------------------
 await guest.getByRole("button", { name: "GET TO WORK" }).click();
 await guest.getByRole("button", { name: "HERE", exact: true }).click();
-await guest.getByPlaceholder("176 Cannon Yard").fill("85 Sodela Walk");
+await guest.getByPlaceholder("176 Cannon Yard").fill("198 Threadneedle Circle");
 await guest.waitForTimeout(600);
-await guest.locator("button", { hasText: "85 Sodela Walk" }).first().click();
+await guest.locator("button", { hasText: "198 Threadneedle Circle" }).first().click();
 await guest.waitForTimeout(2500);
 
 await host.getByRole("button", { name: "JOURNAL" }).click();
 await host.waitForTimeout(1200);
 const hostJournal = await host.locator("article").allInnerTexts();
-const sawTravel = hostJournal.some((t) => t.includes("Blue Moon Apartments"));
+const sawTravel = hostJournal.some((t) => t.includes("Electric Wing Apartments"));
 log(`host's journal shows the guest's move: ${sawTravel}`);
 assert(sawTravel, "the guest's travel never reached the host");
 

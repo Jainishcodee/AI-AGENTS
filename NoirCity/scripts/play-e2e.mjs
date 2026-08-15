@@ -7,7 +7,7 @@
  *   node scripts/play-e2e.mjs <shot-dir>
  */
 import { chromium } from "playwright";
-import { travelTo, QUIET_ROOM_CASE } from "./e2e-lib.mjs";
+import {travelTo, QUIET_ROOM_CASE, enterStudy } from "./e2e-lib.mjs";
 
 const shots = process.argv[2] ?? ".";
 // Points at `npm run dev` by default; set BASE_URL to run the same script
@@ -48,6 +48,7 @@ async function hoursLeft() {
 
 // --- open the case ---------------------------------------------------------
 await page.goto(BASE, { waitUntil: "networkidle" });
+ await enterStudy(page);
 await shot("01-case-files");
 log("case files listed");
 
@@ -66,7 +67,7 @@ await page.waitForTimeout(400);
 // --- tutorial step 1: travel ----------------------------------------------
 const step1 = await page.locator("h2").first().textContent();
 log(`tutorial: ${step1}`);
-await travelTo(page, "loc_0269");
+await travelTo(page, "loc_0360");
 await shot("03-at-the-scene");
 
 // --- step 2: search --------------------------------------------------------
@@ -99,7 +100,7 @@ await page.getByRole("button", { name: /SEARCH THIS PLACE/ }).click();
 await page.waitForTimeout(600);
 log("searched the clinic");
 
-await travelTo(page, "loc_0272");
+await travelTo(page, "loc_0385");
 await page.getByRole("button", { name: /SEARCH THIS PLACE/ }).click();
 await page.waitForTimeout(600);
 log(`searched the apartment, ${await hoursLeft()}h left`);

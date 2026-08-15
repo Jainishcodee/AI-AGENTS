@@ -1,7 +1,7 @@
 import { z } from "zod";
 
 /**
- * Backlund - a fictional city in a fictional coordinate space.
+ * Marrowgate - a fictional city in a fictional coordinate space.
  *
  * Structure is lifted from the Lord of the Mysteries map: a river cutting the
  * city into two banks, joined by a handful of bridges, with class-divided
@@ -40,7 +40,7 @@ export const LOCATION_TYPES = [
 
 export type LocationType = (typeof LOCATION_TYPES)[number];
 
-/** Which side of the Tussock a borough sits on. Crossing costs extra time. */
+/** Which side of the Ebb a borough sits on. Crossing costs extra time. */
 export const BANKS = ["north", "south"] as const;
 export type Bank = (typeof BANKS)[number];
 
@@ -130,7 +130,7 @@ export const citySchema = z.object({
     name: z.string(),
     /** Centreline, north-west to south-east. */
     points: z.array(pointSchema),
-    /** Both banks as one closed ring. The Tussock widens into an estuary as it
+    /** Both banks as one closed ring. The Ebb widens into an estuary as it
      *  runs east, so a single width would not describe it. */
     polygon: z.array(pointSchema),
     widthAtSource: z.number(),
@@ -173,7 +173,7 @@ export const TRAVEL_COST = {
   sameBorough: 1,
   adjacentBorough: 2,
   acrossBank: 3,
-  /** Added on top when the trip has to cross the Tussock. Bridges are the
+  /** Added on top when the trip has to cross the Ebb. Bridges are the
    *  chokepoint the whole map is built around - this is where the tension is. */
   riverCrossing: 1,
 } as const;

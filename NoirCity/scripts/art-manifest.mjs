@@ -23,14 +23,14 @@ const boroughs = new Map(city.boroughs.map((b) => [b.id, b]));
  * The look every generated plate is asked for.
  *
  * This said "1984 film noir" and nothing else, which produced Los Angeles. The
- * city underneath it is not Los Angeles - the generator gives Backlund a
+ * city underneath it is not Los Angeles - the generator gives Marrowgate a
  * winding old core, tenement lanes and a civic quarter, and the cases are full
  * of solicitors, inquests and prescription books. So the plates were fighting
  * their own setting.
  *
  * The setting stays 1984 - the cases turn on answering machines and laboratory
  * reports and cannot move - but the city it happens in never stopped looking
- * Victorian. Gaslight beside sodium, soot brick, fog off the Tussock. That is
+ * Victorian. Gaslight beside sodium, soot brick, fog off the Ebb. That is
  * the register the whole thing has been reaching for, and it is what makes an
  * occult case read as ordinary business rather than as a costume.
  *
@@ -40,7 +40,7 @@ const boroughs = new Map(city.boroughs.map((b) => [b.id, b]));
  * front gets better tonal separation out of the generator.
  */
 const LOOK =
-  "Backlund 1984 - a city that never stopped looking Victorian. Gaslight and sodium lamps, wet cobbles, soot-blackened brick, fog off the river, ornate ironwork, a quiet occult undertone. Monochrome, heavy 35mm grain, deep shadow, one hard light source, no text, no watermark, no people facing camera";
+  "Marrowgate 1984 - a city that never stopped looking Victorian. Gaslight and sodium lamps, wet cobbles, soot-blackened brick, fog off the river, ornate ironwork, a quiet occult undertone. Monochrome, heavy 35mm grain, deep shadow, one hard light source, no text, no watermark, no people facing camera";
 
 const slots = [];
 
@@ -64,7 +64,7 @@ for (const dir of readdirSync(CASES)) {
       kind: "scenes",
       id: loc.cityLocationId,
       label: `${place.name} — ${c.title}`,
-      prompt: `Interior or exterior of ${place.name}, a ${place.type} on ${place.address} in ${borough?.name ?? "Backlund"}. ${firstSentence(loc.description)} Eye-level, 16:9, nobody in frame. ${LOOK}`,
+      prompt: `Interior or exterior of ${place.name}, a ${place.type} on ${place.address} in ${borough?.name ?? "Marrowgate"}. ${firstSentence(loc.description)} Eye-level, 16:9, nobody in frame. ${LOOK}`,
     });
   }
 

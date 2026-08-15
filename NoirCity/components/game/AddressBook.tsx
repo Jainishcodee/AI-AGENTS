@@ -13,7 +13,7 @@ import type { Action } from "@/lib/engine/reducer";
  * cost, but it will not do the remembering for you.
  *
  * Resolution is client-side on purpose. The browser already has every address in
- * Backlund, so hiding the lookup would protect nothing — the puzzle is knowing
+ * Marrowgate, so hiding the lookup would protect nothing — the puzzle is knowing
  * which address matters, not being unable to look one up.
  */
 
@@ -100,7 +100,7 @@ export function AddressBook({
 
         {query.length >= 2 && !matches.length && (
           <p className="mt-4 font-serif text-[13px] italic text-faint">
-            No such address in Backlund. Check what you wrote down.
+            No such address in Marrowgate. Check what you wrote down.
           </p>
         )}
 

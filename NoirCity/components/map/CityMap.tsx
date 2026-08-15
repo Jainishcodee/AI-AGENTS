@@ -84,7 +84,7 @@ function CityMapImpl({
      */
     const reserved = () => reserveRef.current?.offsetWidth ?? 0;
 
-    // Backlund is far wider than it is tall, so the zoom that shows all of it
+    // Marrowgate is far wider than it is tall, so the zoom that shows all of it
     // depends entirely on how wide the container is - a fixed floor that framed
     // the city on a desktop cropped both ends of it on a phone. Derive the
     // floor instead, and make it the limit: you can always see the whole city,
@@ -162,7 +162,7 @@ function CityMapImpl({
      * the team's own doorstep.
      *
      * Opening on the whole city looked deliberate and read as useless: at that
-     * scale Backlund is a grey web of twelve hundred identical dots, no address
+     * scale Marrowgate is a grey web of twelve hundred identical dots, no address
      * is legible, and on a phone the city is a 300px band with black above and
      * below it. You are a detective standing somewhere specific, so the map
      * opens where you are standing. The whole city is still one pinch away, and
@@ -296,6 +296,71 @@ function CityMapImpl({
       focusedId,
     } satisfies CityLayerState);
   }, [visited, hereId, focusedId]);
+
+  /**
+   * The drive.
+   *
+   * Triggered off `hereId` changing rather than off a prop the caller has to
+   * remember to set. That means it needs no new plumbing, it works for a
+   * teammate's move in a shared room exactly as it does for your own, and it
+   * cannot get out of step with the state it is illustrating.
+   *
+   * The map eases to the destination at the same time. Leaflet's pan and this
+   * animation both ask the layer to redraw, and `redraw` coalesces through one
+   * rAF, so a frame still costs a single draw.
+   */
+  const prevHereRef = useRef<string | null>(hereId);
+  useEffect(() => {
+    const from = prevHereRef.current;
+    prevHereRef.current = hereId;
+
+    const map = mapRef.current;
+    const layer = layerRef.current;
+    if (!map || !layer || !from || !hereId || from === hereId) return;
+
+    const a = city.locations.find((l) => l.id === from);
+    const b = city.locations.find((l) => l.id === hereId);
+    if (!a || !b) return;
+
+    // Asked not to animate: no drive, no pan, just be there.
+    if (window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) {
+      map.setView([b.y, b.x], map.getZoom(), { animate: false });
+      return;
+    }
+
+    const DURATION = 1150;
+    const started = performance.now();
+    let frame = 0;
+
+    // Leaflet drives the pan; we drive the car. Slightly shorter than the
+    // journey so the view has settled by the time the pin lands.
+    map.panTo([b.y, b.x], { animate: true, duration: DURATION / 1000 - 0.15 });
+
+    const step = (now: number) => {
+      const t = Math.min(1, (now - started) / DURATION);
+      layer.setTravel({
+        fromX: a.x,
+        fromY: a.y,
+        toX: b.x,
+        toY: b.y,
+        t,
+      });
+      if (t < 1) {
+        frame = requestAnimationFrame(step);
+        return;
+      }
+      // Clearing hands the standing marker back to the destination.
+      layer.setTravel(null);
+    };
+    frame = requestAnimationFrame(step);
+
+    return () => {
+      cancelAnimationFrame(frame);
+      // A second journey starting mid-drive, or the map unmounting, must not
+      // leave a car parked halfway across the city.
+      layer.setTravel(null);
+    };
+  }, [city, hereId]);
 
   // A slow ring around wherever the team is standing. Leaflet keeps a marker in
   // the right place on its own as you pan and zoom, and the ring itself is a CSS

@@ -1,8 +1,8 @@
 {
   "id": "the-quiet-room",
   "title": "The Quiet Room",
-  "cityId": "backlund",
-  "brief": "Six people sat in the dark at 85 Sodela Walk on Thursday evening to speak with the dead. When the lamp came back up, Ottoline Frayne was still in her chair with her eyes open and her heart stopped. The doctor at the table signed her off as heart failure inside the hour, which is very quick work, and her solicitor would like a second opinion. Four addresses. Three days. Everything you need is inside them, and one of the six people at that table is lying to you about something that has nothing to do with the murder.",
+  "cityId": "marrowgate",
+  "brief": "Six people sat in the dark at 198 Threadneedle Circle on Thursday evening to speak with the dead. When the lamp came back up, Ottoline Frayne was still in her chair with her eyes open and her heart stopped. The doctor at the table signed her off as heart failure inside the hour, which is very quick work, and her solicitor would like a second opinion. Four addresses. Three days. Everything you need is inside them, and one of the six people at that table is lying to you about something that has nothing to do with the murder.",
   "timeBudget": 32,
   "sessionMinutes": 45,
   "startsAt": "1984-03-09T09:00:00",
@@ -11,7 +11,7 @@
     {
       "id": "s_vane",
       "name": "Dr. Emmanuel Vane",
-      "occupation": "Physician; Hillston practice",
+      "occupation": "Physician; Harrowfield practice",
       "summary": "Attended Ottoline Frayne for eleven years and sat at her right hand on Thursday. Signed the certificate himself, which is permitted, and unusual.",
       "alibi": "Seated at the table throughout, holding the hands of the sitters either side of him. Both confirm it. Neither could see a thing."
     },
@@ -39,7 +39,7 @@
     {
       "id": "m_inheritance",
       "label": "The inheritance",
-      "description": "The house on Sodela Walk and four hundred a year go to the nephew, and the nephew is owed money by men who do not write letters."
+      "description": "The house on Threadneedle Walk and four hundred a year go to the nephew, and the nephew is owed money by men who do not write letters."
     },
     {
       "id": "m_exposure",
@@ -138,7 +138,7 @@
       "id": "n_sabine",
       "name": "Madame Sabine Roux",
       "role": "Spirit medium",
-      "locationId": "loc_0269",
+      "locationId": "loc_0360",
       "questions": [
         {
           "id": "q_night",
@@ -171,7 +171,7 @@
       "id": "n_gilbert",
       "name": "Gilbert Frayne",
       "role": "The nephew",
-      "locationId": "loc_0269",
+      "locationId": "loc_0360",
       "questions": [
         {
           "id": "q_aunt",
@@ -218,8 +218,8 @@
       "searchCost": 1
     },
     {
-      "cityLocationId": "loc_0269",
-      "description": "85 Sodela Walk. Madame Roux takes the ground floor: a parlour with the curtains permanently drawn, a round table, six chairs, and a sash window that does not quite close. Ottoline Frayne's chair has not been moved. Gilbert Frayne is here too, waiting for somebody to release the house to him.",
+      "cityLocationId": "loc_0360",
+      "description": "198 Threadneedle Circle. Madame Roux takes the ground floor: a parlour with the curtains permanently drawn, a round table, six chairs, and a sash window that does not quite close. Ottoline Frayne's chair has not been moved. Gilbert Frayne is here too, waiting for somebody to release the house to him.",
       "clues": [
         "c_body",
         "c_teacup",
@@ -236,7 +236,7 @@
       "searchCost": 2
     },
     {
-      "cityLocationId": "loc_0272",
+      "cityLocationId": "loc_0385",
       "description": "The Blue Dollar Apartments, where Ottoline Frayne actually lived — two doors from the seance she attended every Thursday. Her writing case is on the bureau and her account books are in it, kept in a hand so small and hard you need the lamp to read them.",
       "clues": [
         "c_ledger_debt",
@@ -258,10 +258,10 @@
       "id": "t_travel",
       "verb": "TRAVEL",
       "title": "Get to the scene",
-      "body": "The map is the board. Every gold pin is somewhere you can go, and there are over a thousand of them — most have nothing to do with this. Click a pin to read it, then DRIVE OVER to move the team there.\n\nGo to 85 Sodela Walk, in Cherwood. Travel costs hours, and hours are all you have.",
+      "body": "The map is the board. Every gold pin is somewhere you can go, and there are over a thousand of them — most have nothing to do with this. Click a pin to read it, then DRIVE OVER to move the team there.\n\nGo to 198 Threadneedle Circle, in Ravensgate. Travel costs hours, and hours are all you have.",
       "done": {
         "type": "atLocation",
-        "locationId": "loc_0269"
+        "locationId": "loc_0360"
       }
     },
     {
@@ -314,7 +314,7 @@
       "c_ledger_debt"
     ],
     "epilogue": "Eleven years of consultations she never had, three hundred and forty pounds, and an old woman patient enough to go back through seven years of her own housekeeping to prove it. She wrote ask him Thursday in her account book on the Tuesday, and on the Thursday she sat down at a round table with him and put her hand in his.\n\nHe did not need the dark. That was the elegant part, and it is what nearly worked: the dark made everyone look at Sabine Roux, and Sabine Roux was a proven liar with a room full of people watching her lie. But the digitalis was in the cup before the lamp ever went out, and it was in the cup because Vane had spent the previous three days making sure Ottoline Frayne had a bottle at home that was strong enough to explain the dose if anybody ever checked. He wrote her a prescription she never asked for, so that her own medicine cabinet would testify for him.\n\nHe is struck off in the spring and hanged in the summer. Sabine Roux is fined nine pounds for obtaining money by deception, pays it in cash, and is sitting six people at the round table again by August. Gilbert Frayne gets the house, sells it inside a month, and is in debt again by the following spring.",
-    "failureEpilogue": "Dr. Vane attends the inquest, gives his evidence in a calm and professional manner, and is thanked by the coroner for his trouble. The prescription book stays on his desk for another week and then it does not. There is no post-mortem, because the family did not request one, because the family is a nephew who wanted the house and got it.\n\nSomewhere in the account books at the Blue Dollar Apartments there are two columns three hundred and forty pounds apart, and a line in a small hard hand that reads ask him Thursday, and nobody reads it again. Vane moves his practice to Cherwood the following year and does rather well there.",
+    "failureEpilogue": "Dr. Vane attends the inquest, gives his evidence in a calm and professional manner, and is thanked by the coroner for his trouble. The prescription book stays on his desk for another week and then it does not. There is no post-mortem, because the family did not request one, because the family is a nephew who wanted the house and got it.\n\nSomewhere in the account books at the Blue Dollar Apartments there are two columns three hundred and forty pounds apart, and a line in a small hard hand that reads ask him Thursday, and nobody reads it again. Vane moves his practice to Ravensgate the following year and does rather well there.",
     "keyPoints": [
       {
         "id": "kp_money",

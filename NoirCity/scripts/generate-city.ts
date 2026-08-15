@@ -1,11 +1,15 @@
 /**
- * Generates content/city.json - the city of Backlund.
+ * Generates content/city.json - the city of Marrowgate.
  *
- * Structure comes from the Lord of the Mysteries map: the Tussock River splits
- * the city into two banks joined by four crossings, with boroughs that differ
- * sharply by class. Texture is Los Angeles blended with London - wide jittered
- * boulevards and a neon strip on one side of the river, a tangled old core and
- * dockland lanes on the other.
+ * Marrowgate is our own place. The Ebb splits it into two banks joined by four
+ * crossings, with boroughs that differ sharply by class; the texture is Los
+ * Angeles blended with London - wide jittered boulevards and a neon strip on
+ * one side of the river, a tangled old core and dockland lanes on the other.
+ *
+ * The shape of a class-divided river city was suggested by the gaslight-occult
+ * genre generally, but every name here is invented. An earlier draft seeded the
+ * street vocabulary from a published novel's setting, which is somebody else's
+ * copyrighted work and is not ours to ship. `ESTATE` below replaced it.
  *
  * Everything is deterministic: same seed, same city. Run once, commit the JSON.
  *
@@ -61,7 +65,7 @@ function weighted<T extends string>(table: Record<string, number>): T {
 }
 
 // ---------------------------------------------------------------------------
-// The Tussock. X-monotonic, so "which bank" is a cheap comparison.
+// The Ebb. X-monotonic, so "which bank" is a cheap comparison.
 // ---------------------------------------------------------------------------
 
 const RIVER: Point[] = [
@@ -78,7 +82,7 @@ const RIVER_WIDTH_SOURCE = 230;
 const RIVER_WIDTH_MOUTH = 640;
 
 /**
- * The Tussock widens into an estuary as it runs east, which is what gives
+ * The Ebb widens into an estuary as it runs east, which is what gives
  * Saltney open water to be a harbour on - and why the eastern crossing is a
  * ferry rather than a bridge.
  */
@@ -144,7 +148,7 @@ interface BoroughSeed {
   /** Block size along each axis of the local frame, metres. */
   spacing: Point;
   /** For `organic` boroughs: how far streets wander, and over what distance.
-   *  Hillston sweeps in long curves round a hill; East Borough just kinks. */
+   *  Harrowfield sweeps in long curves round a hill; East Borough just kinks. */
   meander?: { amplitude: number; wavelength: number };
   neighbors: string[];
   character: string;
@@ -158,23 +162,26 @@ interface BoroughSeed {
 
 const LONDON_OLD = "Whitcombe Blackfriar Cheapside Ludgate Shadwell Coldbath Aldgate Bishopsgate Wapping Bermond Clerkenwell Houndsditch Fetter Cripplegate Threadneedle Lombard Cannon Fleet Barbican Poultry Cloth Camomile".split(" ");
 const LA_WIDE = "Alvarado Cahuenga Figueroa Normandie Sepulveda Vermont Wilshire Hyperion Beaudry Kenmore Occidental Manzanita Larchmont Cordova Bonnie Rampart Silverlake Effie Sanborn Vendome Marathon".split(" ");
-const LOTM = "Iron Cross Minsk Zouteland Daffodil Tussock Hillston Empress Cherwood Sodela Blackthorn Narcissus Chissak Bayam Pinster Backlund Saint Selena Dwayne Rosago Enmat".split(" ");
+const ESTATE =
+  "Marrow Ashgrove Ebbswell Harrowfield Quillon Ravensgate Sablewick Thornfen Greymarsh Corvin Nettlebed Ferrers Bellamy Wexford Ossary Calder Merrow Ryehill Larkspur".split(
+    " ",
+  );
 
 const BOROUGHS: BoroughSeed[] = [
   {
-    id: "b_hillston",
-    name: "Hillston",
+    id: "b_harrowfield",
+    name: "Harrowfield",
     bank: "north",
     seed: [950, 3800],
     pattern: "organic",
     angle: 0.34,
     spacing: [115, 98],
     meander: { amplitude: 52, wavelength: 620 },
-    neighbors: ["b_vermilion", "b_empress"],
+    neighbors: ["b_vermilion", "b_sovereign"],
     character: "Old money on the high ground.",
     blurb: "Hedges, gate lodges, and driveways that curve so you cannot see the house from the road. Nobody walks here.",
     weight: 10,
-    streetNames: [...LONDON_OLD.slice(0, 10), ...LOTM.slice(4, 12)],
+    streetNames: [...LONDON_OLD.slice(0, 10), ...ESTATE.slice(4, 12)],
     suffixes: ["Terrace", "Gardens", "Hill", "Crescent", "Drive", "Rise"],
     typeMix: { apartment: 5, office: 3, church: 3, clinic: 2, theatre: 1, garage: 1, diner: 2, hall: 2 },
   },
@@ -186,17 +193,17 @@ const BOROUGHS: BoroughSeed[] = [
     pattern: "boulevard",
     angle: 0.06,
     spacing: [170, 78],
-    neighbors: ["b_hillston", "b_cherwood", "b_empress", "b_westborough"],
+    neighbors: ["b_harrowfield", "b_ravensgate", "b_sovereign", "b_westborough"],
     character: "The strip. Neon and appetite.",
     blurb: "Four miles of marquee lights, and behind every one of them a parking lot where the real business happens.",
     weight: 13,
-    streetNames: [...LA_WIDE.slice(0, 14), ...LOTM.slice(0, 4)],
+    streetNames: [...LA_WIDE.slice(0, 14), ...ESTATE.slice(0, 4)],
     suffixes: ["Boulevard", "Avenue", "Strip", "Way", "Street"],
     typeMix: { club: 5, bar: 5, theatre: 4, motel: 4, diner: 3, pawnshop: 2, apartment: 3, garage: 1, hall: 1 },
   },
   {
-    id: "b_cherwood",
-    name: "Cherwood",
+    id: "b_ravensgate",
+    name: "Ravensgate",
     bank: "north",
     seed: [5300, 3350],
     pattern: "radial",
@@ -206,23 +213,23 @@ const BOROUGHS: BoroughSeed[] = [
     character: "University, libraries, and the circus grounds.",
     blurb: "Reading rooms, lecture halls, and a green where a permanent circus has been packing up for eleven years.",
     weight: 11,
-    streetNames: [...LOTM.slice(6, 18), ...LONDON_OLD.slice(10, 18)],
+    streetNames: [...ESTATE.slice(6, 18), ...LONDON_OLD.slice(10, 18)],
     suffixes: ["Square", "Row", "Walk", "Street", "Circle", "Green"],
     typeMix: { hall: 4, office: 3, church: 2, apartment: 4, diner: 3, theatre: 2, clinic: 2, market: 2 },
   },
   {
-    id: "b_empress",
-    name: "Empress Borough",
+    id: "b_sovereign",
+    name: "Sovereign Borough",
     bank: "north",
     seed: [2000, 2820],
     pattern: "grid",
     angle: 0.02,
     spacing: [115, 95],
-    neighbors: ["b_hillston", "b_vermilion", "b_westborough"],
+    neighbors: ["b_harrowfield", "b_vermilion", "b_westborough"],
     character: "City Hall, the courts, and the Bell of Order.",
     blurb: "Granite, columns, and pigeons. Every window on this street belongs to someone who can ruin you with a memo.",
     weight: 10,
-    streetNames: [...LOTM.slice(4, 16), ...LONDON_OLD.slice(2, 10)],
+    streetNames: [...ESTATE.slice(4, 16), ...LONDON_OLD.slice(2, 10)],
     suffixes: ["Street", "Place", "Court", "Avenue", "Parade"],
     typeMix: { office: 6, precinct: 3, hall: 3, church: 2, diner: 2, bar: 2, apartment: 2, clinic: 1 },
   },
@@ -234,11 +241,11 @@ const BOROUGHS: BoroughSeed[] = [
     pattern: "grid",
     angle: 0.27,
     spacing: [92, 78],
-    neighbors: ["b_empress", "b_vermilion", "b_cherwood"],
+    neighbors: ["b_sovereign", "b_vermilion", "b_ravensgate"],
     character: "Banks, law firms, and private clubs.",
     blurb: "Narrow and vertical. The men here have never once had to explain where the money came from.",
     weight: 11,
-    streetNames: [...LONDON_OLD.slice(8, 22), ...LOTM.slice(12, 20)],
+    streetNames: [...LONDON_OLD.slice(8, 22), ...ESTATE.slice(12, 20)],
     suffixes: ["Street", "Court", "Lane", "Yard", "Chambers"],
     typeMix: { office: 6, bar: 3, apartment: 3, hall: 2, clinic: 2, diner: 2, market: 1, church: 1 },
   },
@@ -270,7 +277,7 @@ const BOROUGHS: BoroughSeed[] = [
     character: "Markets, printers, and the ferry landings.",
     blurb: "Where the two halves of the city meet and neither one takes responsibility. Everything is for sale by noon.",
     weight: 11,
-    streetNames: [...LONDON_OLD.slice(0, 16), ...LOTM.slice(0, 6)],
+    streetNames: [...LONDON_OLD.slice(0, 16), ...ESTATE.slice(0, 6)],
     suffixes: ["Row", "Lane", "Market", "Steps", "Alley", "Wharf"],
     typeMix: { market: 5, pawnshop: 4, bar: 4, diner: 3, apartment: 3, warehouse: 2, church: 2, motel: 2 },
   },
@@ -302,7 +309,7 @@ const BOROUGHS: BoroughSeed[] = [
     character: "The prison, the asylum, and the county morgue.",
     blurb: "Institutional brick as far as the eye goes. Everything here has a number stencilled on it, including the people.",
     weight: 7,
-    streetNames: [...LOTM.slice(8, 20), ...LONDON_OLD.slice(5, 12)],
+    streetNames: [...ESTATE.slice(8, 20), ...LONDON_OLD.slice(5, 12)],
     suffixes: ["Street", "Road", "Gate", "Walk", "Terrace"],
     typeMix: { precinct: 4, clinic: 4, church: 3, apartment: 3, warehouse: 2, office: 2, diner: 1, hall: 1 },
   },
@@ -318,14 +325,14 @@ const BOROUGHS: BoroughSeed[] = [
     character: "Cranes, container yards, and the union hall.",
     blurb: "The estuary end. Gulls, creosote, and a hiring line that forms at four in the morning and settles nothing.",
     weight: 9,
-    streetNames: [...LONDON_OLD.slice(8, 14), ...LA_WIDE.slice(0, 10), ...LOTM.slice(16, 20)],
+    streetNames: [...LONDON_OLD.slice(8, 14), ...LA_WIDE.slice(0, 10), ...ESTATE.slice(16, 20)],
     suffixes: ["Wharf", "Quay", "Row", "Dock", "Reach", "Street"],
     typeMix: { pier: 6, warehouse: 5, bar: 4, motel: 2, garage: 2, diner: 2, hall: 2, apartment: 2 },
   },
 ];
 
 /** Crossings are anchored to the river centreline so they always touch dry land
- *  on both banks, however the Tussock is redrawn. */
+ *  on both banks, however the Ebb is redrawn. */
 function crossing(
   id: string,
   name: string,
@@ -348,7 +355,7 @@ function crossing(
 /**
  * Rail. Freight hugs the south bank through the industrial boroughs out to the
  * docks; the passenger line comes in from the north-west to a terminus behind
- * Empress Borough. Track carves a corridor through the blocks it crosses.
+ * Sovereign Borough. Track carves a corridor through the blocks it crosses.
  */
 const RAILWAYS: Array<{ id: string; name: string; points: Point[] }> = [
   {
@@ -378,7 +385,7 @@ const RAILWAYS: Array<{ id: string; name: string; points: Point[] }> = [
   },
   {
     id: "rw_cherwoodloop",
-    name: "Cherwood Loop",
+    name: "Ravensgate Loop",
     points: [
       [3120, 4400],
       [3600, 4090],
@@ -416,7 +423,7 @@ function onRailCorridor(x: number, y: number): boolean {
 
 const BRIDGES: Bridge[] = [
   crossing("br_ludgate", "Ludgate Bridge", 1150, "bridge"),
-  crossing("br_backlund", "Backlund Bridge", 2300, "bridge"),
+  crossing("br_backlund", "Marrowgate Bridge", 2300, "bridge"),
   crossing("br_ironcross", "Iron Cross Bridge", 3700, "bridge"),
   crossing("br_saltferry", "Saltney Ferry", 5300, "ferry"),
 ];
@@ -799,7 +806,7 @@ const GREENS: Array<{
 ];
 
 /**
- * The map's fixed points. Everything else in Backlund is generated filler; these
+ * The map's fixed points. Everything else in Marrowgate is generated filler; these
  * are the places a case can actually be about, so they are written by hand.
  */
 const LANDMARKS: Array<{
@@ -808,26 +815,26 @@ const LANDMARKS: Array<{
   at: Point;
   blurb: string;
 }> = [
-  { name: "Backlund City Hall", type: "hall", at: [2000, 2900], blurb: "Granite steps, brass doors, and a lobby built to make you feel small. It works." },
+  { name: "Marrowgate City Hall", type: "hall", at: [2000, 2900], blurb: "Granite steps, brass doors, and a lobby built to make you feel small. It works." },
   { name: "The Bell of Order", type: "monument", at: [2150, 2620], blurb: "Cast in a year nobody agrees on. It rings the hour and, twice in living memory, something else." },
   { name: "The Assize Courts", type: "hall", at: [1700, 3050], blurb: "Where the city decides what happened. Accuracy is not the first consideration." },
   { name: "Divisional Police Headquarters", type: "precinct", at: [2450, 2980], blurb: "Six floors of filing and one honest lieutenant, and nobody will tell you which floor." },
   { name: "Sodela Palace", type: "monument", at: [1560, 2760], blurb: "Closed to the public since the fire. The railings alone cost more than this borough earns in a year." },
-  { name: "The Backlund Exchange", type: "office", at: [4160, 2560], blurb: "A trading floor that empties at three and a basement that does not." },
+  { name: "The Marrowgate Exchange", type: "office", at: [4160, 2560], blurb: "A trading floor that empties at three and a basement that does not." },
   { name: "Blackthorn Security Company", type: "office", at: [4020, 2420], blurb: "Private enquiries, discreet. Two rooms above a tobacconist on Iron Cross Street." },
-  { name: "Backlund University", type: "university", at: [5300, 3640], blurb: "Quadrangles, bicycles, and a chemistry department that does not log who signs the key out." },
-  { name: "The Cherwood Public Library", type: "hall", at: [5060, 3300], blurb: "Four floors of stacks. The restricted room needs a letter from somebody who matters." },
+  { name: "Marrowgate University", type: "university", at: [5300, 3640], blurb: "Quadrangles, bicycles, and a chemistry department that does not log who signs the key out." },
+  { name: "The Ravensgate Public Library", type: "hall", at: [5060, 3300], blurb: "Four floors of stacks. The restricted room needs a letter from somebody who matters." },
   { name: "St. Selena's Cathedral", type: "church", at: [880, 3770], blurb: "Cold stone and a choir that rehearses at seven. The verger notices everyone who comes in." },
   { name: "The Orpheum", type: "theatre", at: [2860, 3720], blurb: "Two thousand seats, gilt flaking off the boxes, and a stage door that is never locked." },
   { name: "The Golden Marlin", type: "club", at: [3180, 3810], blurb: "The strip's oldest room. The house takes a cut of everything, including conversations." },
-  { name: "Backlund Bridge Market", type: "market", at: [2320, 1790], blurb: "Two hundred stalls under the arches. Anything can be bought here and nothing can be traced." },
+  { name: "Marrowgate Bridge Market", type: "market", at: [2320, 1790], blurb: "Two hundred stalls under the arches. Anything can be bought here and nothing can be traced." },
   { name: "The Ferry Steps", type: "pier", at: [2450, 1900], blurb: "Worn hollow by two centuries of boots. The tide leaves things on the bottom stair." },
   { name: "The Rookery", type: "apartment", at: [3480, 1060], blurb: "Nine buildings sharing four staircases and no clear ownership. The police come in threes." },
   { name: "Coldbath Fields Prison", type: "prison", at: [4720, 1240], blurb: "Forty-foot wall, one gate, and a governor who answers questions in writing only." },
   { name: "St. Maar Asylum", type: "clinic", at: [4430, 940], blurb: "Red brick and small windows. Committal here requires two signatures and no relatives." },
   { name: "The County Morgue", type: "clinic", at: [4830, 1150], blurb: "Tile, drains, and a duty clerk who will trade a look at the book for a bottle." },
   { name: "Millgate Terminus", type: "station", at: [1290, 1420], blurb: "Soot, steam, and the departure board clacking over. Anyone leaving the city leaves from here." },
-  { name: "Empress Road Station", type: "station", at: [2280, 3230], blurb: "The northern line's last stop. Commuters by day, nobody you want to meet by night." },
+  { name: "Sovereign Road Station", type: "station", at: [2280, 3230], blurb: "The northern line's last stop. Commuters by day, nobody you want to meet by night." },
   { name: "The Dockers' Union Hall", type: "hall", at: [5680, 700], blurb: "The hiring list is posted at four. Whoever controls this room controls the waterfront." },
   { name: "No. 4 Dry Dock", type: "pier", at: [5900, 520], blurb: "Drained, echoing, and forty feet deep. Things go in that do not come back up." },
 ];
@@ -871,7 +878,7 @@ function main() {
   const streets: Street[] = [];
   const blocks: Block[] = [];
 
-  console.log("Laying out Backlund\n");
+  console.log("Laying out Marrowgate\n");
   for (const b of BOROUGHS) {
     const gen = b.pattern === "radial" ? generateRadial(b) : generateGridLike(b);
     streets.push(...gen.streets);
@@ -887,7 +894,7 @@ function main() {
   for (const g of GREENS) {
     const borough = boroughAt(g.centre[0], g.centre[1]);
     if (!borough) {
-      console.log(`  ! ${g.name} falls in the Tussock - skipped`);
+      console.log(`  ! ${g.name} falls in the Ebb - skipped`);
       continue;
     }
     for (let i = blocks.length - 1; i >= 0; i--) {
@@ -976,7 +983,7 @@ function main() {
   for (const lm of LANDMARKS) {
     const borough = boroughAt(lm.at[0], lm.at[1]);
     if (!borough) {
-      console.log(`  ! ${lm.name} falls in the Tussock - skipped`);
+      console.log(`  ! ${lm.name} falls in the Ebb - skipped`);
       continue;
     }
     const boroughStreets = streets.filter((s) => s.boroughId === borough.id);
@@ -1017,11 +1024,11 @@ function main() {
   }));
 
   const city: City = {
-    id: "backlund",
-    name: "Backlund",
+    id: "marrowgate",
+    name: "Marrowgate",
     size: SIZE,
     river: {
-      name: "The Tussock",
+      name: "The Ebb",
       points: RIVER,
       polygon: riverPolygon(),
       widthAtSource: RIVER_WIDTH_SOURCE,

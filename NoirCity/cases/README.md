@@ -2,7 +2,7 @@
 
 ## The rule that governs all of them
 
-**Every case has a rational solution.** Backlund has cults, seances, sealed
+**Every case has a rational solution.** Marrowgate has cults, seances, sealed
 artifacts and a Church that keeps files on things it will not discuss — and none
 of it ever did the murder. The medium is always a fraud. The occult is the
 *atmosphere* and, more usefully, the *misdirection*: the fraud is how you catch
@@ -36,7 +36,7 @@ below is built to teach.
 
 ### `case-00-the-quiet-room` — the demo
 **Small, hard, and teaches the five verbs.** 3 suspects, 12 clues, 5 locations,
-32 hours. A widow dies at a seance in Cherwood; the physician at the table signs
+32 hours. A widow dies at a seance in Ravensgate; the physician at the table signs
 her off inside the hour.
 
 The tutorial covers TRAVEL → SEARCH → INTERVIEW → LAB → ACCUSE and then stops.
@@ -51,7 +51,7 @@ digitalis was in the cup before the lamp went out.
 
 ### `case-01-harbor-lights` — the first real case
 5 suspects, 19 clues, 6 NPCs, 14 locations, 48 hours. A dockworker at the bottom
-of a dry dock that has been empty three weeks. Requires crossing the Tussock
+of a dry dock that has been empty three weeks. Requires crossing the Ebb
 repeatedly, so the river surcharge bites.
 
 *Blend: hardboiled noir + trace evidence.*
@@ -62,9 +62,9 @@ Each keeps the rational rule. Listed with the technique it is built to teach.
 
 | # | Working title | Setting | Technique | Occult dressing |
 |---|---|---|---|---|
-| 02 | *The Bell Does Not Lie* | Empress Borough, civic quarter | **Closed circle.** Nine people at a dinner, one dead, the doors watched all evening. The alibi lattice is the puzzle — every statement constrains another. | The Bell of Order tolled off-schedule that night. There is a mundane reason. |
+| 02 | *The Bell Does Not Lie* | Sovereign Borough, civic quarter | **Closed circle.** Nine people at a dinner, one dead, the doors watched all evening. The alibi lattice is the puzzle — every statement constrains another. | The Bell of Order tolled off-schedule that night. There is a mundane reason. |
 | 03 | *A Reading for Mr. Pell* | Vermilion, the strip | **Observational deduction.** A cold reader is murdered by someone they read correctly. Solved by reconstructing what the victim *deduced* about their killer. | A Church of Steam diviner offers a prophecy that is, read properly, a description of a bank ledger. |
-| 04 | *What You Actually Want* | Cherwood + Coldbath | **Confession-driven.** Almost no physical evidence. Nearly every clue comes from interrogation; questions unlock other questions rather than unlocking searches. | An asylum ward where four patients describe the same dream. One of them was awake. |
+| 04 | *What You Actually Want* | Ravensgate + Coldbath | **Confession-driven.** Almost no physical evidence. Nearly every clue comes from interrogation; questions unlock other questions rather than unlocking searches. | An asylum ward where four patients describe the same dream. One of them was awake. |
 | 05 | *The Sealed Room at St. Maar* | Coldbath | **Trace evidence + bent police.** A locked cell, a dead prisoner, a duty book that has been rewritten. The official record is the crime scene. | A "sealed artifact" in the prison property store that everyone is afraid of and nobody has opened. |
 
 ### Authoring notes
