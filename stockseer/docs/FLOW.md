@@ -50,6 +50,60 @@ pocket". Read the first two diagrams and you have the whole picture.
 
 ---
 
+## 1b. Where the brain runs — PC or cloud
+
+The same code runs in two places. Pick either, or both.
+
+```
+   ┌─────────────────────────────┐      ┌─────────────────────────────┐
+   │        ON YOUR PC           │      │      ON GITHUB ACTIONS      │
+   │                             │      │                             │
+   │  you start it manually,     │      │  cron starts it, always,    │
+   │  or Task Scheduler does     │      │  free, no card, no PC       │
+   │                             │      │                             │
+   │  ✅ custom vibrations       │      │  ✅ works with the PC OFF   │
+   │  ✅ full dashboard          │      │  ✅ works with Jarvis shut  │
+   │  ✅ 5-second price checks   │      │  ⚠️  5 priority levels only  │
+   │  ❌ needs the PC awake      │      │  ⚠️  cron can lag ~5 min     │
+   │  ❌ needs Jarvis open       │      │  ❌ no dashboard            │
+   │                             │      │                             │
+   │  alerts ──► local queue     │      │  alerts ──► ntfy.sh         │
+   │             Jarvis POLLS    │      │             PUSHED to phone │
+   └─────────────────────────────┘      └─────────────────────────────┘
+              │                                       │
+              └───────────────┬───────────────────────┘
+                              ▼
+                        your phone 📳
+```
+
+**Why the cloud one needs a different transport.** Jarvis finds your PC at an
+address and polls it. A GitHub Actions runner has no address — it appears,
+works, and is destroyed. Nothing can poll it. So the direction flips: the job
+*pushes* to ntfy.sh, and your phone holds a standing subscription there.
+
+### What ntfy.sh is
+
+A free relay. StockSeer POSTs a message to a topic; the ntfy Android app is
+subscribed to that topic and shows it. No account, no card, open source.
+
+```
+   StockSeer  ──POST──►  ntfy.sh/<your-topic>  ──push──►  📳 phone
+   (anywhere)                 (relay)                  (ntfy app)
+```
+
+**The topic name is the only secret.** Anyone who guesses it can read your
+alerts. Use something long: `jainish-ipo-x7k2m9q4`, not `ipo`.
+
+Priority maps to how hard the phone tries:
+
+| urgency | ntfy priority | on the phone |
+|---|---|---|
+| info | 3 | normal notification |
+| act | 4 | high — buzzes, heads-up banner |
+| critical | 5 | max — insistent, repeating, **pierces Do Not Disturb** |
+
+---
+
 ## 2. Two delivery paths — this is the key idea
 
 Alerts reach your phone in **two completely different ways**, because the two
@@ -221,6 +275,81 @@ Discovery checks the **app name**, not just a `200`, so a router page on port
 
 ---
 
+## 6b. Cloud setup — the 24×7 path
+
+Ten minutes, once. After this nothing of yours needs to be switched on.
+
+### Step 1 — the phone
+
+1. Install **ntfy** from the Play Store (free)
+2. Tap **+**, invent a long topic name: `jainish-ipo-x7k2m9q4`
+3. Long-press the topic → make sure notifications are allowed
+
+### Step 2 — test it locally
+
+Add to `stockseer/.env`:
+
+```
+NTFY_TOPIC=jainish-ipo-x7k2m9q4
+```
+
+Then:
+
+```powershell
+python -m stockseer.cli notify push
+```
+
+Three notifications should arrive, each more insistent than the last. If they
+do, the transport works — everything after this is just moving *where it runs*.
+
+### Step 3 — push the repo to GitHub
+
+```powershell
+git add .
+git commit -m "feat: IPO alerts"
+git push
+```
+
+### Step 4 — add the secrets
+
+GitHub → your repo → **Settings → Secrets and variables → Actions → New
+repository secret**. Add five:
+
+| Secret | Value |
+|--------|-------|
+| `NTFY_TOPIC` | your topic name |
+| `ANGEL_API_KEY` | from `.env` |
+| `ANGEL_CLIENT_ID` | from `.env` |
+| `ANGEL_PIN` | from `.env` |
+| `ANGEL_TOTP_SECRET` | from `.env` |
+
+These are encrypted. They are never printed in logs and are not exposed to pull
+requests from forks — safe even on a public repo.
+
+> Only `NTFY_TOPIC` is needed for the calendar workflow. The Angel secrets are
+> only read by the listing watcher, which needs a live price feed.
+
+### Step 5 — turn Actions on
+
+Repo → **Actions** tab → enable workflows. Two appear:
+
+| Workflow | Runs | Costs |
+|---|---|---|
+| **IPO calendar** | 08:00 IST daily | ~40 seconds |
+| **IPO listing watch** | 09:30 IST weekdays | ~40s, or ~2h when something lists |
+
+### Step 6 — prove it works
+
+Actions tab → **IPO calendar** → **Run workflow**. If an IPO is closing, your
+phone buzzes within a minute.
+
+### Cost
+
+Free. Public repo → unlimited minutes. Private → 2,000 minutes/month, and this
+uses roughly 100 (about 15 listing days at 2 hours, plus a minute a day).
+
+---
+
 ## 7. Setup checklist
 
 **On the PC, every time:**
@@ -249,6 +378,11 @@ New-NetFirewallRule -DisplayName "StockSeer" -Direction Inbound `
 
 | Symptom | Cause | Fix |
 |---------|-------|-----|
+| Cloud alerts never arrive | `NTFY_TOPIC` secret missing or misspelt | It must match the app's topic exactly — case sensitive |
+| ntfy works locally, not from Actions | Secret not added in repo settings | Settings → Secrets → Actions |
+| Listing workflow exits immediately | Nothing lists today | Correct behaviour — that is the ~350-day case |
+| Listing workflow fails on Angel | Secrets missing or key rotated | Re-check the four `ANGEL_*` secrets |
+| Alerts arrive late | GitHub cron lag | Normal, up to ~5 min. Deadlines are fine; the 09:30 start absorbs it for listings |
 | "No PC found" | Server bound to loopback | Restart with `--lan` |
 | "No PC found", `--lan` is on | Firewall | Run the admin rule above |
 | "No PC found", both fine | Phone and PC are on different networks | Tailscale or Cloudflare Tunnel |
@@ -297,6 +431,10 @@ average best gain (+3.35%) and average worst dip (-2.80%) before 11:00.
 | `stockseer/ipo/study.py` | The +13.5% allotment measurement |
 | `stockseer/ipo/intraday.py` | The minute-by-minute listing study |
 | `stockseer/notify.py` | Alert queue + vibration patterns |
+| `stockseer/push.py` | ntfy transport — the 24×7 path |
+| `.github/workflows/ipo-calendar.yml` | Daily deadline scan in the cloud |
+| `.github/workflows/ipo-listing.yml` | Listing-morning watcher in the cloud |
+| `scripts/install-scheduler.ps1` | Wake-and-run tasks, if you prefer the PC |
 | `stockseer/web/server.py` | Flask API + dashboard |
 | `stockseer/live/angel.py` | Angel One SmartAPI feed |
 | `Jarvis/lib/services/stock_alert_service.dart` | Polling, discovery, alarms |

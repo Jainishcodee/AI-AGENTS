@@ -19,8 +19,28 @@ const city = JSON.parse(readFileSync(join("public", "city.json"), "utf8"));
 const byId = new Map(city.locations.map((l) => [l.id, l]));
 const boroughs = new Map(city.boroughs.map((b) => [b.id, b]));
 
+/**
+ * The look every generated plate is asked for.
+ *
+ * This said "1984 film noir" and nothing else, which produced Los Angeles. The
+ * city underneath it is not Los Angeles - the generator gives Backlund a
+ * winding old core, tenement lanes and a civic quarter, and the cases are full
+ * of solicitors, inquests and prescription books. So the plates were fighting
+ * their own setting.
+ *
+ * The setting stays 1984 - the cases turn on answering machines and laboratory
+ * reports and cannot move - but the city it happens in never stopped looking
+ * Victorian. Gaslight beside sodium, soot brick, fog off the Tussock. That is
+ * the register the whole thing has been reaching for, and it is what makes an
+ * occult case read as ordinary business rather than as a costume.
+ *
+ * Monochrome is not a style choice here: `build-art.mjs` greys every source and
+ * maps it onto the game's own paper-on-black duotone, so asking for colour
+ * would only give the grader something to throw away. Asking for monochrome up
+ * front gets better tonal separation out of the generator.
+ */
 const LOOK =
-  "1984 film noir, black and white, heavy 35mm grain, deep shadow, single hard light source, no text, no watermark, no people facing camera";
+  "Backlund 1984 - a city that never stopped looking Victorian. Gaslight and sodium lamps, wet cobbles, soot-blackened brick, fog off the river, ornate ironwork, a quiet occult undertone. Monochrome, heavy 35mm grain, deep shadow, one hard light source, no text, no watermark, no people facing camera";
 
 const slots = [];
 
