@@ -86,7 +86,7 @@ export function ResolveForm({
           onChange={(event) => setChose(event.target.value)}
           rows={2}
           placeholder="Stayed, but asked for the offer in writing with a deadline."
-          className="w-full resize-y rounded border bg-[var(--color-surface)] px-3 py-2 text-[13.5px] leading-relaxed outline-none hair placeholder:text-[var(--color-faint)] focus:border-[#34343c]"
+          className="w-full resize-y rounded border bg-[var(--color-surface)] px-3 py-2.5 text-[15px] leading-relaxed outline-none hair placeholder:text-[var(--color-faint)] focus:border-[#34343c] sm:py-2 sm:text-[13.5px]"
         />
       </Field>
 
@@ -96,7 +96,7 @@ export function ResolveForm({
           onChange={(event) => setOutcome(event.target.value)}
           rows={3}
           placeholder="The offer arrived nine days later. My manager was relieved I asked directly."
-          className="w-full resize-y rounded border bg-[var(--color-surface)] px-3 py-2 text-[13.5px] leading-relaxed outline-none hair placeholder:text-[var(--color-faint)] focus:border-[#34343c]"
+          className="w-full resize-y rounded border bg-[var(--color-surface)] px-3 py-2.5 text-[15px] leading-relaxed outline-none hair placeholder:text-[var(--color-faint)] focus:border-[#34343c] sm:py-2 sm:text-[13.5px]"
         />
       </Field>
 
@@ -118,7 +118,7 @@ export function ResolveForm({
                 setSurprises(next);
               }}
               placeholder={index === 0 ? "Someone nobody mentioned turned out to decide it." : ""}
-              className="w-full rounded border bg-[var(--color-surface)] px-3 py-1.5 text-[13px] outline-none hair placeholder:text-[var(--color-faint)] focus:border-[#34343c]"
+              className="w-full rounded border bg-[var(--color-surface)] px-3 py-2.5 text-[15px] outline-none hair placeholder:text-[var(--color-faint)] focus:border-[#34343c] sm:py-1.5 sm:text-[13px]"
             />
           ))}
         </div>

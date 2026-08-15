@@ -18,6 +18,7 @@ import argparse
 import asyncio
 import json
 import sys
+from functools import lru_cache
 
 from .core.config import get_settings
 from .core.errors import CognitiveOSError
@@ -91,7 +92,24 @@ COMMANDS = (
 )
 
 
-def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
+GLOBAL_FLAGS: dict[str, bool] = {
+    "--provider": True,
+    "--json": False,
+    "--quiet": False,
+    "--no-persist": False,
+    "-h": False,
+    "--help": False,
+}
+"""Flags accepted *before* the subcommand, mapped to whether they take a value.
+
+The single source of truth for where an implied `ask` gets inserted, which is why the
+values below are read from here rather than hand-listed twice. `tests/test_cli_parsing.py`
+asserts this agrees with the parser.
+"""
+
+
+def build_parser() -> argparse.ArgumentParser:
+    """Extracted from `parse_args` so the flag table above can be checked against it."""
     parser = argparse.ArgumentParser(
         prog="app.cli", description="Convene the council, and score it afterwards."
     )
@@ -242,28 +260,79 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         "Defaults to the configured store directory.",
     )
 
+    return parser
+
+
+def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     args = list(sys.argv[1:] if argv is None else argv)
-    return parser.parse_args(_insert_default_command(args))
+    return build_parser().parse_args(_insert_default_command(args))
 
 
-VALUE_FLAGS = {"--provider"}
+@lru_cache(maxsize=1)
+def _value_taking_flags() -> frozenset[str]:
+    """Every option, on any parser, that consumes the token after it.
+
+    Needed so a global-looking token that is really somebody's *value* is not hoisted:
+    `--notes "--quiet"` must keep `--quiet` as the note.
+    """
+    parser = build_parser()
+    found: set[str] = set()
+
+    def collect(target: argparse.ArgumentParser) -> None:
+        for action in target._actions:  # noqa: SLF001 - no public enumeration exists
+            if action.option_strings and action.nargs != 0:
+                found.update(action.option_strings)
+
+    collect(parser)
+    for action in parser._actions:  # noqa: SLF001
+        if isinstance(action, argparse._SubParsersAction):  # noqa: SLF001
+            for subparser in action.choices.values():
+                collect(subparser)
+    return frozenset(found)
 
 
 def _insert_default_command(args: list[str]) -> list[str]:
-    """`app.cli "question"` still works, without a subcommand.
+    """Normalise argv into `<global flags> <command> <command args>`.
 
-    That is the documented form and the one people type. Finding where to insert
-    `ask` means skipping global flags *and* their values — `--provider mock` would
-    otherwise look like the subcommand `mock`.
+    Two things are being fixed, both of which broke the *documented* invocation:
+
+    - `app.cli "question"` has no subcommand, so `ask` is implied. It must land after the
+      global flags and their values, or `--provider mock` looks like the subcommand `mock`.
+    - argparse requires global flags to precede the subcommand, but nobody types in that
+      order. `--provider mock --depth quick --quiet "…?"` mixes a global flag, one of
+      `ask`'s flags, and another global flag. So global flags are **hoisted** to the front
+      rather than merely skipped, and order stops mattering.
+
+    An earlier version skipped every flag rather than only global ones, which put `ask`
+    after `--depth` and had argparse reject `--depth` at the top level.
     """
+    value_flags = _value_taking_flags()
+    head: list[str] = []
+    tail: list[str] = []
     index = 0
+
     while index < len(args):
         token = args[index]
-        if token.startswith("-"):
-            index += 2 if token in VALUE_FLAGS and "=" not in token else 1
-            continue
-        return args if token in COMMANDS else [*args[:index], "ask", *args[index:]]
-    return args
+        base = token.split("=", 1)[0]
+        inline_value = "=" in token and base != token
+
+        if base in GLOBAL_FLAGS:
+            head.append(token)
+            if GLOBAL_FLAGS[base] and not inline_value and index + 1 < len(args):
+                head.append(args[index + 1])
+                index += 1
+        else:
+            tail.append(token)
+            # Consume this flag's value here so it can never be mistaken for a global
+            # flag on a later pass.
+            if base in value_flags and not inline_value and index + 1 < len(args):
+                tail.append(args[index + 1])
+                index += 1
+        index += 1
+
+    if tail and tail[0] not in COMMANDS:
+        tail.insert(0, "ask")
+    return [*head, *tail]
 
 
 async def _run(args: argparse.Namespace) -> int:

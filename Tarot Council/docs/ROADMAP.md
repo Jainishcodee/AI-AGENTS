@@ -201,7 +201,7 @@ outcome corpus is not.
 
 ---
 
-## Phase 4 — Interface and reach *(in progress)*
+## Phase 4 — Interface and reach ✅
 
 - [x] **Stage re-run** — `POST /deliberations/{id}/rerun`, `app.cli rerun`. Re-runs
       one module from one named stage with new facts, carrying every earlier artifact
@@ -233,17 +233,62 @@ outcome corpus is not.
       context and bury the part that matters. Tested at the wire level (a missing
       `isError`, an answered notification, a schema that disagrees with its handler
       are the mistakes that actually break clients).
-- [ ] Voice: per-module voices; the council as something you listen to
-- [ ] Mobile
-- [ ] LangGraph migration — deferred a third time, and the reason has now been tested
-      twice rather than asserted. Stage re-run did not need it (resumption fell out of
-      per-stage artifacts plus a batch index). Mid-deliberation interjection did not
-      need it either: a running deliberation never leaves the process, so a dict of
-      queues and a four-line check before each batch was the whole mechanism.
+- [x] **Resumable deliberations** — `GET /council/resumable`,
+      `POST /council/resumable/{id}/resume`, `DELETE /council/resumable/{id}`,
+      `app.cli resume`. A deliberation that dies mid-flight — closed laptop, exhausted
+      free-tier quota, dropped provider — is saved as a `Checkpoint` and resumed by
+      handing each module back its own artifacts and restarting at the first stage it had
+      not finished. **Partial** module runs survive, not just completed ones.
+- [x] **A provider outage is no longer an abstention.** `ProviderError` used to be caught
+      by the same handler as `ArtifactInvalid`, so a quota exhaustion produced a
+      "complete" deliberation with six empty runs and wrote a Decision Card to the corpus
+      — which would later be recalled as evidence and graded. The handlers are now split,
+      and `ProviderUnavailable` carries the partial run out with it. This was the more
+      valuable half of the feature (ADR-027).
+- [x] **Voice** — `app.cli brief`. Per-module voices, but the script comes first: the
+      recommendation, its falsifier, up to three dissents each spoken by the module that
+      holds them, the veto, the blind spot. About ninety seconds, enforced as a test bound
+      rather than hoped for. Free (`edge-tts`), and the script is still produced when no
+      engine is installed (ADR-028).
+- [x] **Mobile** — responsive layout plus a PWA manifest with shortcuts to the two screens
+      worth opening on a phone. The phone job is resolving a due card, not deliberating;
+      that needs a form that does not zoom on focus, not a native app (ADR-029).
+- [x] **LangGraph — the trigger fired, and the answer was no.** ADR-007 deferred it until
+      *execution had to survive the process*. That arrived, and it cost a Pydantic model,
+      one SQLite table and a `resume_from` argument: because every stage is a separately
+      validated artifact (ADR-011), the resume point is derivable from which artifacts
+      exist, so there is no interpreter state to serialise. Adopting a graph runtime now
+      would mean re-expressing six programs in someone else's control flow to gain
+      persistence we already have (ADR-027).
 
-      What actually requires checkpointing is **execution surviving the process** — a
-      deliberation you close your laptop on and resume tomorrow, or one that spans a
-      free-tier quota window. That is the trigger. Not before (ADR-007).
+**Exit criterion — met.** A deliberation interrupted by an exhausted free-tier quota resumes
+in a *different process* and reaches a synthesis, with no module re-answering a stage it had
+already completed.
+
+Demonstrated by `scripts/phase4_exit.py`, deliberately as two separate interpreter runs
+rather than as a test, because the claim is about surviving the process:
+
+```
+process 1  quota closed mid-run: ethicist: provider unavailable — HTTP 429
+           crashed after 14 calls, in phase 'reason'
+           5 module(s) complete, 1 partial   (ethicist: 6 of 7 artifacts banked)
+
+process 2  a new process found checkpoint 8b16375ece47 on disk
+           resumed and synthesised. 6 runs, 2 new calls
+           35 banked artifact(s) from 5 module(s) carried through byte-identically
+           abstentions: none
+```
+
+Two new calls, not fourteen. Artifacts are compared by hash, not by presence, so a stage
+that silently re-ran would fail the check.
+
+**Running it is what found the bug the suite could not.** `tests/test_resume.py` passed
+throughout against `InMemoryStore` — which cannot test durability at all. In two processes,
+`FileStore` turned out to inherit a RAM-only `save_checkpoint`, losing every checkpoint on
+restart without saying so, and the shipped `.env` still selected that legacy store despite
+ADR-024 making SQLite the default. Both fixed; `tests/test_checkpoint_durability.py` now
+re-opens each durable store over the same directory, and fails by name if any future write
+path is left inherited (ADR-027).
 
 ---
 

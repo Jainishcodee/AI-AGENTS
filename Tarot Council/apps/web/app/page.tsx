@@ -189,9 +189,12 @@ export default function Page() {
               <div
                 className="grid gap-4"
                 style={{
-                  gridTemplateColumns: `repeat(auto-fit, minmax(${
+                  // `min(…, 100%)` is load-bearing on a phone: a bare 420px minimum
+                  // is wider than a 390px viewport, so the grid overflowed sideways
+                  // instead of collapsing to a single column.
+                  gridTemplateColumns: `repeat(auto-fit, minmax(min(${
                     columns.length <= 2 ? 460 : 420
-                  }px, 1fr))`,
+                  }px, 100%), 1fr))`,
                 }}
               >
                 {columns.map((live) => (

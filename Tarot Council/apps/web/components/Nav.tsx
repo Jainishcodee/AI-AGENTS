@@ -39,12 +39,12 @@ export function Nav() {
 
   return (
     <header className="sticky top-0 z-20 border-b bg-[var(--color-ink)]/90 backdrop-blur hair">
-      <div className="mx-auto flex w-full max-w-[1680px] items-center gap-6 px-4 py-2.5 sm:px-6 lg:px-8">
+      <div className="mx-auto flex w-full max-w-[1680px] items-center gap-3 overflow-x-auto px-4 py-2.5 sm:gap-6 sm:px-6 lg:px-8">
         <Link href="/" className="shrink-0">
           <span className="text-[13.5px] font-medium tracking-tight">Cognitive OS</span>
         </Link>
 
-        <nav className="flex items-center gap-1">
+        <nav className="flex shrink-0 items-center gap-1">
           {LINKS.map((link) => {
             const active =
               link.href === "/" ? pathname === "/" : pathname.startsWith(link.href);
@@ -52,7 +52,7 @@ export function Nav() {
               <Link
                 key={link.href}
                 href={link.href}
-                className={`rounded px-2.5 py-1 text-[12.5px] transition-colors ${
+                className={`rounded px-2.5 py-1.5 text-[13px] transition-colors sm:py-1 sm:text-[12.5px] ${
                   active
                     ? "bg-[var(--color-raised)] text-[var(--color-text)]"
                     : "text-[var(--color-faint)] hover:text-[var(--color-muted)]"
@@ -68,7 +68,7 @@ export function Nav() {
           <Link
             href="/history?status=due"
             title="Decisions whose check-in date has arrived"
-            className="ml-auto flex items-center gap-1.5 rounded border px-2 py-0.5 text-[11.5px] transition-colors hover:brightness-125"
+            className="ml-auto flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded border px-2 py-1 text-[11.5px] transition-colors hover:brightness-125"
             style={{ borderColor: "var(--color-assumed)44", color: "var(--color-assumed)" }}
           >
             <span

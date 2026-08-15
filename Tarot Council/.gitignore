@@ -21,6 +21,8 @@ out/
 apps/api/var/
 *.log
 *.sqlite3
+# scratch state written by scripts/phase4_exit.py between its two processes
+apps/api/scripts/*.json
 
 # editors / os
 .DS_Store

@@ -139,9 +139,12 @@ def build(deliberation: Deliberation) -> Briefing:
     if synthesis.information_to_gather:
         say("narrator", f"Find out first: {synthesis.information_to_gather[0]}")
 
+    # `_speakable` only guarantees punctuation at the *end* of what it is given, so an
+    # interior boundary has to be closed here or the two sentences run together — "about
+    # the next 90 days Check back in 90 days" is what that sounds like.
     say(
         "narrator",
-        f"The prediction on record: {synthesis.expected_outcome.statement} "
+        f"The prediction on record: {_speakable(synthesis.expected_outcome.statement)} "
         f"Check back in {synthesis.expected_outcome.check_in_days} days.",
     )
 
@@ -217,18 +220,23 @@ def ffmpeg_available() -> bool:
 
 _MARKUP = re.compile(r"[`*_#\[\]]+")
 _WHITESPACE = re.compile(r"\s+")
+# `module/stage/Kind#row` and the parenthesised form. Matched with the `#` still present,
+# which is why this has to run *before* markup stripping — `_MARKUP` removes `#` and `_`,
+# and a citation with those gone is unrecognisable and unspeakable.
+_ROW_REF = re.compile(r"\(?\b[a-z][a-z_]*/[a-z][\w.-]*/[A-Za-z]\w*(?:#[\w.-]+)?\)?")
 
 
 def _speakable(text: str) -> str:
     """Strip what only makes sense on a page.
 
     Row ids, markdown and bracketed asides are precise in the trace and noise out loud —
-    "e three, load bearing" is not a sentence anyone wants read to them.
+    "analyst slash evidence slash EvidenceLedger hash e one" is not a sentence anyone
+    wants read to them.
     """
-    cleaned = _MARKUP.sub("", text or "")
-    cleaned = re.sub(r"\((?:see |cf\.? )?[A-Za-z]+/[\w./#-]+\)", "", cleaned)
-    cleaned = re.sub(r"\b[a-z]+/[a-z_]+/[A-Za-z]+#\w+\b", "", cleaned)
+    cleaned = _ROW_REF.sub("", text or "")
+    cleaned = _MARKUP.sub("", cleaned)
     cleaned = _WHITESPACE.sub(" ", cleaned).strip()
+    cleaned = re.sub(r"\s+([.,;:!?])", r"\1", cleaned)
     if cleaned and cleaned[-1] not in ".!?":
         cleaned += "."
     return cleaned

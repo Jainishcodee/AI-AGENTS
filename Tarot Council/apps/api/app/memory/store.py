@@ -261,7 +261,14 @@ class InMemoryStore:
 
 
 class FileStore(InMemoryStore):
-    """JSON on disk, so a restart does not lose history. Deleted in Phase 2."""
+    """JSON on disk, so a restart does not lose history. Superseded by `SQLiteStore`.
+
+    Kept only for migrating an existing `var/` directory (ADR-024). Every write path here
+    must be overridden explicitly: anything left inherited from `InMemoryStore` persists to
+    RAM and is silently gone on restart, which is a worse failure than not supporting it —
+    checkpoints and projects were exactly that until it was caught by resuming in a second
+    process rather than in a test.
+    """
 
     def __init__(self, root: Path) -> None:
         super().__init__()
@@ -269,7 +276,14 @@ class FileStore(InMemoryStore):
         self._deliberation_dir = root / "deliberations"
         self._card_dir = root / "cards"
         self._memory_file = root / "memories.json"
-        for directory in (self._deliberation_dir, self._card_dir):
+        self._checkpoint_dir = root / "checkpoints"
+        self._project_dir = root / "projects"
+        for directory in (
+            self._deliberation_dir,
+            self._card_dir,
+            self._checkpoint_dir,
+            self._project_dir,
+        ):
             directory.mkdir(parents=True, exist_ok=True)
         self._load()
 
@@ -288,6 +302,20 @@ class FileStore(InMemoryStore):
                 )
             except Exception as exc:  # noqa: BLE001
                 log.warning("skipping unreadable card %s: %s", path.name, exc)
+        for path in self._checkpoint_dir.glob("*.json"):
+            try:
+                self._checkpoints[path.stem] = Checkpoint.model_validate_json(
+                    path.read_text(encoding="utf-8")
+                )
+            except Exception as exc:  # noqa: BLE001
+                log.warning("skipping unreadable checkpoint %s: %s", path.name, exc)
+        for path in self._project_dir.glob("*.json"):
+            try:
+                self._projects[path.stem] = Project.model_validate_json(
+                    path.read_text(encoding="utf-8")
+                )
+            except Exception as exc:  # noqa: BLE001
+                log.warning("skipping unreadable project %s: %s", path.name, exc)
         if self._memory_file.is_file():
             try:
                 raw = json.loads(self._memory_file.read_text(encoding="utf-8"))
@@ -310,6 +338,20 @@ class FileStore(InMemoryStore):
         await super().remember(module, memories)
         self._write_memories()
 
+    async def save_project(self, project: Project) -> None:
+        await super().save_project(project)
+        self._write(self._project_dir / f"{project.id}.json", project)
+
+    async def save_checkpoint(self, checkpoint: Checkpoint) -> None:
+        await super().save_checkpoint(checkpoint)
+        self._write(
+            self._checkpoint_dir / f"{checkpoint.deliberation_id}.json", checkpoint
+        )
+
+    async def delete_checkpoint(self, deliberation_id: str) -> None:
+        await super().delete_checkpoint(deliberation_id)
+        (self._checkpoint_dir / f"{deliberation_id}.json").unlink(missing_ok=True)
+
     def _write_memories(self) -> None:
         self._memory_file.write_text(
             json.dumps(
@@ -324,7 +366,7 @@ class FileStore(InMemoryStore):
         )
 
     @staticmethod
-    def _write(path: Path, model: Deliberation | DecisionCard) -> None:
+    def _write(path: Path, model: Deliberation | DecisionCard | Project | Checkpoint) -> None:
         path.write_text(
             json.dumps(model.model_dump(mode="json"), indent=2, ensure_ascii=False),
             encoding="utf-8",

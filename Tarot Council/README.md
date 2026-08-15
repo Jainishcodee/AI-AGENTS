@@ -93,10 +93,11 @@ belonging to one person are not.
 
 ## Status
 
-Phases 1–3 built and 4 underway: reasoning engine, web client, SQLite persistence,
-projects, the calibration loop, replay/backtesting, stage re-run, mid-deliberation
-interjection, an MCP server, and a divergence harness. 302 tests. See [docs/ROADMAP.md](docs/ROADMAP.md)
-for what each phase claims and — more usefully — what it does not.
+Phases 1–4 built, and Phase 5's quality gate ahead of its features: reasoning engine, web
+client, SQLite persistence, projects, the calibration loop, replay/backtesting, stage
+re-run, mid-deliberation interjection, resumable deliberations, a spoken briefing, an MCP
+server, and a divergence harness. 369 tests. See [docs/ROADMAP.md](docs/ROADMAP.md) for
+what each phase claims and — more usefully — what it does not.
 
 ## Documentation
 
@@ -108,7 +109,7 @@ Read in this order:
 | [SPEC-FORMAT.md](docs/SPEC-FORMAT.md) | the meta-spec: the seven questions every module must answer |
 | [ARTIFACTS.md](docs/ARTIFACTS.md) | the artifact registry and every machine-checked invariant |
 | [COUNCIL.md](docs/COUNCIL.md) | presets, critique routing, synthesis contract, Decision Cards, calibration |
-| [DECISIONS.md](docs/DECISIONS.md) | 26 ADRs, including what each one gave up |
+| [DECISIONS.md](docs/DECISIONS.md) | 29 ADRs, including what each one gave up |
 | `docs/agents/*.md` | the six formal reasoning specifications |
 
 ## Quick start
@@ -128,7 +129,7 @@ python -m app.cli --provider mock "Should I quit my internship?"
 # for real
 python -m app.cli --preset strategy --depth quick "Should I quit my internship?"
 
-pytest                                  # 302 tests, ~4s
+pytest                                  # 369 tests, ~5s
 uvicorn app.main:app --reload --port 8787
 ```
 
@@ -219,6 +220,33 @@ stage carries every earlier artifact untouched. Both commands produce a *new*
 deliberation with `derived_from` set — the original is immutable, because it is what
 the Decision Card gets scored against (ADR-022).
 
+**Picking a deliberation back up**
+
+```powershell
+python -m app.cli resume                # lists what is resumable, with what it got through
+python -m app.cli resume <id>
+```
+
+On a free tier a deliberation can outlive its quota window. When a provider fails, every
+completed module run and every partial one is checkpointed, and resuming restarts each
+module at the first stage it had not finished — nothing already answered is paid for twice.
+The same mechanism covers a closed laptop. A provider outage is now distinguishable from a
+module choosing to abstain, which it previously was not: an exhausted quota used to produce
+a "complete" deliberation with six empty runs and file it in the corpus (ADR-027).
+
+**Listening to it instead of reading it**
+
+```powershell
+python -m app.cli brief <deliberation-id>            # the script
+python -m app.cli brief <deliberation-id> --speak    # needs: pip install edge-tts
+```
+
+About ninety seconds: the recommendation, what would make it wrong, then each dissenting
+module in its own voice saying what it would do instead and when it would be right. Not the
+transcript read aloud — stakeholder graphs and cited rows do not survive being spoken, and
+twenty minutes of audio is worse than none (ADR-028). `edge-tts` is free and optional; the
+script is produced either way.
+
 Presets: `full` · `strategy` · `people` · `execution` · `life` · `solo:<module>`.
 Depths: `quick` (~9 calls) · `standard` (~26) · `deep` (~56).
 
@@ -231,7 +259,8 @@ BM25 for recall (ADR-024). Coming from an earlier JSON-file build:
 > per-minute cap, not model quality, is what decides whether a run finishes: a
 > `standard` full-council deliberation is ~26 calls and takes minutes of wall clock.
 > Start with `--preset solo:<module> --depth quick` (~4 calls) while iterating. See
-> ADR-020.
+> ADR-020. If a run does hit the wall, nothing is lost — it checkpoints, and
+> `python -m app.cli resume` picks it up without re-paying for a single completed stage.
 
 ## Layout
 

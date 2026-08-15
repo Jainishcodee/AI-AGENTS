@@ -646,3 +646,149 @@ interpolated into a `MATCH` expression. Every term is extracted and quoted, beca
 text containing `AND`, `NEAR`, `*` or `-` is valid FTS syntax and would silently mean
 something other than what the user asked.
 
+---
+
+## ADR-027 — Resumption is a checkpointed program counter, not a graph runtime
+
+**Decision.** A deliberation that dies mid-flight is saved as a `Checkpoint` — the request,
+the intake context, the completed `ModuleRun`s, the *partial* runs of modules that got some
+way through, the round counter, injected facts and accumulated usage — and resumed by
+handing each module back its own artifacts and restarting at the first stage it had not
+finished. `RESUMABLE_PHASES` names the four phases where partial work is worth keeping.
+Nothing about the algorithm changes on resume.
+
+**Why this closes the LangGraph question rather than deferring it a fourth time.**
+ADR-007 deferred LangGraph and named the trigger explicitly: *execution surviving the
+process*. That has now arrived, and it turned out to cost a Pydantic model, one SQLite
+table and a `resume_from` argument on `run_program`. The reason is ADR-011. Because a
+module is an ordered list of stages and every stage's output is a separately validated
+artifact, the resume point is fully described by *which artifacts exist* — there is no
+interpreter state to serialise, no closure, no pending coroutine. The program counter is
+derivable: `next_stage_for` looks at what the run already produced and returns the first
+stage that is missing.
+
+A graph runtime checkpoints because its state is opaque; ours is a list of validated
+documents in a table. Adopting LangGraph now would mean re-expressing six programs in
+someone else's control flow to gain a persistence mechanism we already have, and taking on
+their release cadence for it. **So this is not a fourth deferral — the trigger fired and
+the answer was no.** If a future module needs genuine cycles with unbounded backtracking,
+reopen it; the critique/revise round loop is a bounded `for`, and a bounded loop is not a
+reason to import a graph.
+
+**The bug this exposed, which mattered more than the feature.** Before checkpointing, a
+provider outage was indistinguishable from six modules choosing to abstain: `ProviderError`
+was caught by the same handler as `ArtifactInvalid`, so a quota exhaustion produced a
+"complete" deliberation with six empty runs, a synthesis over nothing, and a Decision Card
+written to the corpus. That card would then have been recalled as evidence and graded on
+resolution — the learning loop poisoned by an outage. So the handlers are now split:
+`ArtifactInvalid` still abstains, because a module that cannot produce a valid artifact has
+genuinely failed to think; `ProviderError` raises `ProviderUnavailable`, which **carries the
+partial run** so banked stages survive the exception.
+
+**Ordering, which was wrong on the first attempt.** The gather over modules must bank every
+successful `ModuleRun` and every non-empty partial *before* re-raising the outage. Raising
+on first sight of the exception discards the work of every module that succeeded in the
+same batch — precisely the work the feature exists to protect. On a free tier that is the
+difference between resuming with five modules done and resuming with none.
+
+**The exit criterion had to be run in two processes, and that is what found the real bug.**
+`tests/test_resume.py` passed against `InMemoryStore`, which proves the resume *logic* and
+says nothing about durability. Running `scripts/phase4_exit.py` — one process crashing on a
+simulated 429, a second, separate interpreter picking the checkpoint up — surfaced two
+things no test would have:
+
+1. `FileStore` subclasses `InMemoryStore` and had not overridden `save_checkpoint`, so under
+   the legacy JSON store every checkpoint lived in RAM and was gone on restart. Silently:
+   `list_checkpoints` came back empty, which reads as "nothing was interrupted" rather than
+   "your work was lost". `save_project` had the same defect, from the same cause.
+2. The shipped `.env` and `.env.example` still said `COUNCIL_STORE=file` with a comment
+   about Postgres, left over from before ADR-024 — so the *documented* default (SQLite) was
+   not the default anybody actually ran.
+
+Both are now fixed, and `tests/test_checkpoint_durability.py` re-opens each durable store
+over the same directory rather than trusting the write. It also asserts the *class* of bug
+away: any new write method on `InMemoryStore` that `FileStore` does not override fails the
+suite by name, because inheriting a RAM-only write is worse than not having one.
+
+The general lesson is worth more than either fix: an in-memory double cannot test a claim
+about surviving the process, and a passing suite made it look like it had.
+
+**Given up.** Resumption is per-stage, not per-token: a module interrupted halfway through
+generating one artifact re-runs that stage from the start. Finer granularity would mean
+persisting partial model output, which is not a validated artifact and therefore not
+something the engine is allowed to hand to the next stage. Checkpoints are also not
+garbage-collected on a schedule — `discard` is explicit, because silently deleting a
+deliberation someone intended to resume is worse than a stale row.
+
+---
+
+## ADR-028 — Voice is a summarisation problem, not a text-to-speech problem
+
+**Decision.** `python -m app.cli brief` produces a **script** first — the recommendation,
+its falsifier, up to three dissents *in the dissenting module's own voice*, any ethical
+veto, and the council blind spot — and only then synthesises audio. The full transcript is
+never read aloud.
+
+**Why not read the deliberation.** Six full analyses are a *reading* artefact. They are
+tables, stakeholder graphs, probability trees and cited rows, and none of that survives
+being spoken: "analyst slash evidence slash EvidenceLedger hash e one" is not a sentence.
+Piping the transcript into a voice yields twenty-plus minutes nobody finishes, which is a
+worse outcome than having no audio at all — it makes the feature look shipped while being
+unused. The briefing is ~90 seconds, which the tests enforce as a bound
+(`20 <= estimated_seconds <= 180`) rather than a hope.
+
+**Dissent is the reason the feature exists.** A single narrated recommendation is a
+notification read out loud. Six distinguishable voices disagreeing is the product's actual
+argument made audible, so each minority opinion is spoken by its own module together with
+the condition under which it would have been right. Voices are keyed by **module**, not
+skin (ADR-016), so dropping the LOTM layer cannot silently reassign anyone's voice. Dissent
+is capped at three and the remainder is explicitly acknowledged — beyond three it stops
+being listenable, and silently dropping them would make the council sound more unanimous
+than it was.
+
+**Free, and degrading rather than failing.** `edge-tts` is a pip package against a public
+Microsoft endpoint: no key, no card, and a large enough voice inventory to make six modules
+sound like six people. ElevenLabs is better and costs money, so it is a config swap rather
+than the default. If no engine is installed, `synthesise` returns `None` and the script is
+still produced — the script is the half that carries the thinking and it is fully testable
+without a network. MP3 frames concatenate byte-wise, so joining the parts needs no ffmpeg
+either.
+
+**One ordering detail worth recording.** `_speakable` strips row references *before*
+markdown, not after. Stripping markup first removes the `#` and `_` characters, and a
+citation with those gone (`analyst/evidence/EvidenceLedgere1`) no longer matches any
+reference pattern — so it survives into the script and gets read out. Caught by the test
+that asserts no `/` reaches the speaker.
+
+**Given up.** No timing marks, so the UI cannot highlight the trace node being discussed.
+That needs word-level timestamps, which the free endpoint does not return, and the reading
+view already exists for anyone who wants the detail.
+
+---
+
+## ADR-029 — Responsive web and a PWA manifest, not a native app
+
+**Decision.** Mobile is the existing Next.js app made genuinely usable on a phone, plus a
+web app manifest with shortcuts straight to the two things worth opening on a phone:
+`/history?status=due` and `/calibration`.
+
+**Why.** The phone job is not deliberating — it is **resolving a due card**, which is the
+one action the learning loop cannot proceed without and the one most likely to be done
+while away from a desk. Nothing about that needs a native runtime: it is a form, a date and
+some text. A React Native or Flutter client would duplicate every screen and the
+`lib/types.ts` mirror for one form, and that mirror is already the thing most at risk of
+drift (`test_web_contract.py` exists because it drifted twice).
+
+**What actually changed, since "responsive" usually means nothing was tested.** The grid
+was `minmax(420px, 1fr)`, which overflows any phone — now `minmax(min(420px, 100%), 1fr)`.
+Nav scrolls horizontally instead of wrapping into two rows. Buttons and inputs get
+thumb-sized padding below `sm` and tighten up above it. Mobile text inputs are `text-[15px]`
+because iOS Safari zooms the viewport on focus at anything under 16px, and a zoom the user
+has to pinch back out of is enough friction to abandon a resolution form.
+
+**Given up.** No push notifications for due check-ins, which is the one genuinely native
+capability that would matter here — web push needs a service worker, a VAPID key pair and a
+subscription store, and the nav badge plus `pending_checkins` over MCP covers the same need
+until there is more than one user. No offline caching: every screen is a live read of a
+corpus that only exists on the machine running the API.
+

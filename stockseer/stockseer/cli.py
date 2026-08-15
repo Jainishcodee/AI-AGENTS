@@ -14,17 +14,10 @@ import logging
 import sys
 from pathlib import Path
 
-from .pipeline import (
-    ARTIFACTS,
-    Config,
-    build_dataset,
-    predict_latest,
-    run_backtest,
-    save_results,
-    shuffled_control,
-    train_final,
-)
-from .report import plot_report, print_report
+# Heavy imports (pandas, scikit-learn, matplotlib) are deliberately deferred
+# into the commands that need them. `ipo calendar` and `notify` run on a bare
+# Python with nothing but the standard library, which is what lets the GitHub
+# Actions jobs install in seconds instead of minutes.
 
 DISCLAIMER = (
     "\nStockSeer is a research tool, not investment advice. Out-of-sample results "
@@ -63,7 +56,9 @@ def _add_common(p: argparse.ArgumentParser) -> None:
     p.add_argument("--refresh", action="store_true", help="bypass the price cache")
 
 
-def _config(a: argparse.Namespace) -> Config:
+def _config(a: argparse.Namespace):
+    from .pipeline import Config
+
     return Config(
         ticker=a.ticker, benchmark=a.benchmark, start=a.start, end=a.end,
         horizon=a.horizon, task=a.task, deadband=a.deadband, model=a.model,
@@ -74,6 +69,9 @@ def _config(a: argparse.Namespace) -> Config:
 
 
 def cmd_backtest(a: argparse.Namespace) -> int:
+    from .pipeline import ARTIFACTS, run_backtest, save_results, shuffled_control
+    from .report import plot_report, print_report
+
     cfg = _config(a)
     result = run_backtest(cfg)
     if a.control:
@@ -97,6 +95,8 @@ def cmd_sweep(a: argparse.Namespace) -> int:
     A sweep is the honest way to look for signal: if 1 ticker out of 20 shows a
     t-stat of 2, that is what 20 coin flips look like, not a discovery.
     """
+    from .pipeline import run_backtest
+
     tickers = [t.strip() for t in a.tickers.split(",") if t.strip()]
     rows = []
     for ticker in tickers:
@@ -142,12 +142,16 @@ def cmd_sweep(a: argparse.Namespace) -> int:
 
 
 def cmd_train(a: argparse.Namespace) -> int:
+    from .pipeline import train_final
+
     path = train_final(_config(a), Path(a.out) if a.out else None)
     print(f" model -> {path}")
     return 0
 
 
 def cmd_predict(a: argparse.Namespace) -> int:
+    from .pipeline import predict_latest
+
     res = predict_latest(_config(a), a.model_path)
     arrow = {"LONG": "UP", "SHORT": "DOWN", "FLAT": "NO POSITION"}[res["signal"]]
     conf = res["score"] if a.task == "classification" else abs(res["score"])
@@ -163,6 +167,8 @@ def cmd_predict(a: argparse.Namespace) -> int:
 
 
 def cmd_inspect(a: argparse.Namespace) -> int:
+    from .pipeline import build_dataset
+
     ds = build_dataset(_config(a))
     print(f"\n rows      : {len(ds.X)}")
     print(f" features  : {ds.X.shape[1]}")
