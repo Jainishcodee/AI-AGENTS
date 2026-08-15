@@ -67,7 +67,7 @@ await page.waitForTimeout(400);
 // --- tutorial step 1: travel ----------------------------------------------
 const step1 = await page.locator("h2").first().textContent();
 log(`tutorial: ${step1}`);
-await travelTo(page, "loc_0360");
+await travelTo(page, "loc_np_the_rosewood_rooms");
 await shot("03-at-the-scene");
 
 // --- step 2: search --------------------------------------------------------
@@ -95,12 +95,12 @@ log(`lab report back, ${await hoursLeft()}h left`);
 
 // --- the rest of the investigation ----------------------------------------
 await page.getByRole("button", { name: "HERE" }).click();
-await travelTo(page, "loc_0023");
+await travelTo(page, "loc_np_petrakis_medical_clinic");
 await page.getByRole("button", { name: /SEARCH THIS PLACE/ }).click();
 await page.waitForTimeout(600);
 log("searched the clinic");
 
-await travelTo(page, "loc_0385");
+await travelTo(page, "loc_np_the_blue_dollar_apartments");
 await page.getByRole("button", { name: /SEARCH THIS PLACE/ }).click();
 await page.waitForTimeout(600);
 log(`searched the apartment, ${await hoursLeft()}h left`);

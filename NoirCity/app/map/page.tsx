@@ -20,7 +20,7 @@ const CityMap = dynamic(() => import("@/components/map/CityMap"), {
 });
 
 /** The detective's own office. Where every case starts. */
-const HOME_OFFICE = "loc_lm_blackthorn_security_company";
+const HOME_OFFICE = "loc_lm_e_crowe_enquiries";
 
 export default function MapPage() {
   const { city, error } = useCity();

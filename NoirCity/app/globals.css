@@ -37,8 +37,8 @@
      hierarchy now that colour no longer does. */
   --color-bright: #e3e5e9; /* what you are reading */
   --color-muted: #949aa4; /* supporting detail */
-  --color-faint: #5a616b; /* labels, captions, metadata */
-  --color-ghost: #3a4048; /* dividers, disabled, decoration */
+  --color-faint: #747b85; /* labels, captions, metadata */
+  --color-ghost: #5a6068; /* dividers, disabled, decoration */
 
   /* Documents are warm, because paper is. This is deliberately NOT gold - it
      was `amber-100` before, which is why gold read as ordinary. */
@@ -54,7 +54,7 @@
      pressure, evidence you have only just found, and where you are standing.
      Nothing else, ever. */
   --color-gold: #c9a227;
-  --color-danger: #b8503f;
+  --color-danger: #c25a49;
   --color-alive: #4f9d6e;
 }
 

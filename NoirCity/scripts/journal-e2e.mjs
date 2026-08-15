@@ -35,12 +35,12 @@ await page.getByRole("button", { name: "HERE", exact: true }).click();
 await page.waitForTimeout(400);
 
 const field = page.getByPlaceholder("176 Cannon Yard");
-await field.fill("198 Threadneedle");
+await field.fill("74 Threadneedle");
 await page.waitForTimeout(500);
 await page.screenshot({ path: `${shots}/02-address-book.png` });
 
-const matches = await page.locator("button", { hasText: "198 Threadneedle Circle" }).count();
-log(`typing "198 Threadneedle" offers ${matches} address(es)`);
+const matches = await page.locator("button", { hasText: "74 Threadneedle Circle" }).count();
+log(`typing "74 Threadneedle" offers ${matches} address(es)`);
 if (matches < 1) throw new Error("address book found nothing");
 
 // A nonsense address must say so rather than silently offering the world.
@@ -50,9 +50,9 @@ const noSuch = await page.getByText("No such address in Marrowgate").count();
 log(`nonsense address rejected: ${noSuch === 1}`);
 if (noSuch !== 1) throw new Error("bad address was not rejected");
 
-await field.fill("198 Threadneedle Circle");
+await field.fill("74 Threadneedle Circle");
 await page.waitForTimeout(400);
-await page.locator("button", { hasText: "198 Threadneedle Circle" }).first().click();
+await page.locator("button", { hasText: "74 Threadneedle Circle" }).first().click();
 await page.waitForTimeout(900);
 
 await page.getByRole("button", { name: /SEARCH THIS PLACE/ }).click();

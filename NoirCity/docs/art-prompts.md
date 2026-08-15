@@ -13,19 +13,53 @@ The build greys it, maps it onto the game's duotone, and writes
 `public/art/<kind>/<id>.webp`. Every source ends up in the same look, which is
 what stops a mixed set from looking borrowed.
 
+## The look
+
+Every prompt below is built from four fixed clauses. If you are generating by
+hand, or steering a model that ignores part of a long prompt, these are the
+ones that matter, in order:
+
+**1. One light.** A single practical source *visible in the frame* — a hanging
+lamp, a candle, a window — doing all the work, and everything beyond its reach
+falling to **true black, not grey**. Most of the picture is empty shadow, and
+that emptiness is the composition. This is the single most useful instruction
+here: a model told only "noir" returns evenly-lit grey, and a model told this
+returns the frame we want.
+
+**2. Faces turned away.** In covers and scenes, figures are seen from behind or
+in silhouette, never looking back. A face looking at camera makes the picture
+about that person; a figure from behind keeps it about the room, which is what
+the player is meant to be reading. Portraits are the deliberate exception.
+
+**3. A locked-off camera.** Eye level, static, symmetrical, deep space
+receding into shadow. The camera is a witness sitting in the room, not a
+participant moving through it.
+
+**4. Marrowgate, 1984 — a city that never stopped looking Victorian.** Gaslight
+beside sodium, soot brick, heavy furniture, patterned wallpaper, fog off the
+Ebb. A world where a seance is an ordinary evening's business.
+
+Monochrome throughout, and that is not a style preference: `npm run art:build`
+greys every source and maps it onto the game's own paper-on-black duotone, so
+colour is only something the grader has to throw away. Asking for monochrome up
+front gets better tonal separation out of the model.
+
+Ask for **no letterboxing** — the build crops to the slot's aspect ratio, and
+baked-in black bars get cropped as if they were picture.
+
 Any slot left empty draws a deterministic procedural plate instead, so the
 game is complete and shippable with none of this done.
 
-**0 of 59 slots filled.**
+**1 of 59 slots filled.**
 
 ## covers
 
-### `the-quiet-room`
+### `the-quiet-room` ✅
 
 *The Quiet Room*
 
 ```
-Establishing shot for a detective case titled "The Quiet Room". Six people sat in the dark at 161 Threadneedle Circle on Thursday evening to speak with the dead. Wide cinematic framing, 21:9. Marrowgate 1984 - a city that never stopped looking Victorian. Gaslight and sodium lamps, wet cobbles, soot-blackened brick, fog off the river, ornate ironwork, a quiet occult undertone. Monochrome, heavy 35mm grain, deep shadow, one hard light source, no text, no watermark, no people facing camera
+The opening frame of a detective case titled "The Quiet Room". Six people sat in the dark at 74 Threadneedle Circle on Thursday evening to speak with the dead. A wide cinematic interior, 21:9, the whole room in one shot. Lit by ONE practical light source visible in the frame, doing all the work. Everything beyond its reach falls to true black, not grey - most of the image is empty shadow, and that emptiness is the composition. Deep foreground darkness framing the shot. Any figures are seen from behind or in silhouette, faces never visible, never looking at the camera. Locked-off camera at eye level, static and observational, symmetrical centred staging, deep space receding into shadow. Marrowgate 1984 - a city that never stopped looking Victorian. Gaslight beside sodium, wet cobbles, soot-blackened brick, ornate ironwork, heavy furniture, patterned wallpaper, fog off the river. A quiet occult undertone: this is a world where a seance is an ordinary evening's business. Monochrome, fine 35mm grain, high contrast, no text, no watermark, no border, no letterboxing.
 ```
 
 ### `harbor-lights`
@@ -33,7 +67,7 @@ Establishing shot for a detective case titled "The Quiet Room". Six people sat i
 *Harbor Lights*
 
 ```
-Establishing shot for a detective case titled "Harbor Lights". They pulled Tommy Vance out of No. Wide cinematic framing, 21:9. Marrowgate 1984 - a city that never stopped looking Victorian. Gaslight and sodium lamps, wet cobbles, soot-blackened brick, fog off the river, ornate ironwork, a quiet occult undertone. Monochrome, heavy 35mm grain, deep shadow, one hard light source, no text, no watermark, no people facing camera
+The opening frame of a detective case titled "Harbor Lights". They pulled Tommy Vance out of No. A wide cinematic interior, 21:9, the whole room in one shot. Lit by ONE practical light source visible in the frame, doing all the work. Everything beyond its reach falls to true black, not grey - most of the image is empty shadow, and that emptiness is the composition. Deep foreground darkness framing the shot. Any figures are seen from behind or in silhouette, faces never visible, never looking at the camera. Locked-off camera at eye level, static and observational, symmetrical centred staging, deep space receding into shadow. Marrowgate 1984 - a city that never stopped looking Victorian. Gaslight beside sodium, wet cobbles, soot-blackened brick, ornate ironwork, heavy furniture, patterned wallpaper, fog off the river. A quiet occult undertone: this is a world where a seance is an ordinary evening's business. Monochrome, fine 35mm grain, high contrast, no text, no watermark, no border, no letterboxing.
 ```
 
 ### `the-bell-does-not-lie`
@@ -41,49 +75,49 @@ Establishing shot for a detective case titled "Harbor Lights". They pulled Tommy
 *The Bell Does Not Lie*
 
 ```
-Establishing shot for a detective case titled "The Bell Does Not Lie". Alderman Cornelius Reeve went into the library at the Delgado Assembly Rooms during a subscription dinner and did not come out. Wide cinematic framing, 21:9. Marrowgate 1984 - a city that never stopped looking Victorian. Gaslight and sodium lamps, wet cobbles, soot-blackened brick, fog off the river, ornate ironwork, a quiet occult undertone. Monochrome, heavy 35mm grain, deep shadow, one hard light source, no text, no watermark, no people facing camera
+The opening frame of a detective case titled "The Bell Does Not Lie". Alderman Cornelius Reeve went into the library at the Delgado Assembly Rooms during a subscription dinner and did not come out. A wide cinematic interior, 21:9, the whole room in one shot. Lit by ONE practical light source visible in the frame, doing all the work. Everything beyond its reach falls to true black, not grey - most of the image is empty shadow, and that emptiness is the composition. Deep foreground darkness framing the shot. Any figures are seen from behind or in silhouette, faces never visible, never looking at the camera. Locked-off camera at eye level, static and observational, symmetrical centred staging, deep space receding into shadow. Marrowgate 1984 - a city that never stopped looking Victorian. Gaslight beside sodium, wet cobbles, soot-blackened brick, ornate ironwork, heavy furniture, patterned wallpaper, fog off the river. A quiet occult undertone: this is a world where a seance is an ordinary evening's business. Monochrome, fine 35mm grain, high contrast, no text, no watermark, no border, no letterboxing.
 ```
 
 ## scenes
 
-### `loc_lm_blackthorn_security_company`
+### `loc_lm_e_crowe_enquiries`
 
-*Blackthorn Security Company — The Bell Does Not Lie*
-
-```
-Interior or exterior of Blackthorn Security Company, a office on 47 Cripplegate Lane in West Borough. Two rooms above a tobacconist. Eye-level, 16:9, nobody in frame. Marrowgate 1984 - a city that never stopped looking Victorian. Gaslight and sodium lamps, wet cobbles, soot-blackened brick, fog off the river, ornate ironwork, a quiet occult undertone. Monochrome, heavy 35mm grain, deep shadow, one hard light source, no text, no watermark, no people facing camera
-```
-
-### `loc_0269`
-
-*Salazar Fish Market — The Quiet Room*
+*E. Crowe, Enquiries — The Bell Does Not Lie*
 
 ```
-Interior or exterior of Salazar Fish Market, a market on 161 Threadneedle Circle in Ravensgate. 161 Threadneedle Circle. Eye-level, 16:9, nobody in frame. Marrowgate 1984 - a city that never stopped looking Victorian. Gaslight and sodium lamps, wet cobbles, soot-blackened brick, fog off the river, ornate ironwork, a quiet occult undertone. Monochrome, heavy 35mm grain, deep shadow, one hard light source, no text, no watermark, no people facing camera
+E. Crowe, Enquiries, a office on 47 Cripplegate Lane in West Borough. Two rooms above a tobacconist. A wide interior, 16:9, empty of people - the room as somebody walking in would first see it. Lit by ONE practical light source visible in the frame, doing all the work. Everything beyond its reach falls to true black, not grey - most of the image is empty shadow, and that emptiness is the composition. Deep foreground darkness framing the shot. Locked-off camera at eye level, static and observational, symmetrical centred staging, deep space receding into shadow. Marrowgate 1984 - a city that never stopped looking Victorian. Gaslight beside sodium, wet cobbles, soot-blackened brick, ornate ironwork, heavy furniture, patterned wallpaper, fog off the river. A quiet occult undertone: this is a world where a seance is an ordinary evening's business. Monochrome, fine 35mm grain, high contrast, no text, no watermark, no border, no letterboxing.
 ```
 
-### `loc_0023`
+### `loc_np_the_rosewood_rooms`
 
-*Grimaldi Medical Clinic — The Quiet Room*
-
-```
-Interior or exterior of Grimaldi Medical Clinic, a clinic on 240 Corvin Gardens in Harrowfield. Petrakis Medical Clinic, where Dr. Eye-level, 16:9, nobody in frame. Marrowgate 1984 - a city that never stopped looking Victorian. Gaslight and sodium lamps, wet cobbles, soot-blackened brick, fog off the river, ornate ironwork, a quiet occult undertone. Monochrome, heavy 35mm grain, deep shadow, one hard light source, no text, no watermark, no people facing camera
-```
-
-### `loc_0272`
-
-*Tsai Realty — The Quiet Room*
+*The Rosewood Rooms — The Quiet Room*
 
 ```
-Interior or exterior of Tsai Realty, a office on 183 Ferrers Green in Ravensgate. The Blue Dollar Apartments, where Ottoline Frayne actually lived — two doors from the seance she attended every Thursday. Eye-level, 16:9, nobody in frame. Marrowgate 1984 - a city that never stopped looking Victorian. Gaslight and sodium lamps, wet cobbles, soot-blackened brick, fog off the river, ornate ironwork, a quiet occult undertone. Monochrome, heavy 35mm grain, deep shadow, one hard light source, no text, no watermark, no people facing camera
+The Rosewood Rooms, a apartment on 74 Threadneedle Circle in Ravensgate. 74 Threadneedle Circle. A wide interior, 16:9, empty of people - the room as somebody walking in would first see it. Lit by ONE practical light source visible in the frame, doing all the work. Everything beyond its reach falls to true black, not grey - most of the image is empty shadow, and that emptiness is the composition. Deep foreground darkness framing the shot. Locked-off camera at eye level, static and observational, symmetrical centred staging, deep space receding into shadow. Marrowgate 1984 - a city that never stopped looking Victorian. Gaslight beside sodium, wet cobbles, soot-blackened brick, ornate ironwork, heavy furniture, patterned wallpaper, fog off the river. A quiet occult undertone: this is a world where a seance is an ordinary evening's business. Monochrome, fine 35mm grain, high contrast, no text, no watermark, no border, no letterboxing.
 ```
 
-### `loc_0751`
+### `loc_np_petrakis_medical_clinic`
 
-*Halloran & Sons Cafe — The Quiet Room*
+*Petrakis Medical Clinic — The Quiet Room*
 
 ```
-Interior or exterior of Halloran & Sons Cafe, a diner on 57 Harrowfield Lane in Bridge District. Marlowe Loan & Pawn. Eye-level, 16:9, nobody in frame. Marrowgate 1984 - a city that never stopped looking Victorian. Gaslight and sodium lamps, wet cobbles, soot-blackened brick, fog off the river, ornate ironwork, a quiet occult undertone. Monochrome, heavy 35mm grain, deep shadow, one hard light source, no text, no watermark, no people facing camera
+Petrakis Medical Clinic, a clinic on 34 Corvin Gardens in Harrowfield. Petrakis Medical Clinic, where Dr. A wide interior, 16:9, empty of people - the room as somebody walking in would first see it. Lit by ONE practical light source visible in the frame, doing all the work. Everything beyond its reach falls to true black, not grey - most of the image is empty shadow, and that emptiness is the composition. Deep foreground darkness framing the shot. Locked-off camera at eye level, static and observational, symmetrical centred staging, deep space receding into shadow. Marrowgate 1984 - a city that never stopped looking Victorian. Gaslight beside sodium, wet cobbles, soot-blackened brick, ornate ironwork, heavy furniture, patterned wallpaper, fog off the river. A quiet occult undertone: this is a world where a seance is an ordinary evening's business. Monochrome, fine 35mm grain, high contrast, no text, no watermark, no border, no letterboxing.
+```
+
+### `loc_np_the_blue_dollar_apartments`
+
+*The Blue Dollar Apartments — The Quiet Room*
+
+```
+The Blue Dollar Apartments, a apartment on 31 Houndsditch Row in Ravensgate. The Blue Dollar Apartments, where Ottoline Frayne actually lived — two doors from the seance she attended every Thursday. A wide interior, 16:9, empty of people - the room as somebody walking in would first see it. Lit by ONE practical light source visible in the frame, doing all the work. Everything beyond its reach falls to true black, not grey - most of the image is empty shadow, and that emptiness is the composition. Deep foreground darkness framing the shot. Locked-off camera at eye level, static and observational, symmetrical centred staging, deep space receding into shadow. Marrowgate 1984 - a city that never stopped looking Victorian. Gaslight beside sodium, wet cobbles, soot-blackened brick, ornate ironwork, heavy furniture, patterned wallpaper, fog off the river. A quiet occult undertone: this is a world where a seance is an ordinary evening's business. Monochrome, fine 35mm grain, high contrast, no text, no watermark, no border, no letterboxing.
+```
+
+### `loc_np_marlowe_loan_pawn`
+
+*Marlowe Loan & Pawn — The Quiet Room*
+
+```
+Marlowe Loan & Pawn, a pawnshop on 43 Ravensgate Alley in Bridge District. Marlowe Loan & Pawn. A wide interior, 16:9, empty of people - the room as somebody walking in would first see it. Lit by ONE practical light source visible in the frame, doing all the work. Everything beyond its reach falls to true black, not grey - most of the image is empty shadow, and that emptiness is the composition. Deep foreground darkness framing the shot. Locked-off camera at eye level, static and observational, symmetrical centred staging, deep space receding into shadow. Marrowgate 1984 - a city that never stopped looking Victorian. Gaslight beside sodium, wet cobbles, soot-blackened brick, ornate ironwork, heavy furniture, patterned wallpaper, fog off the river. A quiet occult undertone: this is a world where a seance is an ordinary evening's business. Monochrome, fine 35mm grain, high contrast, no text, no watermark, no border, no letterboxing.
 ```
 
 ### `loc_lm_no_4_dry_dock`
@@ -91,7 +125,7 @@ Interior or exterior of Halloran & Sons Cafe, a diner on 57 Harrowfield Lane in 
 *No. 4 Dry Dock — Harbor Lights*
 
 ```
-Interior or exterior of No. 4 Dry Dock, a pier on 15 Cahuenga Reach in Saltney. Drained, echoing, forty feet deep, with a ladder down one wall and a stain on the floor where they found him. Eye-level, 16:9, nobody in frame. Marrowgate 1984 - a city that never stopped looking Victorian. Gaslight and sodium lamps, wet cobbles, soot-blackened brick, fog off the river, ornate ironwork, a quiet occult undertone. Monochrome, heavy 35mm grain, deep shadow, one hard light source, no text, no watermark, no people facing camera
+No. 4 Dry Dock, a pier on 15 Cahuenga Reach in Saltney. Drained, echoing, forty feet deep, with a ladder down one wall and a stain on the floor where they found him. A wide interior, 16:9, empty of people - the room as somebody walking in would first see it. Lit by ONE practical light source visible in the frame, doing all the work. Everything beyond its reach falls to true black, not grey - most of the image is empty shadow, and that emptiness is the composition. Deep foreground darkness framing the shot. Locked-off camera at eye level, static and observational, symmetrical centred staging, deep space receding into shadow. Marrowgate 1984 - a city that never stopped looking Victorian. Gaslight beside sodium, wet cobbles, soot-blackened brick, ornate ironwork, heavy furniture, patterned wallpaper, fog off the river. A quiet occult undertone: this is a world where a seance is an ordinary evening's business. Monochrome, fine 35mm grain, high contrast, no text, no watermark, no border, no letterboxing.
 ```
 
 ### `loc_lm_the_county_morgue`
@@ -99,15 +133,15 @@ Interior or exterior of No. 4 Dry Dock, a pier on 15 Cahuenga Reach in Saltney. 
 *The County Morgue — The Bell Does Not Lie*
 
 ```
-Interior or exterior of The County Morgue, a clinic on 32 Wexford Road in Coldbath. Tile, drains, and a cold that gets into your coat. Eye-level, 16:9, nobody in frame. Marrowgate 1984 - a city that never stopped looking Victorian. Gaslight and sodium lamps, wet cobbles, soot-blackened brick, fog off the river, ornate ironwork, a quiet occult undertone. Monochrome, heavy 35mm grain, deep shadow, one hard light source, no text, no watermark, no people facing camera
+The County Morgue, a clinic on 32 Wexford Road in Coldbath. Tile, drains, and a cold that gets into your coat. A wide interior, 16:9, empty of people - the room as somebody walking in would first see it. Lit by ONE practical light source visible in the frame, doing all the work. Everything beyond its reach falls to true black, not grey - most of the image is empty shadow, and that emptiness is the composition. Deep foreground darkness framing the shot. Locked-off camera at eye level, static and observational, symmetrical centred staging, deep space receding into shadow. Marrowgate 1984 - a city that never stopped looking Victorian. Gaslight beside sodium, wet cobbles, soot-blackened brick, ornate ironwork, heavy furniture, patterned wallpaper, fog off the river. A quiet occult undertone: this is a world where a seance is an ordinary evening's business. Monochrome, fine 35mm grain, high contrast, no text, no watermark, no border, no letterboxing.
 ```
 
-### `loc_1102`
+### `loc_np_quist_freight_storage`
 
-*Grand Room Haulage — Harbor Lights*
+*Quist Freight & Storage — Harbor Lights*
 
 ```
-Interior or exterior of Grand Room Haulage, a warehouse on 25 Bermond Wharf in Saltney. Quist Freight & Storage. Eye-level, 16:9, nobody in frame. Marrowgate 1984 - a city that never stopped looking Victorian. Gaslight and sodium lamps, wet cobbles, soot-blackened brick, fog off the river, ornate ironwork, a quiet occult undertone. Monochrome, heavy 35mm grain, deep shadow, one hard light source, no text, no watermark, no people facing camera
+Quist Freight & Storage, a warehouse on 74 Wilshire Wharf in Saltney. Quist Freight & Storage. A wide interior, 16:9, empty of people - the room as somebody walking in would first see it. Lit by ONE practical light source visible in the frame, doing all the work. Everything beyond its reach falls to true black, not grey - most of the image is empty shadow, and that emptiness is the composition. Deep foreground darkness framing the shot. Locked-off camera at eye level, static and observational, symmetrical centred staging, deep space receding into shadow. Marrowgate 1984 - a city that never stopped looking Victorian. Gaslight beside sodium, wet cobbles, soot-blackened brick, ornate ironwork, heavy furniture, patterned wallpaper, fog off the river. A quiet occult undertone: this is a world where a seance is an ordinary evening's business. Monochrome, fine 35mm grain, high contrast, no text, no watermark, no border, no letterboxing.
 ```
 
 ### `loc_lm_the_marrowgate_exchange`
@@ -115,23 +149,23 @@ Interior or exterior of Grand Room Haulage, a warehouse on 25 Bermond Wharf in S
 *The Marrowgate Exchange — Harbor Lights*
 
 ```
-Interior or exterior of The Marrowgate Exchange, a office on 20 Cannon Street in West Borough. A trading floor that empties at three, and a basement of carbons going back forty years. Eye-level, 16:9, nobody in frame. Marrowgate 1984 - a city that never stopped looking Victorian. Gaslight and sodium lamps, wet cobbles, soot-blackened brick, fog off the river, ornate ironwork, a quiet occult undertone. Monochrome, heavy 35mm grain, deep shadow, one hard light source, no text, no watermark, no people facing camera
+The Marrowgate Exchange, a office on 20 Cannon Street in West Borough. A trading floor that empties at three, and a basement of carbons going back forty years. A wide interior, 16:9, empty of people - the room as somebody walking in would first see it. Lit by ONE practical light source visible in the frame, doing all the work. Everything beyond its reach falls to true black, not grey - most of the image is empty shadow, and that emptiness is the composition. Deep foreground darkness framing the shot. Locked-off camera at eye level, static and observational, symmetrical centred staging, deep space receding into shadow. Marrowgate 1984 - a city that never stopped looking Victorian. Gaslight beside sodium, wet cobbles, soot-blackened brick, ornate ironwork, heavy furniture, patterned wallpaper, fog off the river. A quiet occult undertone: this is a world where a seance is an ordinary evening's business. Monochrome, fine 35mm grain, high contrast, no text, no watermark, no border, no letterboxing.
 ```
 
-### `loc_1098`
+### `loc_np_lucky_lion_wharf`
 
-*Berth 80 — Harbor Lights*
-
-```
-Interior or exterior of Berth 80, a pier on 173 Fetter Reach in Saltney. Lucky Lion Wharf. Eye-level, 16:9, nobody in frame. Marrowgate 1984 - a city that never stopped looking Victorian. Gaslight and sodium lamps, wet cobbles, soot-blackened brick, fog off the river, ornate ironwork, a quiet occult undertone. Monochrome, heavy 35mm grain, deep shadow, one hard light source, no text, no watermark, no people facing camera
-```
-
-### `loc_1105`
-
-*Grimaldi Cold Storage — Harbor Lights*
+*Lucky Lion Wharf — Harbor Lights*
 
 ```
-Interior or exterior of Grimaldi Cold Storage, a warehouse on 32 Cripplegate Quay in Saltney. The Paper Room. Eye-level, 16:9, nobody in frame. Marrowgate 1984 - a city that never stopped looking Victorian. Gaslight and sodium lamps, wet cobbles, soot-blackened brick, fog off the river, ornate ironwork, a quiet occult undertone. Monochrome, heavy 35mm grain, deep shadow, one hard light source, no text, no watermark, no people facing camera
+Lucky Lion Wharf, a pier on 37 Vermont Dock in Saltney. Lucky Lion Wharf. A wide interior, 16:9, empty of people - the room as somebody walking in would first see it. Lit by ONE practical light source visible in the frame, doing all the work. Everything beyond its reach falls to true black, not grey - most of the image is empty shadow, and that emptiness is the composition. Deep foreground darkness framing the shot. Locked-off camera at eye level, static and observational, symmetrical centred staging, deep space receding into shadow. Marrowgate 1984 - a city that never stopped looking Victorian. Gaslight beside sodium, wet cobbles, soot-blackened brick, ornate ironwork, heavy furniture, patterned wallpaper, fog off the river. A quiet occult undertone: this is a world where a seance is an ordinary evening's business. Monochrome, fine 35mm grain, high contrast, no text, no watermark, no border, no letterboxing.
+```
+
+### `loc_np_the_paper_room`
+
+*The Paper Room — Harbor Lights*
+
+```
+The Paper Room, a bar on 15 Cripplegate Quay in Saltney. The Paper Room. A wide interior, 16:9, empty of people - the room as somebody walking in would first see it. Lit by ONE practical light source visible in the frame, doing all the work. Everything beyond its reach falls to true black, not grey - most of the image is empty shadow, and that emptiness is the composition. Deep foreground darkness framing the shot. Locked-off camera at eye level, static and observational, symmetrical centred staging, deep space receding into shadow. Marrowgate 1984 - a city that never stopped looking Victorian. Gaslight beside sodium, wet cobbles, soot-blackened brick, ornate ironwork, heavy furniture, patterned wallpaper, fog off the river. A quiet occult undertone: this is a world where a seance is an ordinary evening's business. Monochrome, fine 35mm grain, high contrast, no text, no watermark, no border, no letterboxing.
 ```
 
 ### `loc_lm_the_dockers_union_hall`
@@ -139,7 +173,7 @@ Interior or exterior of Grimaldi Cold Storage, a warehouse on 32 Cripplegate Qua
 *The Dockers' Union Hall — Harbor Lights*
 
 ```
-Interior or exterior of The Dockers' Union Hall, a hall on 82 Bermond Wharf in Saltney. The hiring list is posted at four and read like scripture. Eye-level, 16:9, nobody in frame. Marrowgate 1984 - a city that never stopped looking Victorian. Gaslight and sodium lamps, wet cobbles, soot-blackened brick, fog off the river, ornate ironwork, a quiet occult undertone. Monochrome, heavy 35mm grain, deep shadow, one hard light source, no text, no watermark, no people facing camera
+The Dockers' Union Hall, a hall on 82 Bermond Wharf in Saltney. The hiring list is posted at four and read like scripture. A wide interior, 16:9, empty of people - the room as somebody walking in would first see it. Lit by ONE practical light source visible in the frame, doing all the work. Everything beyond its reach falls to true black, not grey - most of the image is empty shadow, and that emptiness is the composition. Deep foreground darkness framing the shot. Locked-off camera at eye level, static and observational, symmetrical centred staging, deep space receding into shadow. Marrowgate 1984 - a city that never stopped looking Victorian. Gaslight beside sodium, wet cobbles, soot-blackened brick, ornate ironwork, heavy furniture, patterned wallpaper, fog off the river. A quiet occult undertone: this is a world where a seance is an ordinary evening's business. Monochrome, fine 35mm grain, high contrast, no text, no watermark, no border, no letterboxing.
 ```
 
 ### `loc_lm_the_golden_marlin`
@@ -147,31 +181,31 @@ Interior or exterior of The Dockers' Union Hall, a hall on 82 Bermond Wharf in S
 *The Golden Marlin — Harbor Lights*
 
 ```
-Interior or exterior of The Golden Marlin, a club on 77 Marrow Avenue in Vermilion. The strip's oldest room. Eye-level, 16:9, nobody in frame. Marrowgate 1984 - a city that never stopped looking Victorian. Gaslight and sodium lamps, wet cobbles, soot-blackened brick, fog off the river, ornate ironwork, a quiet occult undertone. Monochrome, heavy 35mm grain, deep shadow, one hard light source, no text, no watermark, no people facing camera
+The Golden Marlin, a club on 77 Marrow Avenue in Vermilion. The strip's oldest room. A wide interior, 16:9, empty of people - the room as somebody walking in would first see it. Lit by ONE practical light source visible in the frame, doing all the work. Everything beyond its reach falls to true black, not grey - most of the image is empty shadow, and that emptiness is the composition. Deep foreground darkness framing the shot. Locked-off camera at eye level, static and observational, symmetrical centred staging, deep space receding into shadow. Marrowgate 1984 - a city that never stopped looking Victorian. Gaslight beside sodium, wet cobbles, soot-blackened brick, ornate ironwork, heavy furniture, patterned wallpaper, fog off the river. A quiet occult undertone: this is a world where a seance is an ordinary evening's business. Monochrome, fine 35mm grain, high contrast, no text, no watermark, no border, no letterboxing.
 ```
 
-### `loc_0881`
+### `loc_np_the_ruby_wire_apartments`
 
-*Ibarra's Coffee Shop — Harbor Lights*
-
-```
-Interior or exterior of Ibarra's Coffee Shop, a diner on 163 Effie Lane in East Borough. The Ruby Wire Apartments. Eye-level, 16:9, nobody in frame. Marrowgate 1984 - a city that never stopped looking Victorian. Gaslight and sodium lamps, wet cobbles, soot-blackened brick, fog off the river, ornate ironwork, a quiet occult undertone. Monochrome, heavy 35mm grain, deep shadow, one hard light source, no text, no watermark, no people facing camera
-```
-
-### `loc_1023`
-
-*Quist Street Station House — Harbor Lights*
+*The Ruby Wire Apartments — Harbor Lights*
 
 ```
-Interior or exterior of Quist Street Station House, a precinct on 45 Bermond Terrace in Coldbath. Precinct 17. Eye-level, 16:9, nobody in frame. Marrowgate 1984 - a city that never stopped looking Victorian. Gaslight and sodium lamps, wet cobbles, soot-blackened brick, fog off the river, ornate ironwork, a quiet occult undertone. Monochrome, heavy 35mm grain, deep shadow, one hard light source, no text, no watermark, no people facing camera
+The Ruby Wire Apartments, a apartment on 52 Marathon Buildings in East Borough. The Ruby Wire Apartments. A wide interior, 16:9, empty of people - the room as somebody walking in would first see it. Lit by ONE practical light source visible in the frame, doing all the work. Everything beyond its reach falls to true black, not grey - most of the image is empty shadow, and that emptiness is the composition. Deep foreground darkness framing the shot. Locked-off camera at eye level, static and observational, symmetrical centred staging, deep space receding into shadow. Marrowgate 1984 - a city that never stopped looking Victorian. Gaslight beside sodium, wet cobbles, soot-blackened brick, ornate ironwork, heavy furniture, patterned wallpaper, fog off the river. A quiet occult undertone: this is a world where a seance is an ordinary evening's business. Monochrome, fine 35mm grain, high contrast, no text, no watermark, no border, no letterboxing.
 ```
 
-### `loc_0888`
+### `loc_np_precinct_17`
 
-*Novak's Coffee Shop — Harbor Lights*
+*Precinct 17 — Harbor Lights*
 
 ```
-Interior or exterior of Novak's Coffee Shop, a diner on 50 Bishopsgate Alley in East Borough. Amato Loan & Pawn. Eye-level, 16:9, nobody in frame. Marrowgate 1984 - a city that never stopped looking Victorian. Gaslight and sodium lamps, wet cobbles, soot-blackened brick, fog off the river, ornate ironwork, a quiet occult undertone. Monochrome, heavy 35mm grain, deep shadow, one hard light source, no text, no watermark, no people facing camera
+Precinct 17, a precinct on 61 Wexford Road in Coldbath. Precinct 17. A wide interior, 16:9, empty of people - the room as somebody walking in would first see it. Lit by ONE practical light source visible in the frame, doing all the work. Everything beyond its reach falls to true black, not grey - most of the image is empty shadow, and that emptiness is the composition. Deep foreground darkness framing the shot. Locked-off camera at eye level, static and observational, symmetrical centred staging, deep space receding into shadow. Marrowgate 1984 - a city that never stopped looking Victorian. Gaslight beside sodium, wet cobbles, soot-blackened brick, ornate ironwork, heavy furniture, patterned wallpaper, fog off the river. A quiet occult undertone: this is a world where a seance is an ordinary evening's business. Monochrome, fine 35mm grain, high contrast, no text, no watermark, no border, no letterboxing.
+```
+
+### `loc_np_amato_loan_pawn`
+
+*Amato Loan & Pawn — Harbor Lights*
+
+```
+Amato Loan & Pawn, a pawnshop on 38 Rampart Buildings in East Borough. Amato Loan & Pawn. A wide interior, 16:9, empty of people - the room as somebody walking in would first see it. Lit by ONE practical light source visible in the frame, doing all the work. Everything beyond its reach falls to true black, not grey - most of the image is empty shadow, and that emptiness is the composition. Deep foreground darkness framing the shot. Locked-off camera at eye level, static and observational, symmetrical centred staging, deep space receding into shadow. Marrowgate 1984 - a city that never stopped looking Victorian. Gaslight beside sodium, wet cobbles, soot-blackened brick, ornate ironwork, heavy furniture, patterned wallpaper, fog off the river. A quiet occult undertone: this is a world where a seance is an ordinary evening's business. Monochrome, fine 35mm grain, high contrast, no text, no watermark, no border, no letterboxing.
 ```
 
 ### `loc_lm_the_ferry_steps`
@@ -179,7 +213,7 @@ Interior or exterior of Novak's Coffee Shop, a diner on 50 Bishopsgate Alley in 
 *The Ferry Steps — Harbor Lights*
 
 ```
-Interior or exterior of The Ferry Steps, a pier on 54 Ashgrove Market in Bridge District. Worn hollow by two centuries of boots. Eye-level, 16:9, nobody in frame. Marrowgate 1984 - a city that never stopped looking Victorian. Gaslight and sodium lamps, wet cobbles, soot-blackened brick, fog off the river, ornate ironwork, a quiet occult undertone. Monochrome, heavy 35mm grain, deep shadow, one hard light source, no text, no watermark, no people facing camera
+The Ferry Steps, a pier on 54 Ashgrove Market in Bridge District. Worn hollow by two centuries of boots. A wide interior, 16:9, empty of people - the room as somebody walking in would first see it. Lit by ONE practical light source visible in the frame, doing all the work. Everything beyond its reach falls to true black, not grey - most of the image is empty shadow, and that emptiness is the composition. Deep foreground darkness framing the shot. Locked-off camera at eye level, static and observational, symmetrical centred staging, deep space receding into shadow. Marrowgate 1984 - a city that never stopped looking Victorian. Gaslight beside sodium, wet cobbles, soot-blackened brick, ornate ironwork, heavy furniture, patterned wallpaper, fog off the river. A quiet occult undertone: this is a world where a seance is an ordinary evening's business. Monochrome, fine 35mm grain, high contrast, no text, no watermark, no border, no letterboxing.
 ```
 
 ### `loc_lm_the_rookery`
@@ -187,15 +221,15 @@ Interior or exterior of The Ferry Steps, a pier on 54 Ashgrove Market in Bridge 
 *The Rookery — Harbor Lights*
 
 ```
-Interior or exterior of The Rookery, a apartment on 78 Poultry Row in East Borough. Nine buildings sharing four staircases and no clear ownership. Eye-level, 16:9, nobody in frame. Marrowgate 1984 - a city that never stopped looking Victorian. Gaslight and sodium lamps, wet cobbles, soot-blackened brick, fog off the river, ornate ironwork, a quiet occult undertone. Monochrome, heavy 35mm grain, deep shadow, one hard light source, no text, no watermark, no people facing camera
+The Rookery, a apartment on 78 Poultry Row in East Borough. Nine buildings sharing four staircases and no clear ownership. A wide interior, 16:9, empty of people - the room as somebody walking in would first see it. Lit by ONE practical light source visible in the frame, doing all the work. Everything beyond its reach falls to true black, not grey - most of the image is empty shadow, and that emptiness is the composition. Deep foreground darkness framing the shot. Locked-off camera at eye level, static and observational, symmetrical centred staging, deep space receding into shadow. Marrowgate 1984 - a city that never stopped looking Victorian. Gaslight beside sodium, wet cobbles, soot-blackened brick, ornate ironwork, heavy furniture, patterned wallpaper, fog off the river. A quiet occult undertone: this is a world where a seance is an ordinary evening's business. Monochrome, fine 35mm grain, high contrast, no text, no watermark, no border, no letterboxing.
 ```
 
-### `loc_0398`
+### `loc_np_delgado_assembly_rooms`
 
-*The Faded Palm Apartments — The Bell Does Not Lie*
+*Delgado Assembly Rooms — The Bell Does Not Lie*
 
 ```
-Interior or exterior of The Faded Palm Apartments, a apartment on 36 Wexford Place in Sovereign Borough. Delgado Assembly Rooms. Eye-level, 16:9, nobody in frame. Marrowgate 1984 - a city that never stopped looking Victorian. Gaslight and sodium lamps, wet cobbles, soot-blackened brick, fog off the river, ornate ironwork, a quiet occult undertone. Monochrome, heavy 35mm grain, deep shadow, one hard light source, no text, no watermark, no people facing camera
+Delgado Assembly Rooms, a hall on 45 Ferrers Parade in Sovereign Borough. Delgado Assembly Rooms. A wide interior, 16:9, empty of people - the room as somebody walking in would first see it. Lit by ONE practical light source visible in the frame, doing all the work. Everything beyond its reach falls to true black, not grey - most of the image is empty shadow, and that emptiness is the composition. Deep foreground darkness framing the shot. Locked-off camera at eye level, static and observational, symmetrical centred staging, deep space receding into shadow. Marrowgate 1984 - a city that never stopped looking Victorian. Gaslight beside sodium, wet cobbles, soot-blackened brick, ornate ironwork, heavy furniture, patterned wallpaper, fog off the river. A quiet occult undertone: this is a world where a seance is an ordinary evening's business. Monochrome, fine 35mm grain, high contrast, no text, no watermark, no border, no letterboxing.
 ```
 
 ### `loc_lm_the_bell_of_order`
@@ -203,7 +237,7 @@ Interior or exterior of The Faded Palm Apartments, a apartment on 36 Wexford Pla
 *The Bell of Order — The Bell Does Not Lie*
 
 ```
-Interior or exterior of The Bell of Order, a monument on 84 Ferrers Parade in Sovereign Borough. Cast in a year nobody agrees on, and the only clock in Marrowgate that everybody trusts without checking. Eye-level, 16:9, nobody in frame. Marrowgate 1984 - a city that never stopped looking Victorian. Gaslight and sodium lamps, wet cobbles, soot-blackened brick, fog off the river, ornate ironwork, a quiet occult undertone. Monochrome, heavy 35mm grain, deep shadow, one hard light source, no text, no watermark, no people facing camera
+The Bell of Order, a monument on 84 Ferrers Parade in Sovereign Borough. Cast in a year nobody agrees on, and the only clock in Marrowgate that everybody trusts without checking. A wide interior, 16:9, empty of people - the room as somebody walking in would first see it. Lit by ONE practical light source visible in the frame, doing all the work. Everything beyond its reach falls to true black, not grey - most of the image is empty shadow, and that emptiness is the composition. Deep foreground darkness framing the shot. Locked-off camera at eye level, static and observational, symmetrical centred staging, deep space receding into shadow. Marrowgate 1984 - a city that never stopped looking Victorian. Gaslight beside sodium, wet cobbles, soot-blackened brick, ornate ironwork, heavy furniture, patterned wallpaper, fog off the river. A quiet occult undertone: this is a world where a seance is an ordinary evening's business. Monochrome, fine 35mm grain, high contrast, no text, no watermark, no border, no letterboxing.
 ```
 
 ### `loc_lm_marrowgate_city_hall`
@@ -211,31 +245,31 @@ Interior or exterior of The Bell of Order, a monument on 84 Ferrers Parade in So
 *Marrowgate City Hall — The Bell Does Not Lie*
 
 ```
-Interior or exterior of Marrowgate City Hall, a hall on 86 Ossary Parade in Sovereign Borough. Granite steps and a committee room where four contracts were awarded in eighteen months. Eye-level, 16:9, nobody in frame. Marrowgate 1984 - a city that never stopped looking Victorian. Gaslight and sodium lamps, wet cobbles, soot-blackened brick, fog off the river, ornate ironwork, a quiet occult undertone. Monochrome, heavy 35mm grain, deep shadow, one hard light source, no text, no watermark, no people facing camera
+Marrowgate City Hall, a hall on 86 Ossary Parade in Sovereign Borough. Granite steps and a committee room where four contracts were awarded in eighteen months. A wide interior, 16:9, empty of people - the room as somebody walking in would first see it. Lit by ONE practical light source visible in the frame, doing all the work. Everything beyond its reach falls to true black, not grey - most of the image is empty shadow, and that emptiness is the composition. Deep foreground darkness framing the shot. Locked-off camera at eye level, static and observational, symmetrical centred staging, deep space receding into shadow. Marrowgate 1984 - a city that never stopped looking Victorian. Gaslight beside sodium, wet cobbles, soot-blackened brick, ornate ironwork, heavy furniture, patterned wallpaper, fog off the river. A quiet occult undertone: this is a world where a seance is an ordinary evening's business. Monochrome, fine 35mm grain, high contrast, no text, no watermark, no border, no letterboxing.
 ```
 
-### `loc_0401`
+### `loc_np_the_grand_crown_apartments`
 
-*The Sandoval Building — The Bell Does Not Lie*
-
-```
-Interior or exterior of The Sandoval Building, a office on 73 Cheapside Parade in Sovereign Borough. The Grand Crown Apartments. Eye-level, 16:9, nobody in frame. Marrowgate 1984 - a city that never stopped looking Victorian. Gaslight and sodium lamps, wet cobbles, soot-blackened brick, fog off the river, ornate ironwork, a quiet occult undertone. Monochrome, heavy 35mm grain, deep shadow, one hard light source, no text, no watermark, no people facing camera
-```
-
-### `loc_0396`
-
-*The Midnight Spur — The Bell Does Not Lie*
+*The Grand Crown Apartments — The Bell Does Not Lie*
 
 ```
-Interior or exterior of The Midnight Spur, a bar on 9 Ludgate Street in Sovereign Borough. Voss & Delgado, Attorneys. Eye-level, 16:9, nobody in frame. Marrowgate 1984 - a city that never stopped looking Victorian. Gaslight and sodium lamps, wet cobbles, soot-blackened brick, fog off the river, ornate ironwork, a quiet occult undertone. Monochrome, heavy 35mm grain, deep shadow, one hard light source, no text, no watermark, no people facing camera
+The Grand Crown Apartments, a apartment on 86 Calder Parade in Sovereign Borough. The Grand Crown Apartments. A wide interior, 16:9, empty of people - the room as somebody walking in would first see it. Lit by ONE practical light source visible in the frame, doing all the work. Everything beyond its reach falls to true black, not grey - most of the image is empty shadow, and that emptiness is the composition. Deep foreground darkness framing the shot. Locked-off camera at eye level, static and observational, symmetrical centred staging, deep space receding into shadow. Marrowgate 1984 - a city that never stopped looking Victorian. Gaslight beside sodium, wet cobbles, soot-blackened brick, ornate ironwork, heavy furniture, patterned wallpaper, fog off the river. A quiet occult undertone: this is a world where a seance is an ordinary evening's business. Monochrome, fine 35mm grain, high contrast, no text, no watermark, no border, no letterboxing.
 ```
 
-### `loc_0412`
+### `loc_np_voss_delgado_attorneys`
 
-*The Tide Meeting House — The Bell Does Not Lie*
+*Voss & Delgado, Attorneys — The Bell Does Not Lie*
 
 ```
-Interior or exterior of The Tide Meeting House, a church on 235 Corvin Court in Sovereign Borough. Chapel of the Crimson Sparrow. Eye-level, 16:9, nobody in frame. Marrowgate 1984 - a city that never stopped looking Victorian. Gaslight and sodium lamps, wet cobbles, soot-blackened brick, fog off the river, ornate ironwork, a quiet occult undertone. Monochrome, heavy 35mm grain, deep shadow, one hard light source, no text, no watermark, no people facing camera
+Voss & Delgado, Attorneys, a office on 64 Nettlebed Avenue in Sovereign Borough. Voss & Delgado, Attorneys. A wide interior, 16:9, empty of people - the room as somebody walking in would first see it. Lit by ONE practical light source visible in the frame, doing all the work. Everything beyond its reach falls to true black, not grey - most of the image is empty shadow, and that emptiness is the composition. Deep foreground darkness framing the shot. Locked-off camera at eye level, static and observational, symmetrical centred staging, deep space receding into shadow. Marrowgate 1984 - a city that never stopped looking Victorian. Gaslight beside sodium, wet cobbles, soot-blackened brick, ornate ironwork, heavy furniture, patterned wallpaper, fog off the river. A quiet occult undertone: this is a world where a seance is an ordinary evening's business. Monochrome, fine 35mm grain, high contrast, no text, no watermark, no border, no letterboxing.
+```
+
+### `loc_np_chapel_of_the_crimson_sparrow`
+
+*Chapel of the Crimson Sparrow — The Bell Does Not Lie*
+
+```
+Chapel of the Crimson Sparrow, a church on 60 Ravensgate Court in Sovereign Borough. Chapel of the Crimson Sparrow. A wide interior, 16:9, empty of people - the room as somebody walking in would first see it. Lit by ONE practical light source visible in the frame, doing all the work. Everything beyond its reach falls to true black, not grey - most of the image is empty shadow, and that emptiness is the composition. Deep foreground darkness framing the shot. Locked-off camera at eye level, static and observational, symmetrical centred staging, deep space receding into shadow. Marrowgate 1984 - a city that never stopped looking Victorian. Gaslight beside sodium, wet cobbles, soot-blackened brick, ornate ironwork, heavy furniture, patterned wallpaper, fog off the river. A quiet occult undertone: this is a world where a seance is an ordinary evening's business. Monochrome, fine 35mm grain, high contrast, no text, no watermark, no border, no letterboxing.
 ```
 
 ### `loc_lm_the_assize_courts`
@@ -243,15 +277,15 @@ Interior or exterior of The Tide Meeting House, a church on 235 Corvin Court in 
 *The Assize Courts — The Bell Does Not Lie*
 
 ```
-Interior or exterior of The Assize Courts, a hall on 7 Cheapside Avenue in Sovereign Borough. Where the city decides what happened. Eye-level, 16:9, nobody in frame. Marrowgate 1984 - a city that never stopped looking Victorian. Gaslight and sodium lamps, wet cobbles, soot-blackened brick, fog off the river, ornate ironwork, a quiet occult undertone. Monochrome, heavy 35mm grain, deep shadow, one hard light source, no text, no watermark, no people facing camera
+The Assize Courts, a hall on 7 Cheapside Avenue in Sovereign Borough. Where the city decides what happened. A wide interior, 16:9, empty of people - the room as somebody walking in would first see it. Lit by ONE practical light source visible in the frame, doing all the work. Everything beyond its reach falls to true black, not grey - most of the image is empty shadow, and that emptiness is the composition. Deep foreground darkness framing the shot. Locked-off camera at eye level, static and observational, symmetrical centred staging, deep space receding into shadow. Marrowgate 1984 - a city that never stopped looking Victorian. Gaslight beside sodium, wet cobbles, soot-blackened brick, ornate ironwork, heavy furniture, patterned wallpaper, fog off the river. A quiet occult undertone: this is a world where a seance is an ordinary evening's business. Monochrome, fine 35mm grain, high contrast, no text, no watermark, no border, no letterboxing.
 ```
 
-### `loc_0423`
+### `loc_np_the_crimson_dial`
 
-*Falk Street Station House — The Bell Does Not Lie*
+*The Crimson Dial — The Bell Does Not Lie*
 
 ```
-Interior or exterior of Falk Street Station House, a precinct on 224 Ossary Parade in Sovereign Borough. The Crimson Dial. Eye-level, 16:9, nobody in frame. Marrowgate 1984 - a city that never stopped looking Victorian. Gaslight and sodium lamps, wet cobbles, soot-blackened brick, fog off the river, ornate ironwork, a quiet occult undertone. Monochrome, heavy 35mm grain, deep shadow, one hard light source, no text, no watermark, no people facing camera
+The Crimson Dial, a bar on 49 Ossary Parade in Sovereign Borough. The Crimson Dial. A wide interior, 16:9, empty of people - the room as somebody walking in would first see it. Lit by ONE practical light source visible in the frame, doing all the work. Everything beyond its reach falls to true black, not grey - most of the image is empty shadow, and that emptiness is the composition. Deep foreground darkness framing the shot. Locked-off camera at eye level, static and observational, symmetrical centred staging, deep space receding into shadow. Marrowgate 1984 - a city that never stopped looking Victorian. Gaslight beside sodium, wet cobbles, soot-blackened brick, ornate ironwork, heavy furniture, patterned wallpaper, fog off the river. A quiet occult undertone: this is a world where a seance is an ordinary evening's business. Monochrome, fine 35mm grain, high contrast, no text, no watermark, no border, no letterboxing.
 ```
 
 ### `loc_lm_divisional_police_headquarters`
@@ -259,7 +293,7 @@ Interior or exterior of Falk Street Station House, a precinct on 224 Ossary Para
 *Divisional Police Headquarters — The Bell Does Not Lie*
 
 ```
-Interior or exterior of Divisional Police Headquarters, a precinct on 33 Nettlebed Parade in Sovereign Borough. Six floors of filing. Eye-level, 16:9, nobody in frame. Marrowgate 1984 - a city that never stopped looking Victorian. Gaslight and sodium lamps, wet cobbles, soot-blackened brick, fog off the river, ornate ironwork, a quiet occult undertone. Monochrome, heavy 35mm grain, deep shadow, one hard light source, no text, no watermark, no people facing camera
+Divisional Police Headquarters, a precinct on 33 Nettlebed Parade in Sovereign Borough. Six floors of filing. A wide interior, 16:9, empty of people - the room as somebody walking in would first see it. Lit by ONE practical light source visible in the frame, doing all the work. Everything beyond its reach falls to true black, not grey - most of the image is empty shadow, and that emptiness is the composition. Deep foreground darkness framing the shot. Locked-off camera at eye level, static and observational, symmetrical centred staging, deep space receding into shadow. Marrowgate 1984 - a city that never stopped looking Victorian. Gaslight beside sodium, wet cobbles, soot-blackened brick, ornate ironwork, heavy furniture, patterned wallpaper, fog off the river. A quiet occult undertone: this is a world where a seance is an ordinary evening's business. Monochrome, fine 35mm grain, high contrast, no text, no watermark, no border, no letterboxing.
 ```
 
 ### `loc_lm_sovereign_road_station`
@@ -267,7 +301,7 @@ Interior or exterior of Divisional Police Headquarters, a precinct on 33 Nettleb
 *Sovereign Road Station — The Bell Does Not Lie*
 
 ```
-Interior or exterior of Sovereign Road Station, a station on 20 Sablewick Parade in Sovereign Borough. The northern line's last stop, two streets from the Assembly Rooms. Eye-level, 16:9, nobody in frame. Marrowgate 1984 - a city that never stopped looking Victorian. Gaslight and sodium lamps, wet cobbles, soot-blackened brick, fog off the river, ornate ironwork, a quiet occult undertone. Monochrome, heavy 35mm grain, deep shadow, one hard light source, no text, no watermark, no people facing camera
+Sovereign Road Station, a station on 20 Sablewick Parade in Sovereign Borough. The northern line's last stop, two streets from the Assembly Rooms. A wide interior, 16:9, empty of people - the room as somebody walking in would first see it. Lit by ONE practical light source visible in the frame, doing all the work. Everything beyond its reach falls to true black, not grey - most of the image is empty shadow, and that emptiness is the composition. Deep foreground darkness framing the shot. Locked-off camera at eye level, static and observational, symmetrical centred staging, deep space receding into shadow. Marrowgate 1984 - a city that never stopped looking Victorian. Gaslight beside sodium, wet cobbles, soot-blackened brick, ornate ironwork, heavy furniture, patterned wallpaper, fog off the river. A quiet occult undertone: this is a world where a seance is an ordinary evening's business. Monochrome, fine 35mm grain, high contrast, no text, no watermark, no border, no letterboxing.
 ```
 
 ## portraits
@@ -277,7 +311,7 @@ Interior or exterior of Sovereign Road Station, a station on 20 Sablewick Parade
 *Dr. Emmanuel Vane — The Quiet Room*
 
 ```
-Head and shoulders identity photograph of Dr. Emmanuel Vane, Physician; Harrowfield practice, 1984. Neutral expression, plain backdrop, 4:5 portrait. Marrowgate 1984 - a city that never stopped looking Victorian. Gaslight and sodium lamps, wet cobbles, soot-blackened brick, fog off the river, ornate ironwork, a quiet occult undertone. Monochrome, heavy 35mm grain, deep shadow, one hard light source, no text, no watermark, no people facing camera
+Head and shoulders photograph of Dr. Emmanuel Vane, Physician; Harrowfield practice, Marrowgate 1984. Facing camera, neutral expression, plain dark backdrop, 4:5 portrait. Lit from one side, the other side of the face falling into shadow. Marrowgate 1984 - a city that never stopped looking Victorian. Gaslight beside sodium, wet cobbles, soot-blackened brick, ornate ironwork, heavy furniture, patterned wallpaper, fog off the river. A quiet occult undertone: this is a world where a seance is an ordinary evening's business. Monochrome, fine 35mm grain, high contrast, no text, no watermark, no border, no letterboxing.
 ```
 
 ### `s_sabine`
@@ -285,7 +319,7 @@ Head and shoulders identity photograph of Dr. Emmanuel Vane, Physician; Harrowfi
 *Madame Sabine Roux — The Quiet Room*
 
 ```
-Head and shoulders identity photograph of Madame Sabine Roux, Spirit medium, 1984. Neutral expression, plain backdrop, 4:5 portrait. Marrowgate 1984 - a city that never stopped looking Victorian. Gaslight and sodium lamps, wet cobbles, soot-blackened brick, fog off the river, ornate ironwork, a quiet occult undertone. Monochrome, heavy 35mm grain, deep shadow, one hard light source, no text, no watermark, no people facing camera
+Head and shoulders photograph of Madame Sabine Roux, Spirit medium, Marrowgate 1984. Facing camera, neutral expression, plain dark backdrop, 4:5 portrait. Lit from one side, the other side of the face falling into shadow. Marrowgate 1984 - a city that never stopped looking Victorian. Gaslight beside sodium, wet cobbles, soot-blackened brick, ornate ironwork, heavy furniture, patterned wallpaper, fog off the river. A quiet occult undertone: this is a world where a seance is an ordinary evening's business. Monochrome, fine 35mm grain, high contrast, no text, no watermark, no border, no letterboxing.
 ```
 
 ### `s_gilbert`
@@ -293,7 +327,7 @@ Head and shoulders identity photograph of Madame Sabine Roux, Spirit medium, 198
 *Gilbert Frayne — The Quiet Room*
 
 ```
-Head and shoulders identity photograph of Gilbert Frayne, The victim's nephew; no occupation, 1984. Neutral expression, plain backdrop, 4:5 portrait. Marrowgate 1984 - a city that never stopped looking Victorian. Gaslight and sodium lamps, wet cobbles, soot-blackened brick, fog off the river, ornate ironwork, a quiet occult undertone. Monochrome, heavy 35mm grain, deep shadow, one hard light source, no text, no watermark, no people facing camera
+Head and shoulders photograph of Gilbert Frayne, The victim's nephew; no occupation, Marrowgate 1984. Facing camera, neutral expression, plain dark backdrop, 4:5 portrait. Lit from one side, the other side of the face falling into shadow. Marrowgate 1984 - a city that never stopped looking Victorian. Gaslight beside sodium, wet cobbles, soot-blackened brick, ornate ironwork, heavy furniture, patterned wallpaper, fog off the river. A quiet occult undertone: this is a world where a seance is an ordinary evening's business. Monochrome, fine 35mm grain, high contrast, no text, no watermark, no border, no letterboxing.
 ```
 
 ### `n_sabine`
@@ -301,7 +335,7 @@ Head and shoulders identity photograph of Gilbert Frayne, The victim's nephew; n
 *Madame Sabine Roux — The Quiet Room*
 
 ```
-Head and shoulders identity photograph of Madame Sabine Roux, Spirit medium, 1984. Neutral expression, plain backdrop, 4:5 portrait. Marrowgate 1984 - a city that never stopped looking Victorian. Gaslight and sodium lamps, wet cobbles, soot-blackened brick, fog off the river, ornate ironwork, a quiet occult undertone. Monochrome, heavy 35mm grain, deep shadow, one hard light source, no text, no watermark, no people facing camera
+Head and shoulders photograph of Madame Sabine Roux, Spirit medium, Marrowgate 1984. Facing camera, neutral expression, plain dark backdrop, 4:5 portrait. Lit from one side, the other side of the face falling into shadow. Marrowgate 1984 - a city that never stopped looking Victorian. Gaslight beside sodium, wet cobbles, soot-blackened brick, ornate ironwork, heavy furniture, patterned wallpaper, fog off the river. A quiet occult undertone: this is a world where a seance is an ordinary evening's business. Monochrome, fine 35mm grain, high contrast, no text, no watermark, no border, no letterboxing.
 ```
 
 ### `n_gilbert`
@@ -309,7 +343,7 @@ Head and shoulders identity photograph of Madame Sabine Roux, Spirit medium, 198
 *Gilbert Frayne — The Quiet Room*
 
 ```
-Head and shoulders identity photograph of Gilbert Frayne, The nephew, 1984. Neutral expression, plain backdrop, 4:5 portrait. Marrowgate 1984 - a city that never stopped looking Victorian. Gaslight and sodium lamps, wet cobbles, soot-blackened brick, fog off the river, ornate ironwork, a quiet occult undertone. Monochrome, heavy 35mm grain, deep shadow, one hard light source, no text, no watermark, no people facing camera
+Head and shoulders photograph of Gilbert Frayne, The nephew, Marrowgate 1984. Facing camera, neutral expression, plain dark backdrop, 4:5 portrait. Lit from one side, the other side of the face falling into shadow. Marrowgate 1984 - a city that never stopped looking Victorian. Gaslight beside sodium, wet cobbles, soot-blackened brick, ornate ironwork, heavy furniture, patterned wallpaper, fog off the river. A quiet occult undertone: this is a world where a seance is an ordinary evening's business. Monochrome, fine 35mm grain, high contrast, no text, no watermark, no border, no letterboxing.
 ```
 
 ### `n_vane`
@@ -317,7 +351,7 @@ Head and shoulders identity photograph of Gilbert Frayne, The nephew, 1984. Neut
 *Dr. Emmanuel Vane — The Quiet Room*
 
 ```
-Head and shoulders identity photograph of Dr. Emmanuel Vane, Physician, 1984. Neutral expression, plain backdrop, 4:5 portrait. Marrowgate 1984 - a city that never stopped looking Victorian. Gaslight and sodium lamps, wet cobbles, soot-blackened brick, fog off the river, ornate ironwork, a quiet occult undertone. Monochrome, heavy 35mm grain, deep shadow, one hard light source, no text, no watermark, no people facing camera
+Head and shoulders photograph of Dr. Emmanuel Vane, Physician, Marrowgate 1984. Facing camera, neutral expression, plain dark backdrop, 4:5 portrait. Lit from one side, the other side of the face falling into shadow. Marrowgate 1984 - a city that never stopped looking Victorian. Gaslight beside sodium, wet cobbles, soot-blackened brick, ornate ironwork, heavy furniture, patterned wallpaper, fog off the river. A quiet occult undertone: this is a world where a seance is an ordinary evening's business. Monochrome, fine 35mm grain, high contrast, no text, no watermark, no border, no letterboxing.
 ```
 
 ### `s_pell`
@@ -325,7 +359,7 @@ Head and shoulders identity photograph of Dr. Emmanuel Vane, Physician, 1984. Ne
 *Arthur Pell — Harbor Lights*
 
 ```
-Head and shoulders identity photograph of Arthur Pell, Shipping agent, Pell & Co., 1984. Neutral expression, plain backdrop, 4:5 portrait. Marrowgate 1984 - a city that never stopped looking Victorian. Gaslight and sodium lamps, wet cobbles, soot-blackened brick, fog off the river, ornate ironwork, a quiet occult undertone. Monochrome, heavy 35mm grain, deep shadow, one hard light source, no text, no watermark, no people facing camera
+Head and shoulders photograph of Arthur Pell, Shipping agent, Pell & Co., Marrowgate 1984. Facing camera, neutral expression, plain dark backdrop, 4:5 portrait. Lit from one side, the other side of the face falling into shadow. Marrowgate 1984 - a city that never stopped looking Victorian. Gaslight beside sodium, wet cobbles, soot-blackened brick, ornate ironwork, heavy furniture, patterned wallpaper, fog off the river. A quiet occult undertone: this is a world where a seance is an ordinary evening's business. Monochrome, fine 35mm grain, high contrast, no text, no watermark, no border, no letterboxing.
 ```
 
 ### `s_rourke`
@@ -333,7 +367,7 @@ Head and shoulders identity photograph of Arthur Pell, Shipping agent, Pell & Co
 *Declan Rourke — Harbor Lights*
 
 ```
-Head and shoulders identity photograph of Declan Rourke, Secretary, Dockers' Union, 1984. Neutral expression, plain backdrop, 4:5 portrait. Marrowgate 1984 - a city that never stopped looking Victorian. Gaslight and sodium lamps, wet cobbles, soot-blackened brick, fog off the river, ornate ironwork, a quiet occult undertone. Monochrome, heavy 35mm grain, deep shadow, one hard light source, no text, no watermark, no people facing camera
+Head and shoulders photograph of Declan Rourke, Secretary, Dockers' Union, Marrowgate 1984. Facing camera, neutral expression, plain dark backdrop, 4:5 portrait. Lit from one side, the other side of the face falling into shadow. Marrowgate 1984 - a city that never stopped looking Victorian. Gaslight beside sodium, wet cobbles, soot-blackened brick, ornate ironwork, heavy furniture, patterned wallpaper, fog off the river. A quiet occult undertone: this is a world where a seance is an ordinary evening's business. Monochrome, fine 35mm grain, high contrast, no text, no watermark, no border, no letterboxing.
 ```
 
 ### `s_marlene`
@@ -341,7 +375,7 @@ Head and shoulders identity photograph of Declan Rourke, Secretary, Dockers' Uni
 *Marlene Voss — Harbor Lights*
 
 ```
-Head and shoulders identity photograph of Marlene Voss, Proprietor, The Golden Marlin, 1984. Neutral expression, plain backdrop, 4:5 portrait. Marrowgate 1984 - a city that never stopped looking Victorian. Gaslight and sodium lamps, wet cobbles, soot-blackened brick, fog off the river, ornate ironwork, a quiet occult undertone. Monochrome, heavy 35mm grain, deep shadow, one hard light source, no text, no watermark, no people facing camera
+Head and shoulders photograph of Marlene Voss, Proprietor, The Golden Marlin, Marrowgate 1984. Facing camera, neutral expression, plain dark backdrop, 4:5 portrait. Lit from one side, the other side of the face falling into shadow. Marrowgate 1984 - a city that never stopped looking Victorian. Gaslight beside sodium, wet cobbles, soot-blackened brick, ornate ironwork, heavy furniture, patterned wallpaper, fog off the river. A quiet occult undertone: this is a world where a seance is an ordinary evening's business. Monochrome, fine 35mm grain, high contrast, no text, no watermark, no border, no letterboxing.
 ```
 
 ### `s_nell`
@@ -349,7 +383,7 @@ Head and shoulders identity photograph of Marlene Voss, Proprietor, The Golden M
 *Nell Cavanagh — Harbor Lights*
 
 ```
-Head and shoulders identity photograph of Nell Cavanagh, Laundress; the victim's sister, 1984. Neutral expression, plain backdrop, 4:5 portrait. Marrowgate 1984 - a city that never stopped looking Victorian. Gaslight and sodium lamps, wet cobbles, soot-blackened brick, fog off the river, ornate ironwork, a quiet occult undertone. Monochrome, heavy 35mm grain, deep shadow, one hard light source, no text, no watermark, no people facing camera
+Head and shoulders photograph of Nell Cavanagh, Laundress; the victim's sister, Marrowgate 1984. Facing camera, neutral expression, plain dark backdrop, 4:5 portrait. Lit from one side, the other side of the face falling into shadow. Marrowgate 1984 - a city that never stopped looking Victorian. Gaslight beside sodium, wet cobbles, soot-blackened brick, ornate ironwork, heavy furniture, patterned wallpaper, fog off the river. A quiet occult undertone: this is a world where a seance is an ordinary evening's business. Monochrome, fine 35mm grain, high contrast, no text, no watermark, no border, no letterboxing.
 ```
 
 ### `s_kessler`
@@ -357,7 +391,7 @@ Head and shoulders identity photograph of Nell Cavanagh, Laundress; the victim's
 *Sgt. Bram Kessler — Harbor Lights*
 
 ```
-Head and shoulders identity photograph of Sgt. Bram Kessler, Coldbath division, Marrowgate Police, 1984. Neutral expression, plain backdrop, 4:5 portrait. Marrowgate 1984 - a city that never stopped looking Victorian. Gaslight and sodium lamps, wet cobbles, soot-blackened brick, fog off the river, ornate ironwork, a quiet occult undertone. Monochrome, heavy 35mm grain, deep shadow, one hard light source, no text, no watermark, no people facing camera
+Head and shoulders photograph of Sgt. Bram Kessler, Coldbath division, Marrowgate Police, Marrowgate 1984. Facing camera, neutral expression, plain dark backdrop, 4:5 portrait. Lit from one side, the other side of the face falling into shadow. Marrowgate 1984 - a city that never stopped looking Victorian. Gaslight beside sodium, wet cobbles, soot-blackened brick, ornate ironwork, heavy furniture, patterned wallpaper, fog off the river. A quiet occult undertone: this is a world where a seance is an ordinary evening's business. Monochrome, fine 35mm grain, high contrast, no text, no watermark, no border, no letterboxing.
 ```
 
 ### `n_sokolov`
@@ -365,7 +399,7 @@ Head and shoulders identity photograph of Sgt. Bram Kessler, Coldbath division, 
 *Dr. Anya Sokolov — Harbor Lights*
 
 ```
-Head and shoulders identity photograph of Dr. Anya Sokolov, Assistant coroner, 1984. Neutral expression, plain backdrop, 4:5 portrait. Marrowgate 1984 - a city that never stopped looking Victorian. Gaslight and sodium lamps, wet cobbles, soot-blackened brick, fog off the river, ornate ironwork, a quiet occult undertone. Monochrome, heavy 35mm grain, deep shadow, one hard light source, no text, no watermark, no people facing camera
+Head and shoulders photograph of Dr. Anya Sokolov, Assistant coroner, Marrowgate 1984. Facing camera, neutral expression, plain dark backdrop, 4:5 portrait. Lit from one side, the other side of the face falling into shadow. Marrowgate 1984 - a city that never stopped looking Victorian. Gaslight beside sodium, wet cobbles, soot-blackened brick, ornate ironwork, heavy furniture, patterned wallpaper, fog off the river. A quiet occult undertone: this is a world where a seance is an ordinary evening's business. Monochrome, fine 35mm grain, high contrast, no text, no watermark, no border, no letterboxing.
 ```
 
 ### `n_sal`
@@ -373,7 +407,7 @@ Head and shoulders identity photograph of Dr. Anya Sokolov, Assistant coroner, 1
 *Sal Deakin — Harbor Lights*
 
 ```
-Head and shoulders identity photograph of Sal Deakin, Barman, The Paper Room, 1984. Neutral expression, plain backdrop, 4:5 portrait. Marrowgate 1984 - a city that never stopped looking Victorian. Gaslight and sodium lamps, wet cobbles, soot-blackened brick, fog off the river, ornate ironwork, a quiet occult undertone. Monochrome, heavy 35mm grain, deep shadow, one hard light source, no text, no watermark, no people facing camera
+Head and shoulders photograph of Sal Deakin, Barman, The Paper Room, Marrowgate 1984. Facing camera, neutral expression, plain dark backdrop, 4:5 portrait. Lit from one side, the other side of the face falling into shadow. Marrowgate 1984 - a city that never stopped looking Victorian. Gaslight beside sodium, wet cobbles, soot-blackened brick, ornate ironwork, heavy furniture, patterned wallpaper, fog off the river. A quiet occult undertone: this is a world where a seance is an ordinary evening's business. Monochrome, fine 35mm grain, high contrast, no text, no watermark, no border, no letterboxing.
 ```
 
 ### `n_ashe`
@@ -381,7 +415,7 @@ Head and shoulders identity photograph of Sal Deakin, Barman, The Paper Room, 19
 *Wilbur Ashe — Harbor Lights*
 
 ```
-Head and shoulders identity photograph of Wilbur Ashe, Filing clerk, the Marrowgate Exchange, 1984. Neutral expression, plain backdrop, 4:5 portrait. Marrowgate 1984 - a city that never stopped looking Victorian. Gaslight and sodium lamps, wet cobbles, soot-blackened brick, fog off the river, ornate ironwork, a quiet occult undertone. Monochrome, heavy 35mm grain, deep shadow, one hard light source, no text, no watermark, no people facing camera
+Head and shoulders photograph of Wilbur Ashe, Filing clerk, the Marrowgate Exchange, Marrowgate 1984. Facing camera, neutral expression, plain dark backdrop, 4:5 portrait. Lit from one side, the other side of the face falling into shadow. Marrowgate 1984 - a city that never stopped looking Victorian. Gaslight beside sodium, wet cobbles, soot-blackened brick, ornate ironwork, heavy furniture, patterned wallpaper, fog off the river. A quiet occult undertone: this is a world where a seance is an ordinary evening's business. Monochrome, fine 35mm grain, high contrast, no text, no watermark, no border, no letterboxing.
 ```
 
 ### `n_rourke`
@@ -389,7 +423,7 @@ Head and shoulders identity photograph of Wilbur Ashe, Filing clerk, the Marrowg
 *Declan Rourke — Harbor Lights*
 
 ```
-Head and shoulders identity photograph of Declan Rourke, Union secretary, 1984. Neutral expression, plain backdrop, 4:5 portrait. Marrowgate 1984 - a city that never stopped looking Victorian. Gaslight and sodium lamps, wet cobbles, soot-blackened brick, fog off the river, ornate ironwork, a quiet occult undertone. Monochrome, heavy 35mm grain, deep shadow, one hard light source, no text, no watermark, no people facing camera
+Head and shoulders photograph of Declan Rourke, Union secretary, Marrowgate 1984. Facing camera, neutral expression, plain dark backdrop, 4:5 portrait. Lit from one side, the other side of the face falling into shadow. Marrowgate 1984 - a city that never stopped looking Victorian. Gaslight beside sodium, wet cobbles, soot-blackened brick, ornate ironwork, heavy furniture, patterned wallpaper, fog off the river. A quiet occult undertone: this is a world where a seance is an ordinary evening's business. Monochrome, fine 35mm grain, high contrast, no text, no watermark, no border, no letterboxing.
 ```
 
 ### `n_nell`
@@ -397,7 +431,7 @@ Head and shoulders identity photograph of Declan Rourke, Union secretary, 1984. 
 *Nell Cavanagh — Harbor Lights*
 
 ```
-Head and shoulders identity photograph of Nell Cavanagh, The client, 1984. Neutral expression, plain backdrop, 4:5 portrait. Marrowgate 1984 - a city that never stopped looking Victorian. Gaslight and sodium lamps, wet cobbles, soot-blackened brick, fog off the river, ornate ironwork, a quiet occult undertone. Monochrome, heavy 35mm grain, deep shadow, one hard light source, no text, no watermark, no people facing camera
+Head and shoulders photograph of Nell Cavanagh, The client, Marrowgate 1984. Facing camera, neutral expression, plain dark backdrop, 4:5 portrait. Lit from one side, the other side of the face falling into shadow. Marrowgate 1984 - a city that never stopped looking Victorian. Gaslight beside sodium, wet cobbles, soot-blackened brick, ornate ironwork, heavy furniture, patterned wallpaper, fog off the river. A quiet occult undertone: this is a world where a seance is an ordinary evening's business. Monochrome, fine 35mm grain, high contrast, no text, no watermark, no border, no letterboxing.
 ```
 
 ### `n_kessler`
@@ -405,7 +439,7 @@ Head and shoulders identity photograph of Nell Cavanagh, The client, 1984. Neutr
 *Sgt. Bram Kessler — Harbor Lights*
 
 ```
-Head and shoulders identity photograph of Sgt. Bram Kessler, Coldbath division, 1984. Neutral expression, plain backdrop, 4:5 portrait. Marrowgate 1984 - a city that never stopped looking Victorian. Gaslight and sodium lamps, wet cobbles, soot-blackened brick, fog off the river, ornate ironwork, a quiet occult undertone. Monochrome, heavy 35mm grain, deep shadow, one hard light source, no text, no watermark, no people facing camera
+Head and shoulders photograph of Sgt. Bram Kessler, Coldbath division, Marrowgate 1984. Facing camera, neutral expression, plain dark backdrop, 4:5 portrait. Lit from one side, the other side of the face falling into shadow. Marrowgate 1984 - a city that never stopped looking Victorian. Gaslight beside sodium, wet cobbles, soot-blackened brick, ornate ironwork, heavy furniture, patterned wallpaper, fog off the river. A quiet occult undertone: this is a world where a seance is an ordinary evening's business. Monochrome, fine 35mm grain, high contrast, no text, no watermark, no border, no letterboxing.
 ```
 
 ### `s_vole`
@@ -413,7 +447,7 @@ Head and shoulders identity photograph of Sgt. Bram Kessler, Coldbath division, 
 *Cassian Vole — The Bell Does Not Lie*
 
 ```
-Head and shoulders identity photograph of Cassian Vole, Secretary to the late Alderman, 1984. Neutral expression, plain backdrop, 4:5 portrait. Marrowgate 1984 - a city that never stopped looking Victorian. Gaslight and sodium lamps, wet cobbles, soot-blackened brick, fog off the river, ornate ironwork, a quiet occult undertone. Monochrome, heavy 35mm grain, deep shadow, one hard light source, no text, no watermark, no people facing camera
+Head and shoulders photograph of Cassian Vole, Secretary to the late Alderman, Marrowgate 1984. Facing camera, neutral expression, plain dark backdrop, 4:5 portrait. Lit from one side, the other side of the face falling into shadow. Marrowgate 1984 - a city that never stopped looking Victorian. Gaslight beside sodium, wet cobbles, soot-blackened brick, ornate ironwork, heavy furniture, patterned wallpaper, fog off the river. A quiet occult undertone: this is a world where a seance is an ordinary evening's business. Monochrome, fine 35mm grain, high contrast, no text, no watermark, no border, no letterboxing.
 ```
 
 ### `s_lyne`
@@ -421,7 +455,7 @@ Head and shoulders identity photograph of Cassian Vole, Secretary to the late Al
 *Hesper Lyne — The Bell Does Not Lie*
 
 ```
-Head and shoulders identity photograph of Hesper Lyne, Alderman, Ravensgate ward, 1984. Neutral expression, plain backdrop, 4:5 portrait. Marrowgate 1984 - a city that never stopped looking Victorian. Gaslight and sodium lamps, wet cobbles, soot-blackened brick, fog off the river, ornate ironwork, a quiet occult undertone. Monochrome, heavy 35mm grain, deep shadow, one hard light source, no text, no watermark, no people facing camera
+Head and shoulders photograph of Hesper Lyne, Alderman, Ravensgate ward, Marrowgate 1984. Facing camera, neutral expression, plain dark backdrop, 4:5 portrait. Lit from one side, the other side of the face falling into shadow. Marrowgate 1984 - a city that never stopped looking Victorian. Gaslight beside sodium, wet cobbles, soot-blackened brick, ornate ironwork, heavy furniture, patterned wallpaper, fog off the river. A quiet occult undertone: this is a world where a seance is an ordinary evening's business. Monochrome, fine 35mm grain, high contrast, no text, no watermark, no border, no letterboxing.
 ```
 
 ### `s_teague`
@@ -429,7 +463,7 @@ Head and shoulders identity photograph of Hesper Lyne, Alderman, Ravensgate ward
 *Dr. Ambrose Teague — The Bell Does Not Lie*
 
 ```
-Head and shoulders identity photograph of Dr. Ambrose Teague, Club physician, 1984. Neutral expression, plain backdrop, 4:5 portrait. Marrowgate 1984 - a city that never stopped looking Victorian. Gaslight and sodium lamps, wet cobbles, soot-blackened brick, fog off the river, ornate ironwork, a quiet occult undertone. Monochrome, heavy 35mm grain, deep shadow, one hard light source, no text, no watermark, no people facing camera
+Head and shoulders photograph of Dr. Ambrose Teague, Club physician, Marrowgate 1984. Facing camera, neutral expression, plain dark backdrop, 4:5 portrait. Lit from one side, the other side of the face falling into shadow. Marrowgate 1984 - a city that never stopped looking Victorian. Gaslight beside sodium, wet cobbles, soot-blackened brick, ornate ironwork, heavy furniture, patterned wallpaper, fog off the river. A quiet occult undertone: this is a world where a seance is an ordinary evening's business. Monochrome, fine 35mm grain, high contrast, no text, no watermark, no border, no letterboxing.
 ```
 
 ### `s_marchmont`
@@ -437,7 +471,7 @@ Head and shoulders identity photograph of Dr. Ambrose Teague, Club physician, 19
 *Lady Ottilie Marchmont — The Bell Does Not Lie*
 
 ```
-Head and shoulders identity photograph of Lady Ottilie Marchmont, Hostess of the subscription dinner, 1984. Neutral expression, plain backdrop, 4:5 portrait. Marrowgate 1984 - a city that never stopped looking Victorian. Gaslight and sodium lamps, wet cobbles, soot-blackened brick, fog off the river, ornate ironwork, a quiet occult undertone. Monochrome, heavy 35mm grain, deep shadow, one hard light source, no text, no watermark, no people facing camera
+Head and shoulders photograph of Lady Ottilie Marchmont, Hostess of the subscription dinner, Marrowgate 1984. Facing camera, neutral expression, plain dark backdrop, 4:5 portrait. Lit from one side, the other side of the face falling into shadow. Marrowgate 1984 - a city that never stopped looking Victorian. Gaslight beside sodium, wet cobbles, soot-blackened brick, ornate ironwork, heavy furniture, patterned wallpaper, fog off the river. A quiet occult undertone: this is a world where a seance is an ordinary evening's business. Monochrome, fine 35mm grain, high contrast, no text, no watermark, no border, no letterboxing.
 ```
 
 ### `s_kell`
@@ -445,7 +479,7 @@ Head and shoulders identity photograph of Lady Ottilie Marchmont, Hostess of the
 *Rufus Kell — The Bell Does Not Lie*
 
 ```
-Head and shoulders identity photograph of Rufus Kell, Steward, Delgado Assembly Rooms, 1984. Neutral expression, plain backdrop, 4:5 portrait. Marrowgate 1984 - a city that never stopped looking Victorian. Gaslight and sodium lamps, wet cobbles, soot-blackened brick, fog off the river, ornate ironwork, a quiet occult undertone. Monochrome, heavy 35mm grain, deep shadow, one hard light source, no text, no watermark, no people facing camera
+Head and shoulders photograph of Rufus Kell, Steward, Delgado Assembly Rooms, Marrowgate 1984. Facing camera, neutral expression, plain dark backdrop, 4:5 portrait. Lit from one side, the other side of the face falling into shadow. Marrowgate 1984 - a city that never stopped looking Victorian. Gaslight beside sodium, wet cobbles, soot-blackened brick, ornate ironwork, heavy furniture, patterned wallpaper, fog off the river. A quiet occult undertone: this is a world where a seance is an ordinary evening's business. Monochrome, fine 35mm grain, high contrast, no text, no watermark, no border, no letterboxing.
 ```
 
 ### `n_kell`
@@ -453,7 +487,7 @@ Head and shoulders identity photograph of Rufus Kell, Steward, Delgado Assembly 
 *Rufus Kell — The Bell Does Not Lie*
 
 ```
-Head and shoulders identity photograph of Rufus Kell, Steward, 1984. Neutral expression, plain backdrop, 4:5 portrait. Marrowgate 1984 - a city that never stopped looking Victorian. Gaslight and sodium lamps, wet cobbles, soot-blackened brick, fog off the river, ornate ironwork, a quiet occult undertone. Monochrome, heavy 35mm grain, deep shadow, one hard light source, no text, no watermark, no people facing camera
+Head and shoulders photograph of Rufus Kell, Steward, Marrowgate 1984. Facing camera, neutral expression, plain dark backdrop, 4:5 portrait. Lit from one side, the other side of the face falling into shadow. Marrowgate 1984 - a city that never stopped looking Victorian. Gaslight beside sodium, wet cobbles, soot-blackened brick, ornate ironwork, heavy furniture, patterned wallpaper, fog off the river. A quiet occult undertone: this is a world where a seance is an ordinary evening's business. Monochrome, fine 35mm grain, high contrast, no text, no watermark, no border, no letterboxing.
 ```
 
 ### `n_marchmont`
@@ -461,7 +495,7 @@ Head and shoulders identity photograph of Rufus Kell, Steward, 1984. Neutral exp
 *Lady Ottilie Marchmont — The Bell Does Not Lie*
 
 ```
-Head and shoulders identity photograph of Lady Ottilie Marchmont, The hostess, 1984. Neutral expression, plain backdrop, 4:5 portrait. Marrowgate 1984 - a city that never stopped looking Victorian. Gaslight and sodium lamps, wet cobbles, soot-blackened brick, fog off the river, ornate ironwork, a quiet occult undertone. Monochrome, heavy 35mm grain, deep shadow, one hard light source, no text, no watermark, no people facing camera
+Head and shoulders photograph of Lady Ottilie Marchmont, The hostess, Marrowgate 1984. Facing camera, neutral expression, plain dark backdrop, 4:5 portrait. Lit from one side, the other side of the face falling into shadow. Marrowgate 1984 - a city that never stopped looking Victorian. Gaslight beside sodium, wet cobbles, soot-blackened brick, ornate ironwork, heavy furniture, patterned wallpaper, fog off the river. A quiet occult undertone: this is a world where a seance is an ordinary evening's business. Monochrome, fine 35mm grain, high contrast, no text, no watermark, no border, no letterboxing.
 ```
 
 ### `n_coroner`
@@ -469,7 +503,7 @@ Head and shoulders identity photograph of Lady Ottilie Marchmont, The hostess, 1
 *Dr. Anya Sokolov — The Bell Does Not Lie*
 
 ```
-Head and shoulders identity photograph of Dr. Anya Sokolov, Assistant coroner, 1984. Neutral expression, plain backdrop, 4:5 portrait. Marrowgate 1984 - a city that never stopped looking Victorian. Gaslight and sodium lamps, wet cobbles, soot-blackened brick, fog off the river, ornate ironwork, a quiet occult undertone. Monochrome, heavy 35mm grain, deep shadow, one hard light source, no text, no watermark, no people facing camera
+Head and shoulders photograph of Dr. Anya Sokolov, Assistant coroner, Marrowgate 1984. Facing camera, neutral expression, plain dark backdrop, 4:5 portrait. Lit from one side, the other side of the face falling into shadow. Marrowgate 1984 - a city that never stopped looking Victorian. Gaslight beside sodium, wet cobbles, soot-blackened brick, ornate ironwork, heavy furniture, patterned wallpaper, fog off the river. A quiet occult undertone: this is a world where a seance is an ordinary evening's business. Monochrome, fine 35mm grain, high contrast, no text, no watermark, no border, no letterboxing.
 ```
 
 ### `n_vole`
@@ -477,7 +511,7 @@ Head and shoulders identity photograph of Dr. Anya Sokolov, Assistant coroner, 1
 *Cassian Vole — The Bell Does Not Lie*
 
 ```
-Head and shoulders identity photograph of Cassian Vole, The secretary, 1984. Neutral expression, plain backdrop, 4:5 portrait. Marrowgate 1984 - a city that never stopped looking Victorian. Gaslight and sodium lamps, wet cobbles, soot-blackened brick, fog off the river, ornate ironwork, a quiet occult undertone. Monochrome, heavy 35mm grain, deep shadow, one hard light source, no text, no watermark, no people facing camera
+Head and shoulders photograph of Cassian Vole, The secretary, Marrowgate 1984. Facing camera, neutral expression, plain dark backdrop, 4:5 portrait. Lit from one side, the other side of the face falling into shadow. Marrowgate 1984 - a city that never stopped looking Victorian. Gaslight beside sodium, wet cobbles, soot-blackened brick, ornate ironwork, heavy furniture, patterned wallpaper, fog off the river. A quiet occult undertone: this is a world where a seance is an ordinary evening's business. Monochrome, fine 35mm grain, high contrast, no text, no watermark, no border, no letterboxing.
 ```
 
 ### `n_lyne`
@@ -485,7 +519,7 @@ Head and shoulders identity photograph of Cassian Vole, The secretary, 1984. Neu
 *Hesper Lyne — The Bell Does Not Lie*
 
 ```
-Head and shoulders identity photograph of Hesper Lyne, Alderman, 1984. Neutral expression, plain backdrop, 4:5 portrait. Marrowgate 1984 - a city that never stopped looking Victorian. Gaslight and sodium lamps, wet cobbles, soot-blackened brick, fog off the river, ornate ironwork, a quiet occult undertone. Monochrome, heavy 35mm grain, deep shadow, one hard light source, no text, no watermark, no people facing camera
+Head and shoulders photograph of Hesper Lyne, Alderman, Marrowgate 1984. Facing camera, neutral expression, plain dark backdrop, 4:5 portrait. Lit from one side, the other side of the face falling into shadow. Marrowgate 1984 - a city that never stopped looking Victorian. Gaslight beside sodium, wet cobbles, soot-blackened brick, ornate ironwork, heavy furniture, patterned wallpaper, fog off the river. A quiet occult undertone: this is a world where a seance is an ordinary evening's business. Monochrome, fine 35mm grain, high contrast, no text, no watermark, no border, no letterboxing.
 ```
 
 ### `n_teague`
@@ -493,5 +527,5 @@ Head and shoulders identity photograph of Hesper Lyne, Alderman, 1984. Neutral e
 *Dr. Ambrose Teague — The Bell Does Not Lie*
 
 ```
-Head and shoulders identity photograph of Dr. Ambrose Teague, Club physician, 1984. Neutral expression, plain backdrop, 4:5 portrait. Marrowgate 1984 - a city that never stopped looking Victorian. Gaslight and sodium lamps, wet cobbles, soot-blackened brick, fog off the river, ornate ironwork, a quiet occult undertone. Monochrome, heavy 35mm grain, deep shadow, one hard light source, no text, no watermark, no people facing camera
+Head and shoulders photograph of Dr. Ambrose Teague, Club physician, Marrowgate 1984. Facing camera, neutral expression, plain dark backdrop, 4:5 portrait. Lit from one side, the other side of the face falling into shadow. Marrowgate 1984 - a city that never stopped looking Victorian. Gaslight beside sodium, wet cobbles, soot-blackened brick, ornate ironwork, heavy furniture, patterned wallpaper, fog off the river. A quiet occult undertone: this is a world where a seance is an ordinary evening's business. Monochrome, fine 35mm grain, high contrast, no text, no watermark, no border, no letterboxing.
 ```

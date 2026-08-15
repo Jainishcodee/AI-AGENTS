@@ -104,6 +104,39 @@ class TestGeminiTranslation(unittest.TestCase):
         calls = [p["functionCall"]["name"] for p in out[1]["parts"] if "functionCall" in p]
         self.assertEqual(calls, ["get_booking", "get_train"])
 
+    def test_thought_signature_round_trips(self):
+        """Gemini thinking models reject a history that lost the signature.
+
+        Live failure was HTTP 400 "Function call is missing a thought_signature
+        in functionCall parts", which killed every trajectory at the second
+        model turn.
+        """
+        hist = [{"role": "assistant", "content": "", "tool_calls": [
+            {"id": "c1", "name": "get_booking", "args": {"pnr": "1"},
+             "thought_signature": "SIGNATURE_ABC"}]}]
+        part = to_gemini(hist)[0]["parts"][0]
+        self.assertEqual(part["thoughtSignature"], "SIGNATURE_ABC")
+
+    def test_signature_is_captured_from_a_response(self):
+        import json as _json
+        from unittest import mock as _mock
+
+        def fake_post(url, headers=None, json=None, timeout=None):
+            resp = _mock.Mock(status_code=200)
+            resp.json.return_value = {"candidates": [{"content": {"parts": [
+                {"functionCall": {"name": "get_booking", "args": {"pnr": "1"}},
+                 "thoughtSignature": "SIG123"}]}}]}
+            return resp
+
+        with mock.patch("iab.providers.requests.post", side_effect=fake_post):
+            out = Gemini("gemini-3.5-flash", api_key="k").chat("s", [], [])
+        self.assertEqual(out["tool_calls"][0]["thought_signature"], "SIG123")
+        # and it must not leak into the OpenAI wire format as a bogus field
+        wire = to_openai([{"role": "assistant", "content": "",
+                           "tool_calls": out["tool_calls"]}])
+        self.assertEqual(set(wire[0]["tool_calls"][0]), {"id", "type", "function"})
+        _json.dumps(wire)
+
     def test_no_argument_tools_omit_parameters(self):
         """An empty properties map is rejected by Gemini."""
         tools = {t["name"]: t for t in RailEnv(rail_db()).tools()}

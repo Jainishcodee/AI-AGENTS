@@ -34,7 +34,7 @@ await page.waitForTimeout(1000);
 await page.getByRole("button", { name: "GET TO WORK" }).click();
 
 // Gather enough evidence that the board has something on it.
-await travelTo(page, "loc_0360");
+await travelTo(page, "loc_np_the_rosewood_rooms");
 await page.getByRole("button", { name: /SEARCH THIS PLACE/ }).click();
 await page.waitForTimeout(500);
 await page.getByRole("button", { name: /Take me through Thursday evening/ }).click();

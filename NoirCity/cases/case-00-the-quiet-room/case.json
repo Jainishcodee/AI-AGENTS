@@ -2,11 +2,11 @@
   "id": "the-quiet-room",
   "title": "The Quiet Room",
   "cityId": "marrowgate",
-  "brief": "Six people sat in the dark at 198 Threadneedle Circle on Thursday evening to speak with the dead. When the lamp came back up, Ottoline Frayne was still in her chair with her eyes open and her heart stopped. The doctor at the table signed her off as heart failure inside the hour, which is very quick work, and her solicitor would like a second opinion. Four addresses. Three days. Everything you need is inside them, and one of the six people at that table is lying to you about something that has nothing to do with the murder.",
+  "brief": "Six people sat in the dark at 74 Threadneedle Circle on Thursday evening to speak with the dead. When the lamp came back up, Ottoline Frayne was still in her chair with her eyes open and her heart stopped. The doctor at the table signed her off as heart failure inside the hour, which is very quick work, and her solicitor would like a second opinion. Four addresses. Three days. Everything you need is inside them, and one of the six people at that table is lying to you about something that has nothing to do with the murder.",
   "timeBudget": 32,
   "sessionMinutes": 45,
   "startsAt": "1984-03-09T09:00:00",
-  "startLocationId": "loc_lm_blackthorn_security_company",
+  "startLocationId": "loc_lm_e_crowe_enquiries",
   "suspects": [
     {
       "id": "s_vane",
@@ -138,7 +138,7 @@
       "id": "n_sabine",
       "name": "Madame Sabine Roux",
       "role": "Spirit medium",
-      "locationId": "loc_0360",
+      "locationId": "loc_np_the_rosewood_rooms",
       "questions": [
         {
           "id": "q_night",
@@ -171,7 +171,7 @@
       "id": "n_gilbert",
       "name": "Gilbert Frayne",
       "role": "The nephew",
-      "locationId": "loc_0360",
+      "locationId": "loc_np_the_rosewood_rooms",
       "questions": [
         {
           "id": "q_aunt",
@@ -187,7 +187,7 @@
       "id": "n_vane",
       "name": "Dr. Emmanuel Vane",
       "role": "Physician",
-      "locationId": "loc_0023",
+      "locationId": "loc_np_petrakis_medical_clinic",
       "questions": [
         {
           "id": "q_certificate",
@@ -211,15 +211,15 @@
   ],
   "locations": [
     {
-      "cityLocationId": "loc_lm_blackthorn_security_company",
+      "cityLocationId": "loc_lm_e_crowe_enquiries",
       "description": "Your own two rooms above the tobacconist. The solicitor's letter is on the desk with a cheque clipped to it, and the cheque is smaller than the letter suggests.",
       "searchable": false,
       "clues": [],
       "searchCost": 1
     },
     {
-      "cityLocationId": "loc_0360",
-      "description": "198 Threadneedle Circle. Madame Roux takes the ground floor: a parlour with the curtains permanently drawn, a round table, six chairs, and a sash window that does not quite close. Ottoline Frayne's chair has not been moved. Gilbert Frayne is here too, waiting for somebody to release the house to him.",
+      "cityLocationId": "loc_np_the_rosewood_rooms",
+      "description": "74 Threadneedle Circle. Madame Roux takes the ground floor: a parlour with the curtains permanently drawn, a round table, six chairs, and a sash window that does not quite close. Ottoline Frayne's chair has not been moved. Gilbert Frayne is here too, waiting for somebody to release the house to him.",
       "clues": [
         "c_body",
         "c_teacup",
@@ -228,7 +228,7 @@
       "searchCost": 2
     },
     {
-      "cityLocationId": "loc_0023",
+      "cityLocationId": "loc_np_petrakis_medical_clinic",
       "description": "Petrakis Medical Clinic, where Dr. Vane keeps consulting rooms three days a week. Waiting chairs, a locked dispensary, and a prescription book on the desk that he has not thought to move, because he does not believe anyone will ask.",
       "clues": [
         "c_prescription"
@@ -236,7 +236,7 @@
       "searchCost": 2
     },
     {
-      "cityLocationId": "loc_0385",
+      "cityLocationId": "loc_np_the_blue_dollar_apartments",
       "description": "The Blue Dollar Apartments, where Ottoline Frayne actually lived — two doors from the seance she attended every Thursday. Her writing case is on the bureau and her account books are in it, kept in a hand so small and hard you need the lamp to read them.",
       "clues": [
         "c_ledger_debt",
@@ -245,7 +245,7 @@
       "searchCost": 2
     },
     {
-      "cityLocationId": "loc_0751",
+      "cityLocationId": "loc_np_marlowe_loan_pawn",
       "description": "Marlowe Loan & Pawn. Wedding rings under glass, a broker who remembers every face, and a ledger he will let you see if you are pleasant about it.",
       "clues": [
         "c_pawn_ticket"
@@ -258,10 +258,10 @@
       "id": "t_travel",
       "verb": "TRAVEL",
       "title": "Get to the scene",
-      "body": "The map is the board. Every gold pin is somewhere you can go, and there are over a thousand of them — most have nothing to do with this. Click a pin to read it, then DRIVE OVER to move the team there.\n\nGo to 198 Threadneedle Circle, in Ravensgate. Travel costs hours, and hours are all you have.",
+      "body": "The map is the board. Every gold pin is somewhere you can go, and there are over a thousand of them — most have nothing to do with this. Click a pin to read it, then DRIVE OVER to move the team there.\n\nGo to 74 Threadneedle Circle, in Ravensgate. Travel costs hours, and hours are all you have.",
       "done": {
         "type": "atLocation",
-        "locationId": "loc_0360"
+        "locationId": "loc_np_the_rosewood_rooms"
       }
     },
     {

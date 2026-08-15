@@ -45,9 +45,19 @@ interface WorkersAi {
  */
 async function binding(): Promise<WorkersAi | null> {
   try {
-    const mod = await import("@opennextjs/cloudflare");
-    const ctx = await mod.getCloudflareContext({ async: true });
-    const ai = (ctx?.env as Record<string, unknown> | undefined)?.AI;
+    // Raced, not just try/caught. Outside a Worker `getCloudflareContext` can
+    // sit unresolved rather than throwing - which is not a caught error, it is
+    // a request that never comes back. That hung every accusation in local dev:
+    // the case closed server-side and the verdict never arrived, because the
+    // response was still waiting on a context that does not exist here.
+    const ai = await Promise.race([
+      (async () => {
+        const mod = await import("@opennextjs/cloudflare");
+        const ctx = await mod.getCloudflareContext({ async: true });
+        return (ctx?.env as Record<string, unknown> | undefined)?.AI;
+      })(),
+      new Promise<undefined>((resolve) => setTimeout(resolve, 500)),
+    ]);
     return ai && typeof (ai as WorkersAi).run === "function"
       ? (ai as WorkersAi)
       : null;

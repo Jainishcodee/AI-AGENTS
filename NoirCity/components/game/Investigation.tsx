@@ -27,6 +27,7 @@ import { Verdict } from "./Verdict";
 import { Corkboard } from "./Corkboard";
 import { CaseTabs, type Tab } from "./CaseTabs";
 import { PlaceCard } from "./PlaceCard";
+import { CaseOpening } from "./CaseOpening";
 import { useBoard } from "@/lib/game/useBoard";
 
 const CityMap = dynamic(() => import("@/components/map/CityMap"), {
@@ -180,23 +181,6 @@ export function Investigation({
           />
         )}
 
-        {briefOpen && (
-          <div className="reveal absolute inset-x-3 top-3 z-[1100] max-h-[70dvh] max-w-lg overflow-y-auto border border-line bg-surface/95 p-5 backdrop-blur sm:inset-x-6 sm:top-6 sm:p-6">
-            <p className="text-[10px] tracking-[0.3em] text-faint">THE JOB</p>
-            <h2 className="mt-2 font-serif text-lg text-bright sm:text-xl">
-              {view.title}
-            </h2>
-            <p className="mt-3 font-serif text-[14px] leading-relaxed text-muted">
-              {view.brief}
-            </p>
-            <button
-              onClick={() => setBriefOpen(false)}
-              className="mt-5 border border-edge px-5 py-2.5 text-[11px] tracking-[0.2em] text-muted lift hover:border-muted hover:text-bright"
-            >
-              GET TO WORK
-            </button>
-          </div>
-        )}
 
         {/* One cluster in the corner rather than a button pinned to each end.
             The right-hand end of a desktop screen now belongs to the notebook,
@@ -374,6 +358,15 @@ export function Investigation({
           </div>
         </div>
       </aside>
+
+      {briefOpen && (
+        <CaseOpening
+          caseId={view.caseId}
+          title={view.title}
+          brief={view.brief}
+          onBegin={() => setBriefOpen(false)}
+        />
+      )}
 
       {view.state.status === "finished" && (
         <Verdict view={view} onRestart={onRestart} />

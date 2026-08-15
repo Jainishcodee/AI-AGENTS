@@ -71,13 +71,13 @@ describe("case 00 - The Quiet Room", () => {
   const c = loadCase("case-00-the-quiet-room");
 
   const script: Action[] = [
-    { type: "travel", locationId: "loc_0360" },
+    { type: "travel", locationId: "loc_np_the_rosewood_rooms" },
     { type: "search" },
     { type: "interview", npcId: "n_sabine", questionId: "q_night" },
     { type: "lab", clueId: "c_teacup" },
-    { type: "travel", locationId: "loc_0023" },
+    { type: "travel", locationId: "loc_np_petrakis_medical_clinic" },
     { type: "search" },
-    { type: "travel", locationId: "loc_0385" },
+    { type: "travel", locationId: "loc_np_the_blue_dollar_apartments" },
     { type: "search" },
   ];
 
@@ -150,7 +150,7 @@ describe("case 00 - The Quiet Room", () => {
 
     const away = applyAction(c, city, state, {
       type: "travel",
-      locationId: "loc_0023",
+      locationId: "loc_np_petrakis_medical_clinic",
     });
     expect(away.ok).toBe(true);
     if (away.ok) {
@@ -177,7 +177,7 @@ describe("case 01 - Harbor Lights", () => {
   const c = loadCase("case-01-harbor-lights");
 
   const script: Action[] = [
-    { type: "travel", locationId: "loc_1102" },
+    { type: "travel", locationId: "loc_np_quist_freight_storage" },
     { type: "search" },
     { type: "travel", locationId: "loc_lm_no_4_dry_dock" },
     { type: "search" },
@@ -189,7 +189,7 @@ describe("case 01 - Harbor Lights", () => {
     { type: "travel", locationId: "loc_lm_the_marrowgate_exchange" },
     { type: "search" },
     { type: "interview", npcId: "n_ashe", questionId: "q_manifest" },
-    { type: "travel", locationId: "loc_1098" },
+    { type: "travel", locationId: "loc_np_lucky_lion_wharf" },
     { type: "search" },
   ];
 
@@ -231,7 +231,7 @@ describe("case 02 - The Bell Does Not Lie", () => {
   const c = loadCase("case-02-the-bell-does-not-lie");
 
   const script: Action[] = [
-    { type: "travel", locationId: "loc_0398" },
+    { type: "travel", locationId: "loc_np_delgado_assembly_rooms" },
     { type: "search" },
     { type: "travel", locationId: "loc_lm_the_county_morgue" },
     { type: "interview", npcId: "n_coroner", questionId: "q_time" },

@@ -6,7 +6,7 @@
   "timeBudget": 48,
   "sessionMinutes": 90,
   "startsAt": "1984-09-11T08:00:00",
-  "startLocationId": "loc_lm_blackthorn_security_company",
+  "startLocationId": "loc_lm_e_crowe_enquiries",
   "suspects": [
     {
       "id": "s_pell",
@@ -243,7 +243,7 @@
       "id": "n_sal",
       "name": "Sal Deakin",
       "role": "Barman, The Paper Room",
-      "locationId": "loc_1105",
+      "locationId": "loc_np_the_paper_room",
       "questions": [
         {
           "id": "q_night",
@@ -313,7 +313,7 @@
       "id": "n_nell",
       "name": "Nell Cavanagh",
       "role": "The client",
-      "locationId": "loc_0881",
+      "locationId": "loc_np_the_ruby_wire_apartments",
       "questions": [
         {
           "id": "q_brother",
@@ -329,7 +329,7 @@
       "id": "n_kessler",
       "name": "Sgt. Bram Kessler",
       "role": "Coldbath division",
-      "locationId": "loc_1023",
+      "locationId": "loc_np_precinct_17",
       "questions": [
         {
           "id": "q_report",
@@ -344,7 +344,7 @@
   ],
   "locations": [
     {
-      "cityLocationId": "loc_lm_blackthorn_security_company",
+      "cityLocationId": "loc_lm_e_crowe_enquiries",
       "description": "Two rooms above a tobacconist. A desk, a filing cabinet you have never fully closed, and a window that looks onto an airshaft. The forty pounds is still in the envelope in the drawer.",
       "searchable": false,
       "clues": [],
@@ -366,7 +366,7 @@
       "searchCost": 2
     },
     {
-      "cityLocationId": "loc_1102",
+      "cityLocationId": "loc_np_quist_freight_storage",
       "description": "Quist Freight & Storage. Pallets to the roof, a checker's cubby by the door with a stool and a shelf, and Vance's name still chalked on the duty board nobody has wiped.",
       "clues": [
         "c_tally_book"
@@ -382,7 +382,7 @@
       "searchCost": 2
     },
     {
-      "cityLocationId": "loc_1098",
+      "cityLocationId": "loc_np_lucky_lion_wharf",
       "description": "Lucky Lion Wharf. Creosote, gulls, and mud that holds a bootprint for a week. The dry dock ladder comes up thirty feet from where you are standing.",
       "clues": [
         "c_signet"
@@ -390,7 +390,7 @@
       "searchCost": 2
     },
     {
-      "cityLocationId": "loc_1105",
+      "cityLocationId": "loc_np_the_paper_room",
       "description": "The Paper Room. Low ceiling, four tables, and a barman who has heard every lie told on this waterfront and repeated none of them.",
       "clues": [],
       "searchCost": 2
@@ -412,7 +412,7 @@
       "searchCost": 2
     },
     {
-      "cityLocationId": "loc_0881",
+      "cityLocationId": "loc_np_the_ruby_wire_apartments",
       "description": "The Ruby Wire Apartments. Six floors, no lift, and the Cavanaghs four to a room on the third. There is a photograph of Tommy on the shelf and nothing else on it.",
       "clues": [
         "c_policy"
@@ -420,7 +420,7 @@
       "searchCost": 2
     },
     {
-      "cityLocationId": "loc_1023",
+      "cityLocationId": "loc_np_precinct_17",
       "description": "Precinct 17. Fluorescent light, carbon paper, and a bench of people who have been waiting since morning. Kessler's desk is the one with nothing on it.",
       "clues": [
         "c_payoff_envelope"
@@ -428,7 +428,7 @@
       "searchCost": 3
     },
     {
-      "cityLocationId": "loc_0888",
+      "cityLocationId": "loc_np_amato_loan_pawn",
       "description": "Amato Loan & Pawn. Wedding rings under glass, guitars on the wall, and a broker who remembers every face and volunteers none of them.",
       "clues": [
         "c_bloodied_shirt"

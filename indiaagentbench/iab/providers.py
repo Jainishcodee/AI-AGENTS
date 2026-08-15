@@ -104,6 +104,11 @@ class OpenAICompat(Provider):
                   headers={"Authorization": f"Bearer {self.api_key}"},
                   json=self.payload(system, messages, tools), timeout=120)
         self._raise_for_limits(r)
+        if r.status_code >= 500:
+            # Server-side wobble (503 UNAVAILABLE, 500, 502, 504). The host is
+            # not exhausted, it is busy -- retiring it would throw away capacity
+            # that is fine again in seconds.
+            raise Transient(f"{self.model} HTTP {r.status_code}: {r.text[:200]}")
         if r.status_code >= 400:
             raise ProviderError(f"{self.model} HTTP {r.status_code}: {r.text[:400]}")
 
@@ -149,6 +154,8 @@ class Gemini(Provider):
             if "perday" in body.replace("_", "") or "daily" in body:
                 raise QuotaDead(r.text[:300])
             raise RateLimited(r.text[:300], retry_after=_retry_after(r))
+        if r.status_code >= 500:
+            raise Transient(f"{self.model} HTTP {r.status_code}: {r.text[:200]}")
         if r.status_code >= 400:
             raise ProviderError(f"{self.model} HTTP {r.status_code}: {r.text[:400]}")
 
@@ -157,10 +164,19 @@ class Gemini(Provider):
         text = "".join(p.get("text", "") for p in parts)
         # Gemini has no tool-call ids, so synthesise stable ones. The runner
         # needs them to pair results back to calls in the internal format.
-        calls = [{"id": f"call_{n}",
-                  "name": p["functionCall"]["name"],
-                  "args": dict(p["functionCall"].get("args") or {})}
-                 for n, p in enumerate(p for p in parts if "functionCall" in p)]
+        #
+        # thoughtSignature must be captured and echoed back verbatim on replay:
+        # the thinking models reject a history whose functionCall parts have
+        # lost it ("Function call is missing a thought_signature"), which kills
+        # every multi-turn trajectory at the second model turn.
+        calls = []
+        for n, p in enumerate(p for p in parts if "functionCall" in p):
+            call = {"id": f"call_{n}",
+                    "name": p["functionCall"]["name"],
+                    "args": dict(p["functionCall"].get("args") or {})}
+            if p.get("thoughtSignature"):
+                call["thought_signature"] = p["thoughtSignature"]
+            calls.append(call)
         return {"text": text, "tool_calls": calls, "model": self.model}
 
 
@@ -296,7 +312,11 @@ def to_gemini(messages):
             if m.get("content"):
                 parts.append({"text": m["content"]})
             for tc in m.get("tool_calls") or []:
-                parts.append({"functionCall": {"name": tc["name"], "args": tc["args"]}})
+                part = {"functionCall": {"name": tc["name"], "args": tc["args"]}}
+                # Echo the signature back untouched; thinking models require it.
+                if tc.get("thought_signature"):
+                    part["thoughtSignature"] = tc["thought_signature"]
+                parts.append(part)
             out.append({"role": "model", "parts": parts or [{"text": ""}]})
         else:
             out.append({"role": "user", "parts": [{"text": m["content"]}]})
@@ -329,9 +349,19 @@ ENDPOINTS = {
         ("openai-compat", "https://router.huggingface.co/v1", "HF_TOKEN",
          "bharatgenai/Param2-17B-A2.4B-Thinking"),   # UNCONFIRMED routing
     ],
-    "gemini-flash": [
+    # Separate entries, NOT fallbacks for one another. These are different
+    # weights: listing them under a single "gemini-flash" model would let one
+    # run be answered partly by 2.5 and partly by 3.5 and be reported as one
+    # number -- precisely the corruption this registry's rotation rule exists
+    # to prevent. A fallback is only legitimate when it serves identical weights.
+    "gemini-2.5-flash": [
         ("gemini", None, "GEMINI_API_KEY", "gemini-2.5-flash"),
+    ],
+    "gemini-3.5-flash": [
         ("gemini", None, "GEMINI_API_KEY", "gemini-3.5-flash"),
+    ],
+    "gemini-3.1-flash-lite": [
+        ("gemini", None, "GEMINI_API_KEY", "gemini-3.1-flash-lite"),
     ],
     "llama-70b": [
         ("openai-compat", "https://api.groq.com/openai/v1", "GROQ_API_KEY",

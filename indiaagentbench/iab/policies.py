@@ -38,7 +38,11 @@ Operating rules:
 - Cancel exactly the passengers the user asked for, and nobody else.
 - Calculate the total refund yourself and pass it to cancel_passengers.
 - Never guess a PNR. If the user has not given one, look it up from their
-  registered mobile number and confirm which booking they mean before acting.
+  registered mobile number and identify which booking they mean from the details
+  they have already provided.
+- The user is not available for follow-up questions. Everything you need is in
+  their message. Do not ask for clarification -- re-read the request and act on
+  what it says.
 - If a request cannot be fulfilled with the tools available, say so plainly and
   call transfer_to_human. Do not perform a different action instead.
 """
@@ -64,6 +68,9 @@ Operating rules:
   not submit.
 - When more than one citizen record matches a name, use the additional details
   the citizen gives you to identify the right one. Never act on the wrong record.
+- The citizen is not available for follow-up questions. Everything you need is
+  in their message. Do not ask for clarification -- re-read the request and act
+  on what it says.
 """
 
 POLICIES = {"rail": RAIL, "schemes": SCHEMES}

@@ -63,12 +63,19 @@ def run_task(task, rotator, max_steps=MAX_STEPS):
     else:
         stop = "max_steps"
 
+    # Ending on a question is a distinct failure mode from acting wrongly: the
+    # agent had the information and declined to use it. Policy forbids it, but
+    # tagging it keeps the two separable in the failure taxonomy rather than
+    # both collapsing into "did not complete".
+    final = next((t["text"] for t in reversed(transcript)
+                  if t["role"] == "assistant" and t.get("text")), "")
     scored = verify(env, task)
     scored.update({
         "model": rotator.model_name,
         "condition": task.get("condition", "C1"),
         "domain": domain,
         "stop_reason": stop,
+        "asked_clarification": bool(final.strip().endswith("?")),
         "survival": survival,
         "actions": env.actions,
         "transcript": transcript,

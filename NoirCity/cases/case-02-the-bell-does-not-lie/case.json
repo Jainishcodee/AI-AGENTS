@@ -6,7 +6,7 @@
   "timeBudget": 44,
   "sessionMinutes": 75,
   "startsAt": "1984-11-16T09:00:00",
-  "startLocationId": "loc_lm_blackthorn_security_company",
+  "startLocationId": "loc_lm_e_crowe_enquiries",
   "suspects": [
     {
       "id": "s_vole",
@@ -207,7 +207,7 @@
       "id": "n_kell",
       "name": "Rufus Kell",
       "role": "Steward",
-      "locationId": "loc_0398",
+      "locationId": "loc_np_delgado_assembly_rooms",
       "questions": [
         {
           "id": "q_last",
@@ -232,7 +232,7 @@
       "id": "n_marchmont",
       "name": "Lady Ottilie Marchmont",
       "role": "The hostess",
-      "locationId": "loc_0412",
+      "locationId": "loc_np_chapel_of_the_crimson_sparrow",
       "questions": [
         {
           "id": "q_found",
@@ -276,7 +276,7 @@
       "id": "n_vole",
       "name": "Cassian Vole",
       "role": "The secretary",
-      "locationId": "loc_0401",
+      "locationId": "loc_np_the_grand_crown_apartments",
       "questions": [
         {
           "id": "q_evening",
@@ -326,7 +326,7 @@
       "id": "n_teague",
       "name": "Dr. Ambrose Teague",
       "role": "Club physician",
-      "locationId": "loc_0398",
+      "locationId": "loc_np_delgado_assembly_rooms",
       "questions": [
         {
           "id": "q_certificate",
@@ -341,14 +341,14 @@
   ],
   "locations": [
     {
-      "cityLocationId": "loc_lm_blackthorn_security_company",
+      "cityLocationId": "loc_lm_e_crowe_enquiries",
       "description": "Two rooms above a tobacconist. The council's letter of engagement is on the desk, which means for once somebody respectable is paying, and for once you do not entirely trust the reason.",
       "searchable": false,
       "clues": [],
       "searchCost": 1
     },
     {
-      "cityLocationId": "loc_0398",
+      "cityLocationId": "loc_np_delgado_assembly_rooms",
       "description": "Delgado Assembly Rooms. Long table, card room, terrace, and a library at the back with one door and a fire that had burned down by the time anybody thought to look at it.",
       "clues": [
         "c_body",
@@ -381,7 +381,7 @@
       "searchCost": 2
     },
     {
-      "cityLocationId": "loc_0401",
+      "cityLocationId": "loc_np_the_grand_crown_apartments",
       "description": "The Grand Crown Apartments. Cassian Vole keeps three rooms, very clean, with a shelf of Reeve's old speeches bound at his own expense.",
       "clues": [
         "c_vole_deposits"
@@ -389,7 +389,7 @@
       "searchCost": 2
     },
     {
-      "cityLocationId": "loc_0396",
+      "cityLocationId": "loc_np_voss_delgado_attorneys",
       "description": "Voss & Delgado, Attorneys. Reeve's solicitors, and the only people in Marrowgate who kept copies of his correspondence when he did not.",
       "clues": [
         "c_lyne_letter",
@@ -398,7 +398,7 @@
       "searchCost": 2
     },
     {
-      "cityLocationId": "loc_0412",
+      "cityLocationId": "loc_np_chapel_of_the_crimson_sparrow",
       "description": "Chapel of the Crimson Sparrow. Lady Marchmont has been here every morning since, which the verger finds admirable and you find worth a question.",
       "clues": [],
       "searchCost": 2
@@ -410,7 +410,7 @@
       "searchCost": 2
     },
     {
-      "cityLocationId": "loc_0423",
+      "cityLocationId": "loc_np_the_crimson_dial",
       "description": "The Crimson Dial. Half the council drinks here and all of it talks. The steward's cellar book trouble was common knowledge a month before the committee heard of it.",
       "clues": [
         "c_cellar_book",

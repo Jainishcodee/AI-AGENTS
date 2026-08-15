@@ -424,7 +424,7 @@ function onRailCorridor(x: number, y: number): boolean {
 const BRIDGES: Bridge[] = [
   crossing("br_ludgate", "Ludgate Bridge", 1150, "bridge"),
   crossing("br_backlund", "Marrowgate Bridge", 2300, "bridge"),
-  crossing("br_ironcross", "Iron Cross Bridge", 3700, "bridge"),
+  crossing("br_ossary", "Ossary Bridge", 3700, "bridge"),
   crossing("br_saltferry", "Saltney Ferry", 5300, "ferry"),
 ];
 
@@ -814,6 +814,17 @@ const LANDMARKS: Array<{
   type: LocationType;
   at: Point;
   blurb: string;
+  /**
+   * Whether this is one of the city's famous places.
+   *
+   * Landmarks are drawn red and labelled at any zoom - City Hall, the Assize
+   * Courts, the cathedral. A hand-authored place that is merely *named* rather
+   * than famous sets this false and draws as an ordinary chip, which matters:
+   * if every address a case is about were a labelled landmark, the map would
+   * announce the answer. Knowing which of twelve hundred addresses matters is
+   * the game.
+   */
+  landmark?: boolean;
 }> = [
   { name: "Marrowgate City Hall", type: "hall", at: [2000, 2900], blurb: "Granite steps, brass doors, and a lobby built to make you feel small. It works." },
   { name: "The Bell of Order", type: "monument", at: [2150, 2620], blurb: "Cast in a year nobody agrees on. It rings the hour and, twice in living memory, something else." },
@@ -821,7 +832,7 @@ const LANDMARKS: Array<{
   { name: "Divisional Police Headquarters", type: "precinct", at: [2450, 2980], blurb: "Six floors of filing and one honest lieutenant, and nobody will tell you which floor." },
   { name: "Sodela Palace", type: "monument", at: [1560, 2760], blurb: "Closed to the public since the fire. The railings alone cost more than this borough earns in a year." },
   { name: "The Marrowgate Exchange", type: "office", at: [4160, 2560], blurb: "A trading floor that empties at three and a basement that does not." },
-  { name: "Blackthorn Security Company", type: "office", at: [4020, 2420], blurb: "Private enquiries, discreet. Two rooms above a tobacconist on Iron Cross Street." },
+  { name: "E. Crowe, Enquiries", type: "office", at: [4020, 2420], blurb: "Private enquiries, discreet. Two rooms over a tobacconist, and your name on the glass." },
   { name: "Marrowgate University", type: "university", at: [5300, 3640], blurb: "Quadrangles, bicycles, and a chemistry department that does not log who signs the key out." },
   { name: "The Ravensgate Public Library", type: "hall", at: [5060, 3300], blurb: "Four floors of stacks. The restricted room needs a letter from somebody who matters." },
   { name: "St. Selena's Cathedral", type: "church", at: [880, 3770], blurb: "Cold stone and a choir that rehearses at seven. The verger notices everyone who comes in." },
@@ -837,6 +848,32 @@ const LANDMARKS: Array<{
   { name: "Sovereign Road Station", type: "station", at: [2280, 3230], blurb: "The northern line's last stop. Commuters by day, nobody you want to meet by night." },
   { name: "The Dockers' Union Hall", type: "hall", at: [5680, 700], blurb: "The hiring list is posted at four. Whoever controls this room controls the waterfront." },
   { name: "No. 4 Dry Dock", type: "pier", at: [5900, 520], blurb: "Drained, echoing, and forty feet deep. Things go in that do not come back up." },
+
+  // --- named, not famous --------------------------------------------------
+  // Addresses the written cases are about. They were bound to generated filler
+  // before, which broke twice over: the filler was renamed whenever the city's
+  // street vocabulary changed, and its type was whatever the generator felt
+  // like - so a case about a pawnbroker pointed at a cafe, and a bar where half
+  // the council drinks was a police station.
+  //
+  // Hand-authored here instead, at the coordinates they already occupied, so
+  // the travel costs every case is balanced against do not move. `landmark:
+  // false` keeps them ordinary chips on the map.
+  { name: "The Rosewood Rooms", type: "apartment", at: [5645, 3048], landmark: false, blurb: "A ground-floor parlour with the curtains permanently drawn, and three floors of tenants above it who keep their own hours." },
+  { name: "Petrakis Medical Clinic", type: "clinic", at: [66, 3792], landmark: false, blurb: "Consulting rooms, a waiting bench, and a dispensary that is locked but not well." },
+  { name: "The Blue Dollar Apartments", type: "apartment", at: [5400, 3350], landmark: false, blurb: "Four floors of respectable widows and a porter who signs for everything." },
+  { name: "Marlowe Loan & Pawn", type: "pawnshop", at: [1875, 1518], landmark: false, blurb: "Wedding rings under glass, and a broker who remembers every face and admits to none." },
+  { name: "Quist Freight & Storage", type: "warehouse", at: [5325, 795], landmark: false, blurb: "Pallets to the roof and a checker's cubby by the door with the manifests in it." },
+  { name: "Lucky Lion Wharf", type: "pier", at: [5810, 1020], landmark: false, blurb: "Creosote, gulls, and mud that holds a bootprint for a fortnight." },
+  { name: "The Paper Room", type: "bar", at: [5474, 721], landmark: false, blurb: "Low ceiling, four tables, and a barman who has heard everything and repeats a little of it." },
+  { name: "The Ruby Wire Apartments", type: "apartment", at: [3887, 162], landmark: false, blurb: "Six floors, no lift, and walls that carry an argument the length of the building." },
+  { name: "Precinct 17", type: "precinct", at: [4882, 1193], landmark: false, blurb: "Fluorescent light, carbon paper, and a bench of people who have been there since morning." },
+  { name: "Amato Loan & Pawn", type: "pawnshop", at: [3137, 1133], landmark: false, blurb: "Guitars on the wall and a ledger the owner would rather you did not ask about." },
+  { name: "Delgado Assembly Rooms", type: "hall", at: [2667, 2634], landmark: false, blurb: "Long table, card room, terrace, and a library nobody reads in." },
+  { name: "The Grand Crown Apartments", type: "apartment", at: [1449, 2754], landmark: false, blurb: "Very clean, very quiet, and the rent is paid a year at a time." },
+  { name: "Voss & Delgado, Attorneys", type: "office", at: [2534, 2967], landmark: false, blurb: "Green shades, deed boxes, and a clerk who has been told not to be helpful." },
+  { name: "Chapel of the Crimson Sparrow", type: "church", at: [1117, 2836], landmark: false, blurb: "Eighteen seats and a morning service kept by the same handful of people for years." },
+  { name: "The Crimson Dial", type: "bar", at: [1949, 3438], landmark: false, blurb: "Half the council drinks here and all of it talks. The other half sends somebody to listen." },
 ];
 
 function circlePolygon(centre: Point, radius: number, segments = 14): Point[] {
@@ -992,8 +1029,33 @@ function main() {
       console.log(`  ! ${lm.name} has no street to front onto - skipped`);
       continue;
     }
+    const famous = lm.landmark !== false;
+
+    // Clear the ground first.
+    //
+    // Hand-authored places are positioned deliberately, and the generator has
+    // already scattered filler everywhere - so a landmark almost always lands
+    // on top of one. Two locations at the same spot is not a cosmetic problem:
+    // the map hit test picks whichever it finds first, so clicking the pin for
+    // the house a case is about could select the anonymous flat underneath it
+    // and drive the team to the wrong address entirely.
+    const CLEAR = 45;
+    for (let i = locations.length - 1; i >= 0; i--) {
+      const other = locations[i];
+      if (other.isLandmark || other.id.startsWith("loc_np_")) continue;
+      if (Math.hypot(other.x - lm.at[0], other.y - lm.at[1]) < CLEAR) {
+        locations.splice(i, 1);
+      }
+    }
+
     locations.push({
-      id: `loc_lm_${lm.name.toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_|_$/g, "")}`,
+      // `lm` for a landmark, `np` for a named place. Distinct prefixes so a
+      // case binding reads as deliberate rather than as a filler id that
+      // happened to survive a regeneration.
+      id: `loc_${famous ? "lm" : "np"}_${lm.name
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, "_")
+        .replace(/^_|_$/g, "")}`,
       name: lm.name,
       type: lm.type,
       boroughId: borough.id,
@@ -1002,7 +1064,7 @@ function main() {
       x: lm.at[0],
       y: lm.at[1],
       blurb: lm.blurb,
-      isLandmark: true,
+      isLandmark: famous,
     });
     landmarksPlaced++;
   }

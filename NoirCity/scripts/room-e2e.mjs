@@ -109,15 +109,15 @@ await host.waitForTimeout(1500);
 // --- the guest acts, the host must see it -----------------------------------
 await guest.getByRole("button", { name: "GET TO WORK" }).click();
 await guest.getByRole("button", { name: "HERE", exact: true }).click();
-await guest.getByPlaceholder("176 Cannon Yard").fill("198 Threadneedle Circle");
+await guest.getByPlaceholder("176 Cannon Yard").fill("74 Threadneedle Circle");
 await guest.waitForTimeout(600);
-await guest.locator("button", { hasText: "198 Threadneedle Circle" }).first().click();
+await guest.locator("button", { hasText: "74 Threadneedle Circle" }).first().click();
 await guest.waitForTimeout(2500);
 
 await host.getByRole("button", { name: "JOURNAL" }).click();
 await host.waitForTimeout(1200);
 const hostJournal = await host.locator("article").allInnerTexts();
-const sawTravel = hostJournal.some((t) => t.includes("Electric Wing Apartments"));
+const sawTravel = hostJournal.some((t) => t.includes("Rosewood Rooms"));
 log(`host's journal shows the guest's move: ${sawTravel}`);
 assert(sawTravel, "the guest's travel never reached the host");
 

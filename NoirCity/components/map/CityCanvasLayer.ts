@@ -710,7 +710,7 @@ export class CityCanvasLayer extends L.Layer {
    * `claimed` is the running list of label boxes already on the plate. This
    * adds its own to it so the borough names drawn afterwards do not print
    * through it - which is exactly what "West Borough" was doing across
-   * "Blackthorn Security Company", the one label on the map that names where
+   * "E. Crowe, Enquiries", the one label on the map that names where
    * you are actually standing.
    */
   private drawMarker(
