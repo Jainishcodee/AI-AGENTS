@@ -220,7 +220,11 @@ def create_app() -> Flask:
         """Undelivered alerts. Jarvis polls this and vibrates once per alert."""
         from ..notify import hub
 
-        items = hub().pending(int(request.args.get("limit", 20)))
+        h = hub()
+        # Record the poll so alerts are not also pushed via ntfy while Jarvis
+        # is here to deliver them -- one event, one buzz.
+        h.note_poll()
+        items = h.pending(int(request.args.get("limit", 20)))
         return jsonify(_clean([{**asdict_notif(n)} for n in items]))
 
     @app.post("/api/notify/ack")

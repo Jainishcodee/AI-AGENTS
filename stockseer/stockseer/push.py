@@ -49,16 +49,35 @@ TAGS = {
 }
 
 
+def _env(name: str) -> str:
+    """Read a setting from the environment, falling back to .env.
+
+    GitHub Actions injects real environment variables; a local run keeps them in
+    .env. Reading only the former would mean the topic works in the cloud and
+    silently does nothing on your own machine.
+    """
+    val = os.environ.get(name, "").strip()
+    if val:
+        return val
+    try:
+        from .live.angel import _load_dotenv
+
+        _load_dotenv()
+    except Exception:
+        return ""
+    return os.environ.get(name, "").strip()
+
+
 def configured() -> bool:
-    return bool(os.environ.get("NTFY_TOPIC", "").strip())
+    return bool(_env("NTFY_TOPIC"))
 
 
 def topic() -> str:
-    return os.environ.get("NTFY_TOPIC", "").strip()
+    return _env("NTFY_TOPIC")
 
 
 def server() -> str:
-    return os.environ.get("NTFY_SERVER", DEFAULT_SERVER).rstrip("/")
+    return (_env("NTFY_SERVER") or DEFAULT_SERVER).rstrip("/")
 
 
 def push(title: str, body: str, urgency: str = "info", kind: str = "",

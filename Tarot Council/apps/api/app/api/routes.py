@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import AsyncIterator
+from datetime import datetime, timezone
 
 from fastapi import APIRouter, HTTPException, Query, Request
 from fastapi.responses import StreamingResponse
@@ -14,7 +15,7 @@ from ..council.live import Injection
 from ..engine.planner import call_estimate
 from ..learning import divergence, priors
 from ..learning.scoring import CHANCE_BRIER
-from ..programs import loader
+from ..programs import catalog, loader
 from ..schemas.cards import (
     MIN_N_TO_DISPLAY,
     CardStatus,
@@ -26,6 +27,8 @@ from ..schemas.cards import (
 )
 from ..schemas.common import Verdict
 from ..schemas.divergence import StructuralReport
+from ..schemas.module import ModuleCatalogEntry, ModuleStatus, UserModule
+from ..schemas.program import AgentProgram
 from ..schemas.council import Deliberation, DeliberationRequest
 from ..schemas.events import sse
 
@@ -148,7 +151,7 @@ async def critique_matrix() -> dict[str, list[str]]:
 @router.post("/council/deliberate")
 async def deliberate(request: Request, body: DeliberationRequest) -> StreamingResponse:
     council = _council(request)
-    _check_preset(body.preset)
+    await _check_preset(council, body.preset)
 
     async def stream() -> AsyncIterator[str]:
         async for event in council.deliberate(body):
@@ -163,9 +166,10 @@ async def deliberate(request: Request, body: DeliberationRequest) -> StreamingRe
 
 @router.post("/council/deliberate/sync")
 async def deliberate_sync(request: Request, body: DeliberationRequest) -> Deliberation:
-    _check_preset(body.preset)
+    council = _council(request)
+    await _check_preset(council, body.preset)
     try:
-        return await _council(request).run(body)
+        return await council.run(body)
     except CognitiveOSError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
 
@@ -312,6 +316,19 @@ async def resume(request: Request, deliberation_id: str) -> StreamingResponse:
     """
     council = _council(request)
 
+    # Checked *before* the StreamingResponse is returned. `council.resume` is an async
+    # generator, so its body — and its "no such deliberation" — does not run until the
+    # first iteration, which happens after the status line has already gone out as 200.
+    # Resuming a nonexistent id would look like success and then hand back a broken stream.
+    checkpoint = await council.store.get_checkpoint(deliberation_id)
+    if checkpoint is None:
+        raise HTTPException(status_code=404, detail="no such resumable deliberation")
+    if not checkpoint.resumable:
+        raise HTTPException(
+            status_code=409,
+            detail=f"deliberation stopped in '{checkpoint.phase}', which is not resumable",
+        )
+
     async def stream() -> AsyncIterator[str]:
         async for event in council.resume(deliberation_id):
             yield sse(event)
@@ -327,6 +344,71 @@ async def resume(request: Request, deliberation_id: str) -> StreamingResponse:
 async def discard_checkpoint(request: Request, deliberation_id: str) -> dict[str, str]:
     await _council(request).discard(deliberation_id)
     return {"discarded": deliberation_id}
+
+
+@router.get("/catalog")
+async def module_catalog(request: Request) -> list[ModuleCatalogEntry]:
+    """Every module, built-in or authored, including quarantined ones with their errors.
+
+    One list rather than two, so no client has to branch on origin to show what exists —
+    and a broken module is visible rather than mysteriously absent (ADR-030).
+    """
+    return await _council(request).modules()
+
+
+@router.get("/catalog/{module_id}")
+async def get_user_module(request: Request, module_id: str) -> UserModule:
+    found = await _council(request).store.get_module(module_id)
+    if found is None:
+        raise HTTPException(status_code=404, detail="no such authored module")
+    return found
+
+
+@router.put("/catalog/{module_id}")
+async def put_user_module(
+    request: Request, module_id: str, program: AgentProgram
+) -> UserModule:
+    """Create or replace an authored module.
+
+    Returns **200 with the verdict attached** rather than 422 on a rule violation, because
+    saving a broken draft is the normal state of authoring and refusing the write would
+    leave the author nothing to iterate on. Read `status` and `errors`: a quarantined module
+    is stored and listed but cannot run.
+    """
+    if program.id != module_id:
+        raise HTTPException(
+            status_code=400,
+            detail=f"program id '{program.id}' does not match the path '{module_id}'",
+        )
+    council = _council(request)
+    existing = await council.store.get_module(module_id)
+    # Through `catalog.author` so the shared constitution is merged exactly as it is for the
+    # CLI and for built-ins. Building the `UserModule` here by hand was the bug: rule 10 then
+    # fired on every request and this route could never store a valid module.
+    return await council.save_module(catalog.author(module_id, program, existing=existing))
+
+
+class StatusChange(BaseModel):
+    status: ModuleStatus
+
+
+@router.post("/catalog/{module_id}/status")
+async def set_module_status(
+    request: Request, module_id: str, body: StatusChange
+) -> UserModule:
+    """Put a module into play, or withdraw it. Re-validated on the way in."""
+    try:
+        return await _council(request).set_module_status(module_id, body.status)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail="no such authored module") from exc
+    except CognitiveOSError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+
+
+@router.delete("/catalog/{module_id}")
+async def delete_user_module(request: Request, module_id: str) -> dict[str, str]:
+    await _council(request).delete_module(module_id)
+    return {"deleted": module_id}
 
 
 @router.get("/divergence")
@@ -509,10 +591,18 @@ async def all_priors(request: Request) -> dict[str, list[Prior]]:
     }
 
 
-def _check_preset(name: str | None) -> None:
+async def _check_preset(council: Council, name: str | None) -> None:
+    """Reject a bad preset before the stream opens, authored modules included.
+
+    Resolved through the catalog rather than the loader: `loader.preset` knows only the
+    built-in six, so it rejected every `with:<authored module>` name with a 400 and made
+    authored modules unreachable over HTTP entirely — the orchestrator would have run them
+    perfectly well. Same class of mistake as validating inside a `StreamingResponse`: the
+    check has to know as much as the thing it is guarding.
+    """
     if name is None:
         return
     try:
-        loader.preset(name)
+        catalog.preset(name, await council.store.list_modules())
     except ProgramInvalid as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc

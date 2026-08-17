@@ -713,6 +713,52 @@ suite by name, because inheriting a RAM-only write is worse than not having one.
 The general lesson is worth more than either fix: an in-memory double cannot test a claim
 about surviving the process, and a passing suite made it look like it had.
 
+**A second pass over the same code found six more, five of them silent.** Worth listing,
+because they share one shape — the checkpoint's *bookkeeping* disagreeing with reality
+while every existing test passed:
+
+1. **Double-banked module runs.** Banking successes before re-raising an outage (the fix
+   above) left the original banking loop in place, so `checkpoint.completed` held every
+   module twice and `checkpoint.usage` counted every call twice. Invisible on a fresh run,
+   because `deliberation.runs` is built separately — and then every module appeared twice in
+   the transcript the moment anyone resumed. The reported cost, which is what a person
+   reads before deciding whether they can afford to continue, was roughly doubled.
+2. **A provider outage during *synthesis* was still swallowed.** The reasoning phase learned
+   the `ProviderError`/`ArtifactInvalid` distinction; synthesis did not. By then all six
+   modules have run, so a 429 on the final call returned "no synthesis", completed the
+   deliberation, wrote no card, and **deleted the checkpoint** — discarding ~26 calls at the
+   single most expensive moment, with no resume offered. A `ValidationError` there still
+   degrades, because an unusable answer genuinely is a synthesis failure.
+3. **Critique history duplicated, then lost.** The copy of banked critiques into the
+   deliberation sat *inside* the round loop: `deep` replayed round one on top of round two,
+   and resuming with all rounds already done skipped the copy entirely, so the transcript
+   claimed nobody had critiqued anybody. One statement moved above the loop fixes both.
+4. **Injected facts did not survive a resume.** `Checkpoint.injected` was declared and never
+   written to or read from. Facts were folded into the executor's *local* context, so they
+   reached only the modules running at the time; after an interruption the person had
+   answered the council's unknown and the resumed run behaved as though they had not.
+5. **Preset and depth were re-resolved from settings on resume.** A request naming no preset
+   falls back to the current default, so changing `COUNCIL_DEFAULT_PRESET` between the crash
+   and the resume would continue a deliberation with a different set of modules than the
+   banked artifacts came from — the same hazard the intake skip exists to avoid.
+6. **`POST /council/resumable/{id}/resume` returned 200 for an unknown id.** The lookup lived
+   inside the `StreamingResponse` generator, which does not execute until after the status
+   line has gone out. The sibling `deliberate` route already validated first; this one
+   deviated. It was the *only* route with no HTTP-level test, which is exactly why.
+
+Also fixed while in there: the checkpoint write in the failure handler bypassed
+`_checkpoint`, so a failing store could replace a quota error with a disk error and swallow
+the re-raise; `_checkpoint` now returns whether it landed, so nothing announces "saved,
+resume later" when the write failed.
+
+**What generalises.** Five of the six were invisible because the checkpoint is written on
+the failure path and read on the resume path, and almost every test exercised one or the
+other but never both against real storage. `tests/test_pipeline_bookkeeping.py` asserts the
+accounting directly — each module once, cost not inflated, `deep` costing exactly two rounds
+rather than three — and targets induced failures **by role** rather than by call index,
+because counting calls to land on "the synthesis one" silently lands in the revision phase
+instead, where failures are caught and logged and the test passes for the wrong reason.
+
 **Given up.** Resumption is per-stage, not per-token: a module interrupted halfway through
 generating one artifact re-runs that stage from the start. Finer granularity would mean
 persisting partial model output, which is not a validated artifact and therefore not
@@ -791,4 +837,161 @@ capability that would matter here — web push needs a service worker, a VAPID k
 subscription store, and the nav badge plus `pending_checkins` over MCP covers the same need
 until there is more than one user. No offline caching: every screen is a live read of a
 corpus that only exists on the machine running the API.
+
+---
+
+## ADR-030 — A user-authored module is a stored `AgentProgram`, loaded leniently and quarantined on error
+
+**Decision.** A user module is *the same* `AgentProgram` the engine already executes — no
+second schema, no parallel interpreter. It differs in exactly two ways: it is stored in
+SQLite rather than read from YAML in the package directory, and it is loaded **leniently**.
+A user module that fails validation is quarantined — recorded with its errors, excluded from
+every preset, and reported — never fatal.
+
+**Why not the existing load path.** The loader's loudness is deliberate and load-bearing: a
+malformed *built-in* program refuses to let the server start, because a broken built-in is a
+developer error and failing halfway through someone's deliberation is worse. That reasoning
+inverts for user content. The person who authored the broken module is the person running
+the process, a half-finished draft is the normal state of authoring, and a draft that
+prevents the server booting takes away the only tool they have for fixing it. So built-ins
+keep `ProgramInvalid`; user modules get a status and an error list.
+
+The two rules therefore split:
+- **Built-in, malformed → refuse to boot.** Unchanged.
+- **User module, malformed → quarantine, keep serving.** The catalog reports it.
+
+**The real obstacle was loader rule 4**, not storage: every `stage.produces` must name a
+registered artifact type *that has a Python invariant validator*. That rule is the whole
+reason these are six algorithms rather than six personas (ADR-012) — "instructions are
+advisory, validators are not". A user cannot write a Pydantic model or a validator function,
+so taken literally rule 4 makes user modules impossible. Three ways out:
+
+1. **Reuse existing artifact kinds only.** Safe and nearly free, but a new module could only
+   *recombine* — a new ordering of other people's artifacts. It could not force a new kind of
+   thinking, which is most of what makes a module a module.
+2. **Let users supply arbitrary JSON Schema.** Maximum freedom, nothing machine-checked
+   beyond shape. This is precisely the persona-with-a-prompt that the project exists to
+   reject, and it would quietly repeal ADR-012 for exactly the modules with the least
+   scrutiny behind them.
+3. **A generic table artifact with a declarative invariant vocabulary.** Chosen.
+
+**Why the vocabulary is credible: it was extracted, not invented.** The ~40 hand-written
+validators in `engine/invariants.py` are almost all instances of about eight recurring
+shapes. The declarative rules are those shapes, and each one already has a built-in using it:
+
+| declarative rule | already used by |
+|---|---|
+| `min_rows` | `OptionSet` (≥7), `FailureModeTable` (≥3) |
+| `required_columns` (non-empty per row) | the psychologist's nine dimensions |
+| `distinct` | no two options may share a label |
+| `required_tags` | `REQUIRED_OPTION_TAGS` on the option set |
+| `covers` a prior artifact's column | `PersonProfileSet` must cover `PersonList`; `AsymmetryTable` must cover `OptionSet` |
+| `range` on a numeric column | the leaf-probability floor |
+| `at_least_one_tagged` | ADR-014's forced `reckless` option |
+| `sums_to` within a group | probability-tree siblings |
+
+If the vocabulary can express what the built-ins already assert, it is expressive enough to
+hold a user module to a real standard rather than a stylistic one.
+
+**Shipped, and the expressiveness claim is now a test.** One artifact kind, `Table`, plus a
+`TableSpec` on the stage that produces it. `tests/test_table_vocabulary.py` restates
+`OptionSet`'s real invariant — the most demanding hand-written one, ≥7 options with five
+required tags and no two labels alike — declaratively, and shows the declarative version
+rejects each violation the Python one does. Every rule is also tested in *both* directions,
+because a declarative rule that never fails is decoration.
+
+**Three rules turned out to be about the loader, not the runtime.** A spec can be wrong in
+ways that make it look like a guarantee while enforcing nothing, so the loader refuses:
+a `required`/`distinct`/`ranges`/`sums_to` column that is not in `columns` (the rule could
+never fire); a `covers` pointing forward; a spec on a stage that produces something else
+(it would be silently ignored); and a spec with columns but *no* constraint — a table with no
+rules is the persona-with-a-prompt case wearing a table for a hat.
+
+The subtlest one: **`covers` may not point into the same group.** Grouped stages become one
+call (ADR-013), so the covered artifact does not exist when the covering one is produced and
+the check silently never runs. It costs an extra call per coverage rule, which on a free tier
+is a real price — paid because a cross-stage guarantee that cannot fire is worse than none.
+This caught a bug in the shipped example module, which had both tables in one group.
+
+**Given up, and stated rather than hidden.** The recursive invariants do *not* generalise:
+tree depth and sibling sums over a nested structure stay built-in-only, so a user cannot
+author a probability tree. Declarative rules also cannot express cross-field semantics ("the
+regret at ten years must not contradict the one-year row"), which is where the built-ins'
+hand-written validators still earn their keep. A user module is therefore held to a weaker
+standard than the six — knowable, checkable, but weaker — and the divergence harness
+(ADR-026) is what stops that gap turning into a module that merely agrees eloquently.
+
+**Two bugs the mock provider found, both real.** `synth.py` unpacked `get_args(annotation)`
+into a single name, so the first artifact field annotated `tuple[X, ...]` rather than
+`list[X]` raised `ValueError` and surfaced as an unexplained module abstention. And a batched
+prompt contains every stage's declared shape, so a fixup reading the whole prompt filled the
+second authored table with the first one's columns — the mock now scopes the prompt to one
+stage's section. Both were mock-side, but the second is the reason to keep the mock honest:
+it only succeeds when the declared shape was actually rendered into the prompt, so a spec the
+template forgets to describe fails the mock run instead of silently producing a table a real
+model could never have known how to fill.
+
+**Five bugs in the authoring layer itself**, found by scanning it rather than by using it:
+
+1. **Peer modules could not reference each other.** `validate` knew only the built-ins plus
+   the module in front of it, so two authored modules naming each other as critics were each
+   rejected for naming an unknown module — and neither could be saved first. Authoring a
+   *set* of modules is the normal case. Peers now count as known even when quarantined, and
+   the cost is named: if every critic a module names is non-runnable, that module effectively
+   has no critics at run time, which weakens rule 7. Blocking the author is the worse trade.
+2. **`PUT /catalog/{id}` could never save a valid module.** It built its `UserModule` by hand
+   instead of merging the shared constitution, so rule 10 fired on every request — four times
+   over, once per missing line. There are now one authoring entry point (`catalog.author`) and
+   one rule-10 message.
+3. **`_check_preset` rejected `with:<authored module>`** with a 400, because it resolved
+   through the loader rather than the catalog. Authored modules were unreachable over HTTP
+   entirely, while the orchestrator would have run them fine. Same shape as validating inside
+   a `StreamingResponse`: a guard has to know as much as the thing it guards.
+4. **Retired modules broke replay.** ADR-030 keeps them precisely so old traces stay
+   explicable, but `programs()` excluded them, so replaying a card decided by a seven-module
+   council failed on a module sitting in the store. Replay and stage re-run now reconstruct
+   with `include_retired=True`; new decisions still exclude them.
+5. **`--no-persist` hid authored modules.** It swaps in a throwaway store, and reading the
+   catalog is a *read* — so the most common authoring move, trying a module without dropping
+   a mock card into the corpus, reported `unknown module`.
+
+**A second pass over the vocabulary found four more, and they rhyme with the first five.**
+Every one is a rule that *reads* as a guarantee while enforcing nothing, or an error message
+that sends the reader to the wrong place:
+
+6. **`covers` pointing at a non-`Table` stage silently approved everything.** Coverage reads
+   the covered artifact's `rows`, and only a `Table` has those — every built-in keeps its
+   entries under a different key (`people`, `actors`, `options`). So a spec covering a
+   `PersonList` stage came back with an empty expected set and passed any table at all. This
+   was the quietest failure in the vocabulary and the hardest to notice, because coverage
+   reads as the *strongest* rule in a spec. The loader now refuses it.
+7. **`sums_to` blamed the total for a non-numeric cell.** `_number(...) or 0.0` swallowed the
+   parse failure, so a model writing "about half" produced `'share' sums to 0.500` — sending
+   the repair pass to fix arithmetic instead of the cell that is not a number.
+8. **The mock could not satisfy a legal spec.** Declaring `distinct` on the same column you
+   `covers` is the natural way to write "one row per precedent, no double-counting"; the
+   fixup's distinct filler ran *after* the covered value and overwrote it, so coverage failed
+   and the blame landed on the author rather than on the mock.
+9. **A module id could disagree with its program id.** The catalog keys on `UserModule.id`
+   while the engine stamps `ModuleRun.module` from `program.id`. Let those diverge — nothing
+   checked — and a preset selects `economist` while the transcript, the calibration scores
+   and the extracted memories all say `historian`, with no failure anywhere.
+
+Two smaller ones with the same flavour: `set_module_status` wrote any string it was handed,
+because `model_copy(update=...)` does **not** re-validate — a module could sit in a state no
+code recognised, with every `status == "active"` check quietly disagreeing with it. And the
+store `--no-persist` opens purely to read authored modules from was never closed.
+
+**The pattern worth naming across all eleven.** Almost none of them were logic errors. They
+were *guarantees that could not fire* — a rule whose column does not exist, a coverage check
+whose prior is the wrong shape, a validator behind a status nothing sets, a route whose guard
+knows less than the thing it guards. This is the failure mode a declarative system invites:
+the spec is data, so a spec that means nothing still looks like a spec. Hence the loader rules
+that reject un-fireable specs, and hence every vocabulary rule being tested in both
+directions. A rule that has never been seen to fail is not known to work.
+
+**Sharing is deliberately not part of this.** Importing a stranger's module means executing
+their `instruction` text inside a system prompt, which is prompt injection with extra steps.
+Authoring your own modules locally has no such exposure, so that ships first; import gets a
+review step and its own decision when there is anything to import.
 

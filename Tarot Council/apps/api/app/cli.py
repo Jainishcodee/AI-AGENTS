@@ -19,10 +19,13 @@ import asyncio
 import json
 import sys
 from functools import lru_cache
+from pathlib import Path
+
+from pydantic import ValidationError
 
 from .core.config import get_settings
 from .core.errors import CognitiveOSError
-from .core.logging import setup_logging
+from .core.logging import get_logger, setup_logging
 from .council import Council
 from .learning import divergence, priors
 from .learning.scoring import CHANCE_BRIER
@@ -87,6 +90,7 @@ COMMANDS = (
     "projects",
     "replay",
     "divergence",
+    "modules",
     "resume",
     "brief",
 )
@@ -203,6 +207,25 @@ def build_parser() -> argparse.ArgumentParser:
     )
     projects.add_argument("--brief", default="", help="What the situation is.")
     projects.add_argument("--close", default=None, metavar="ID", help="Close a project.")
+
+    catalog_cmd = sub.add_parser(
+        "modules", help="List modules, or author one from a YAML file."
+    )
+    catalog_cmd.add_argument(
+        "--load",
+        default=None,
+        metavar="FILE",
+        help="Validate and save a module from a YAML program file.",
+    )
+    catalog_cmd.add_argument(
+        "--activate", default=None, metavar="ID", help="Put an authored module into play."
+    )
+    catalog_cmd.add_argument(
+        "--retire", default=None, metavar="ID", help="Withdraw an authored module."
+    )
+    catalog_cmd.add_argument(
+        "--delete", default=None, metavar="ID", help="Delete an authored module."
+    )
 
     replay = sub.add_parser(
         "replay",
@@ -344,6 +367,8 @@ async def _run(args: argparse.Namespace) -> int:
         store=InMemoryStore() if args.no_persist else None,
         force_provider=args.provider,
     )
+    if args.no_persist:
+        await _seed_modules(council, settings)
     try:
         handler = {
             "ask": _cmd_ask,
@@ -357,6 +382,7 @@ async def _run(args: argparse.Namespace) -> int:
             "refine": _cmd_refine,
             "migrate": _cmd_migrate,
             "projects": _cmd_projects,
+            "modules": _cmd_modules,
             "replay": _cmd_replay,
             "divergence": _cmd_divergence,
             "resume": _cmd_resume,
@@ -394,6 +420,119 @@ async def _nudge_due(council: Council, args: argparse.Namespace) -> None:
         ),
         file=sys.stderr,
     )
+
+
+async def _cmd_modules(council: Council, args: argparse.Namespace) -> int:
+    """List the catalog, or author a module from a YAML program file.
+
+    YAML rather than a wizard because that is the format the built-in six are written in, so
+    the fastest way to author a module is to copy one and edit it — and anything the wizard
+    could produce has to be expressible here anyway.
+    """
+    import yaml
+
+    from .programs import catalog
+    from .schemas.program import AgentProgram
+
+    if args.delete:
+        await council.delete_module(args.delete)
+        print(_wrap(f"deleted authored module '{args.delete}'"))
+        return 0
+
+    for flag, status in (("activate", "active"), ("retire", "retired")):
+        target = getattr(args, flag)
+        if not target:
+            continue
+        try:
+            module = await council.set_module_status(target, status)
+        except KeyError:
+            print(f"no such authored module: {target}", file=sys.stderr)
+            return 1
+        except CognitiveOSError as exc:
+            print(f"{exc}", file=sys.stderr)
+            return 1
+        print(_wrap(f"'{module.id}' is now {module.status}"))
+        return 0
+
+    if args.load:
+        path = Path(args.load)
+        if not path.is_file():
+            print(f"no such file: {path}", file=sys.stderr)
+            return 1
+        raw = yaml.safe_load(path.read_text(encoding="utf-8"))
+        if not isinstance(raw, dict):
+            print(f"{path.name}: expected a mapping at the top level", file=sys.stderr)
+            return 1
+
+        try:
+            program = AgentProgram.model_validate(raw)
+        except ValidationError as exc:
+            print(f"{path.name} is not a valid program:\n{exc}", file=sys.stderr)
+            return 1
+
+        existing = await council.store.get_module(program.id)
+        # `catalog.author` merges the shared constitution (rule 10 is not something a spec
+        # opts out of by being authored) and preserves the record fields on an edit.
+        saved = await council.save_module(
+            catalog.author(program.id, program, existing=existing)
+        )
+        if saved.errors:
+            print(_c(f"{saved.id}: quarantined — {len(saved.errors)} rule violation(s)", BOLD))
+            for problem in saved.errors:
+                print(_wrap(f"{GLYPH['arrow']} {problem}", indent="  "))
+            print()
+            print(
+                _c(
+                    _wrap(
+                        "Saved anyway, so you can fix it and reload. It will not run "
+                        "until it validates and you activate it."
+                    ),
+                    DIM,
+                )
+            )
+            return 1
+        print(_c(f"{saved.id}: saved, {len(saved.program.stages)} stages, status {saved.status}", BOLD))
+        print(
+            _c(
+                _wrap(
+                    f"Activate it with: app.cli modules --activate {saved.id}  —  then use "
+                    f"it with: app.cli --preset with:{saved.id} \"...\". Activating does not "
+                    "change what `full` means; named presets are curated."
+                ),
+                DIM,
+            )
+        )
+        return 0
+
+    entries = await council.modules()
+    if args.json:
+        print(json.dumps([e.model_dump(mode="json") for e in entries], indent=2))
+        return 0
+
+    print()
+    print(_c("modules", BOLD))
+    for entry in entries:
+        mark = " " if entry.runnable else GLYPH["arrow"]
+        origin = "built-in" if entry.origin == "builtin" else "authored"
+        print(
+            f"{mark} {_c(entry.id.ljust(14), BOLD)} {origin:9} {entry.status:12} "
+            f"{entry.stages} stages"
+        )
+        if entry.summary:
+            print(_c(_wrap(entry.summary, indent="    "), DIM))
+        for problem in entry.errors:
+            print(_c(_wrap(problem, indent="    "), DIM))
+    print()
+    print(
+        _c(
+            _wrap(
+                "Author one with: app.cli modules --load my-module.yaml  "
+                "(copy app/programs/analyst.yaml to start)"
+            ),
+            DIM,
+        )
+    )
+    return 0
 
 
 async def _cmd_projects(council: Council, args: argparse.Namespace) -> int:
@@ -615,7 +754,7 @@ async def _cmd_resume(council: Council, args: argparse.Namespace) -> int:
     if args.json:
         print(result.model_dump_json(indent=2))
     else:
-        _report(result)
+        _report(result, await _catalog_programs(council))
     return 0
 
 
@@ -832,7 +971,7 @@ async def _cmd_rerun(council: Council, args: argparse.Namespace) -> int:
             BOLD,
         )
     )
-    _report(derived)
+    _report(derived, await _catalog_programs(council))
     return 0
 
 
@@ -848,7 +987,7 @@ async def _cmd_refine(council: Council, args: argparse.Namespace) -> int:
         print(refined.model_dump_json(indent=2))
         return 0
     print(_c(f"\nrefined → new deliberation {refined.id}", BOLD))
-    _report(refined)
+    _report(refined, await _catalog_programs(council))
     return 0
 
 
@@ -882,7 +1021,7 @@ async def _cmd_ask(council: Council, args: argparse.Namespace) -> int:
     if args.json:
         print(result.model_dump_json(indent=2))
     else:
-        _report(result)
+        _report(result, await _catalog_programs(council))
         if card_id:
             print(_c(f"card {card_id}", BOLD))
             print(
@@ -1117,8 +1256,53 @@ def _wrap(text: str, indent: str = "  ", width: int = 76) -> str:
     )
 
 
-def _report(d: Deliberation) -> None:
-    programs = loader.programs()
+async def _seed_modules(council: Council, settings) -> None:
+    """Copy authored modules into a `--no-persist` run.
+
+    `--no-persist` means "write nothing to disk", and reading the module catalog is a read.
+    Conflating the two made the most common authoring move impossible: trying a new module
+    without dropping a mock Decision Card into the corpus reported
+    `unknown module 'historian'`, because the throwaway store had never heard of it.
+
+    Failure here is deliberately silent-but-logged: if there is no real store yet, there are
+    no authored modules to miss.
+    """
+    from .memory.store import build_store
+
+    real = None
+    try:
+        real = build_store(settings.store, settings.store_dir)
+        for module in await real.list_modules():
+            await council.store.save_module(module)
+    except Exception as exc:  # noqa: BLE001 - a throwaway run must not die on this
+        log.debug("could not seed authored modules into the no-persist store: %s", exc)
+    finally:
+        # This store is opened only to be read from; leaving it open would keep a SQLite
+        # connection alive for the rest of the process for no reason.
+        close = getattr(real, "close", None)
+        if close is not None:
+            try:
+                await close()
+            except Exception as exc:  # noqa: BLE001
+                log.debug("could not close the seed store: %s", exc)
+
+
+async def _catalog_programs(council: Council) -> dict:
+    """Built-ins plus authored modules, for anything that renders a module's skin."""
+    from .programs import catalog
+
+    return catalog.programs(await council.store.list_modules())
+
+
+def _report(d: Deliberation, programs: dict | None = None) -> None:
+    """Print a finished deliberation.
+
+    `programs` is passed in rather than looked up because an authored module is not in
+    `loader.programs()` — without it, a user module printed its id where its skin name
+    should be ("historian (historian)"), which is the module/skin split (ADR-016) leaking
+    into the one place the user actually reads.
+    """
+    programs = programs if programs is not None else loader.programs()
     print()
     print(RULE)
     print(_c(d.question, BOLD))

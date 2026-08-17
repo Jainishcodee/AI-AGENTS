@@ -17,13 +17,12 @@ from pydantic import ValidationError
 
 from ..core.config import Depth, Settings, get_settings
 from ..core.errors import (
-    ArtifactInvalid,
     CognitiveOSError,
     ProviderError,
     ProviderUnavailable,
 )
 from ..core.logging import get_logger
-from ..engine.executor import Engine
+from ..engine.executor import Engine, with_late_facts
 from ..engine.mockfix import build_fixups
 from ..llm.base import LLMRequest
 from ..llm.jsonio import extract_json
@@ -32,7 +31,7 @@ from ..learning.extraction import extract as extract_memories
 from ..learning.grader import grade as grade_card
 from ..llm.registry import Router
 from ..memory.store import MemoryStore, build_store
-from ..programs import loader
+from ..programs import catalog, loader
 from ..prompts import renderer
 from ..schemas.cards import (
     DecisionCard,
@@ -44,6 +43,12 @@ from ..schemas.cards import (
     Resolution,
 )
 from ..schemas.checkpoint import Checkpoint
+from ..schemas.module import (
+    MODULE_STATUSES,
+    ModuleCatalogEntry,
+    ModuleStatus,
+    UserModule,
+)
 from ..schemas.common import Verdict
 from ..schemas.council import (
     Critique,
@@ -157,6 +162,65 @@ class Council:
         await self._store.save_project(project)
         return project
 
+    # -------------------------------------------------------- module authoring --
+
+    async def modules(self) -> list[ModuleCatalogEntry]:
+        """Everything runnable or authored, built-in and user, including what is broken."""
+        return catalog.entries(await self._store.list_modules())
+
+    async def save_module(self, module: UserModule) -> UserModule:
+        """Validate, then store whatever comes back — valid or quarantined.
+
+        Storing an invalid module is the point rather than an oversight (ADR-030): a draft
+        that will not save is a draft that cannot be worked on, and the author is the only
+        person who can fix it. The verdict travels with the module so nothing downstream has
+        to re-derive it.
+        """
+        peers = [m for m in await self._store.list_modules() if m.id != module.id]
+        checked = catalog.validate(module, peers=peers).model_copy(
+            update={"updated_at": datetime.now(timezone.utc)}
+        )
+        await self._store.save_module(checked)
+        if checked.errors:
+            log.info("module '%s' quarantined: %d violation(s)", checked.id, len(checked.errors))
+        return checked
+
+    async def set_module_status(self, module_id: ModuleId, status: ModuleStatus) -> UserModule:
+        """Put a module into play, or take it out.
+
+        Activation is re-validated rather than trusted: the rules can change under a stored
+        module when the built-ins do — a module whose only critic was retired is no longer
+        valid, and it must not slip into a council on a stale verdict.
+        """
+        # `model_copy(update=...)` below does *not* re-validate, so an unknown status would be
+        # written to the store verbatim and every `status == "active"` check would quietly
+        # disagree with it. The HTTP layer constrains this via its request model; this method
+        # is also called directly, so it checks for itself.
+        if status not in MODULE_STATUSES:
+            raise CognitiveOSError(
+                f"unknown module status '{status}'. Known: {', '.join(MODULE_STATUSES)}"
+            )
+
+        stored = await self._store.get_module(module_id)
+        if stored is None:
+            raise KeyError(module_id)
+
+        peers = [m for m in await self._store.list_modules() if m.id != module_id]
+        checked = catalog.validate(stored, peers=peers)
+        if status == "active" and checked.errors:
+            raise CognitiveOSError(
+                f"module '{module_id}' cannot be activated; it breaks "
+                f"{len(checked.errors)} rule(s): {checked.errors[0]}"
+            )
+        updated = checked.model_copy(
+            update={"status": status, "updated_at": datetime.now(timezone.utc)}
+        )
+        await self._store.save_module(updated)
+        return updated
+
+    async def delete_module(self, module_id: ModuleId) -> None:
+        await self._store.delete_module(module_id)
+
     # --------------------------------------------------------------- replay --
 
     async def replay(self, card_id: str) -> ReplayResult:
@@ -187,8 +251,12 @@ class Council:
         if original is None:
             raise CognitiveOSError(f"card {card_id} has no stored deliberation to replay")
 
-        programs = loader.programs()
-        preset = loader.preset(card.preset)
+        # Through the catalog: a card written with an authored module in the council must
+        # stay replayable, and if that module has since been deleted the failure should say
+        # so rather than silently replaying a different council than the one being scored.
+        user_modules = await self._store.list_modules()
+        programs = catalog.programs(user_modules, include_retired=True)
+        preset = catalog.preset(card.preset, user_modules, include_retired=True)
         blocked = frozenset({card.id})
 
         withheld_memories = 0
@@ -299,14 +367,27 @@ class Council:
 
     # ----------------------------------------------------------- resumption --
 
-    async def _checkpoint(self, checkpoint: Checkpoint) -> None:
+    async def _checkpoint(self, checkpoint: Checkpoint, live: LiveRun | None = None) -> bool:
+        """Persist progress. Returns whether it actually landed.
+
+        Never let bookkeeping kill a live deliberation: a lost checkpoint costs a replay,
+        a crashed deliberation costs the whole run. The boolean matters because callers
+        announce the checkpoint to the user — claiming "saved, resume later" when the write
+        failed is worse than saying nothing.
+
+        Injected facts are swept off `live` here rather than at the point they are consumed:
+        they are drained deep inside the executor, and one sweep on the way to storage
+        cannot be bypassed by a later edit adding another checkpoint call.
+        """
+        if live is not None and live.facts:
+            checkpoint.injected = list(dict.fromkeys([*checkpoint.injected, *live.facts]))
         checkpoint.updated_at = datetime.now(timezone.utc)
         try:
             await self._store.save_checkpoint(checkpoint)
+            return True
         except Exception as exc:  # noqa: BLE001
-            # Never let bookkeeping kill a live deliberation. A lost checkpoint costs a
-            # replay; a crashed deliberation costs the whole run.
             log.warning("could not write checkpoint %s: %s", checkpoint.deliberation_id, exc)
+            return False
 
     async def resumable(self, limit: int = 20) -> list[Checkpoint]:
         return [c for c in await self._store.list_checkpoints(limit) if c.resumable]
@@ -362,7 +443,7 @@ class Council:
         if seed is None:
             raise KeyError(f"deliberation {deliberation_id} has no run for {module}")
 
-        programs = loader.programs()
+        programs = catalog.programs(await self._store.list_modules(), include_retired=True)
         if module not in programs:
             raise ProgramInvalid(f"unknown module '{module}'")
 
@@ -525,9 +606,25 @@ class Council:
         emit: Emit,
         resume: Checkpoint | None = None,
     ) -> None:
-        preset = loader.preset(request.preset or self._settings.default_preset)
-        depth: Depth = request.depth or self._settings.default_depth
-        programs = loader.programs()
+        # On resume, the preset and depth come from the checkpoint, never from the request
+        # or the current settings. A request that named no preset falls back to the default,
+        # so changing `COUNCIL_DEFAULT_PRESET` between the crash and the resume would
+        # continue the deliberation with a different set of modules than the banked
+        # artifacts were built by — the same reason intake is not re-run.
+        # Resolved through the catalog so an authored module can take part (ADR-030). The
+        # engine below is handed a plain `AgentProgram` either way and never learns where it
+        # came from — that indifference is the whole reason the marketplace is a storage
+        # problem rather than an engine one.
+        user_modules = await self._store.list_modules()
+        if resume is not None:
+            preset = catalog.preset(resume.preset, user_modules)
+            depth: Depth = resume.depth  # type: ignore[assignment]
+        else:
+            preset = catalog.preset(
+                request.preset or self._settings.default_preset, user_modules
+            )
+            depth = request.depth or self._settings.default_depth
+        programs = catalog.programs(user_modules)
 
         # A live run is addressable for interjection from the first event, so a client
         # can answer an unknown the moment it sees one raised.
@@ -550,9 +647,10 @@ class Council:
             await self._pipeline(request, preset, depth, programs, live, emit, checkpoint)
         except Exception as exc:  # noqa: BLE001 - record where it stopped, then re-raise
             checkpoint.failure = str(exc)
-            checkpoint.updated_at = datetime.now(timezone.utc)
-            if checkpoint.resumable:
-                await self._store.save_checkpoint(checkpoint)
+            # Via `_checkpoint`, so a failing store cannot replace the real error with its
+            # own and swallow the `raise` below: the caller must hear about the quota, not
+            # about the disk. Only announce the checkpoint if it was genuinely written.
+            if checkpoint.resumable and await self._checkpoint(checkpoint, live):
                 await emit(
                     ev(
                         "checkpointed",
@@ -585,8 +683,22 @@ class Council:
             await emit(ev("stage_started", phase="intake", label="Reading the question"))
             checkpoint.context = await self._intake(request, emit)
             checkpoint.phase = "reason"
-            await self._checkpoint(checkpoint)
+            await self._checkpoint(checkpoint, live)
         context = checkpoint.context
+
+        # Facts a person injected during an earlier attempt. They were folded into the
+        # executor's *local* context, so without this they reached only the modules running
+        # at the time and the resumed ones would be handed a context that never mentions
+        # them — the person answered the council's unknown and the resume behaves as though
+        # they had not. Applied once, here, still labelled as late (earlier stages genuinely
+        # did not have them).
+        if checkpoint.injected:
+            context = with_late_facts(context, checkpoint.injected)
+            log.info(
+                "resuming with %d fact(s) injected before the interruption",
+                len(checkpoint.injected),
+            )
+
         await emit(ev("intake_complete", context=context.model_dump(mode="json")))
 
         deliberation = Deliberation(
@@ -664,6 +776,12 @@ class Council:
         # modules that completed as well as the partial stages of ones that did not.
         # Order matters: raising before banking the successes would throw away exactly
         # the work resumption exists to preserve.
+        #
+        # This loop is the *only* place a success is banked into the checkpoint. It used to
+        # be banked here and again in the loop below, which double-counted usage and put
+        # every module into `checkpoint.completed` twice — invisible on a fresh run, because
+        # `deliberation.runs` is built below, and then duplicated across the transcript the
+        # moment anyone resumed.
         outage: ProviderUnavailable | None = None
         for module, result in zip(todo, results):
             if isinstance(result, ProviderUnavailable):
@@ -678,7 +796,7 @@ class Council:
                 checkpoint.usage.merge(result.usage)
 
         if outage is not None:
-            await self._checkpoint(checkpoint)
+            await self._checkpoint(checkpoint, live)
             raise outage
 
         for module, result in zip(todo, results):
@@ -694,22 +812,28 @@ class Council:
                     )
                 )
                 await emit(ev("module_abstained", module=module, reason=str(result)))
-                # An abstention is a result. Recording it stops a resume from retrying a
-                # module that has already failed twice at the same stage.
+                # An abstention is a result, and the loop above skipped it (it banks only
+                # ProviderUnavailable and ModuleRun). Recording it stops a resume from
+                # retrying a module that has already failed twice at the same stage.
                 checkpoint.completed.append(deliberation.runs[-1])
                 checkpoint.partial.pop(module, None)
-                await self._checkpoint(checkpoint)
             else:
                 deliberation.runs.append(result)
                 deliberation.usage.merge(result.usage)
-                checkpoint.completed.append(result)
-                checkpoint.partial.pop(module, None)
-                checkpoint.usage.merge(result.usage)
-                await self._checkpoint(checkpoint)
+        await self._checkpoint(checkpoint, live)
 
         # ---- stages 2 & 3: critique and revision ----------------------------
         checkpoint.phase = "critique"
-        await self._checkpoint(checkpoint)
+        await self._checkpoint(checkpoint, live)
+
+        # Critique history banked by an earlier attempt is copied in exactly once, here,
+        # *before* the loop. Inside the loop it was replayed every round — so a `deep` run
+        # duplicated round one across round two — and it was skipped entirely whenever the
+        # loop body did not execute, which is precisely the resume-into-synthesis case:
+        # every round already done, `range` empty, and the banked critiques silently
+        # dropped from the transcript so the run looked uncritiqued.
+        deliberation.critiques.extend(checkpoint.critiques)
+        deliberation.revisions.extend(checkpoint.revisions)
 
         for round_index in range(checkpoint.rounds_done, CRITIQUE_ROUNDS.get(depth, 1)):
             fresh = [r for r in deliberation.runs if not r.abstained and r.conclusion]
@@ -722,12 +846,10 @@ class Council:
                     label=f"Critique round {round_index + 1}",
                 )
             )
-            deliberation.critiques.extend(checkpoint.critiques)
-            deliberation.revisions.extend(checkpoint.revisions)
             critiques = await self._critique(preset, programs, deliberation, emit)
             deliberation.critiques.extend(critiques)
             checkpoint.critiques.extend(critiques)
-            await self._checkpoint(checkpoint)
+            await self._checkpoint(checkpoint, live)
             if not critiques:
                 break
 
@@ -737,11 +859,11 @@ class Council:
             deliberation.revisions.extend(revisions)
             checkpoint.revisions.extend(revisions)
             checkpoint.rounds_done = round_index + 1
-            await self._checkpoint(checkpoint)
+            await self._checkpoint(checkpoint, live)
 
         # ---- stage 4: synthesis ---------------------------------------------
         checkpoint.phase = "synthesis"
-        await self._checkpoint(checkpoint)
+        await self._checkpoint(checkpoint, live)
         await emit(ev("stage_started", phase="synthesis", label="Synthesising"))
         synthesis = await self._synthesise(programs, deliberation, emit)
         deliberation.synthesis = synthesis
@@ -753,9 +875,16 @@ class Council:
         await self._store.save_deliberation(deliberation)
 
         # Finished, so there is nothing to resume. Deleting rather than marking done
-        # keeps `list_checkpoints` honest about what is genuinely unfinished.
+        # keeps `list_checkpoints` honest about what is genuinely unfinished. Guarded for
+        # the same reason as the write: a store hiccup here would abort a deliberation that
+        # has already been paid for and saved, and lose the Decision Card below with it.
         checkpoint.phase = "done"
-        await self._store.delete_checkpoint(checkpoint.deliberation_id)
+        try:
+            await self._store.delete_checkpoint(checkpoint.deliberation_id)
+        except Exception as exc:  # noqa: BLE001
+            log.warning(
+                "could not clear checkpoint %s: %s", checkpoint.deliberation_id, exc
+            )
 
         card: DecisionCard | None = None
         if synthesis is not None:
@@ -1010,7 +1139,19 @@ class Council:
                 output_tokens=response.output_tokens,
             )
             synthesis = Synthesis.model_validate(extract_json(response.text))
-        except (ProviderError, ValidationError, ValueError) as exc:
+        except ProviderError as exc:
+            # The same distinction ADR-027 drew for the reasoning phase, which was still
+            # missing here — and this is the most expensive place to get it wrong. By now
+            # every module has run (~26 calls at `standard`), so swallowing the outage and
+            # returning `None` completes the deliberation with no synthesis, writes no
+            # Decision Card, and *deletes the checkpoint* — discarding the entire run at
+            # the last step with no resume offered. Raising lets `_run` checkpoint it.
+            log.warning("synthesis stopped by the provider: %s", exc)
+            raise ProviderUnavailable("synthesis", None, exc) from exc
+        except (ValidationError, ValueError) as exc:
+            # A malformed or unparseable synthesis genuinely is a synthesis failure: the
+            # provider answered, the answer was unusable. Degrading is right, because the
+            # six analyses still stand on their own.
             log.error("synthesis failed: %s", exc)
             await emit(ev("error", message=f"synthesis failed: {exc}", recoverable=False))
             return None

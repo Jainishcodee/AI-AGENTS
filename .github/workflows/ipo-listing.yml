@@ -5,15 +5,15 @@
 # list, it tracks live prices and pushes buy / target / stop alerts to your
 # phone until midday.
 #
-# Requires Angel One credentials (GitHub Secrets, encrypted, never in logs).
+# Requires Angel One credentials as encrypted repository secrets.
 
 name: IPO listing watch
 
 on:
   schedule:
-    # 04:00 UTC = 09:30 IST. Deliberately 30 minutes before the 10:00 listing:
+    # 04:00 UTC = 09:30 IST. Deliberately half an hour before the listing:
     # GitHub's scheduler can lag several minutes under load, and being early
-    # costs nothing while being late costs the entry.
+    # costs one idle job while being late costs the entry.
     - cron: "0 4 * * 1-5"
   workflow_dispatch:
     inputs:
@@ -28,9 +28,12 @@ concurrency:
 jobs:
   watch:
     runs-on: ubuntu-latest
-    # Runs to ~12:00 IST. The study found the drift keeps building past 11:00,
-    # so there is no reason to stop the moment the popular exit time passes.
+    # Runs to roughly 12:15 IST. The study found the drift keeps building past
+    # 11:00, so there is no reason to stop at the popular exit time.
     timeout-minutes: 160
+    defaults:
+      run:
+        working-directory: stockseer
 
     steps:
       - uses: actions/checkout@v4
@@ -38,15 +41,13 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
-          cache: pip
-
-      - name: Install
-        run: pip install --quiet requests pandas numpy smartapi-python pyotp logzero
 
       - name: Is anything listing today?
         id: check
         env:
           TZ: Asia/Kolkata
+        # Pure standard library, so this costs no install time on the ~350
+        # days a year when the answer is "nothing".
         run: |
           python - <<'PY' >> "$GITHUB_OUTPUT"
           from stockseer.ipo.registry import listing_today
@@ -55,9 +56,13 @@ jobs:
           print(f"symbols={','.join(i.symbol for i in ipos)}")
           PY
 
-      - name: Nothing today
+      - name: Nothing lists today
         if: steps.check.outputs.count == '0'
-        run: echo "No IPO lists today. Exiting — this costs about 40 seconds."
+        run: echo "No IPO lists today. Exiting."
+
+      - name: Install the market feed
+        if: steps.check.outputs.count != '0'
+        run: pip install --quiet pandas numpy smartapi-python pyotp logzero
 
       - name: Watch the listing
         if: steps.check.outputs.count != '0'
@@ -82,6 +87,6 @@ jobs:
           from stockseer.push import push
           push("StockSeer watcher failed",
                "The listing watcher errored. If you were waiting on a buy or "
-               "stop alert, it is NOT coming — check positions manually.",
+               "stop alert, it is NOT coming — check any position manually.",
                urgency="critical", kind="test")
           PY

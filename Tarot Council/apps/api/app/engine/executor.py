@@ -9,7 +9,7 @@ from __future__ import annotations
 from collections.abc import Awaitable, Callable
 from typing import Any
 
-from pydantic import BaseModel, ValidationError
+from pydantic import ValidationError
 
 from ..core.config import Depth
 from ..core.errors import ArtifactInvalid, ProviderError, ProviderUnavailable
@@ -91,7 +91,7 @@ class Engine:
             if live is not None:
                 arriving = await live.drain()
                 if arriving:
-                    context = _with_facts(context, [item.fact for item in arriving])
+                    context = with_late_facts(context, [item.fact for item in arriving])
                     if emit:
                         await emit(
                             ev(
@@ -328,7 +328,14 @@ had been there from the start would produce a transcript that cannot be read bac
 honestly — and the earlier stages genuinely did not have it."""
 
 
-def _with_facts(context: DecisionContext, facts: list[str]) -> DecisionContext:
+def with_late_facts(context: DecisionContext, facts: list[str]) -> DecisionContext:
+    """Fold facts that arrived after the run began into the context, labelled as late.
+
+    Public because two callers need identical labelling: the executor, mid-run as facts
+    are drained, and the orchestrator, re-applying a checkpoint's injected facts on
+    resume. Two spellings of "arrived late" would make the transcript inconsistent about
+    when knowledge appeared.
+    """
     return context.model_copy(
         update={
             "constraints": [
@@ -386,6 +393,3 @@ def _row_key(row: dict[str, object]) -> str | None:
             return str(value)
     return None
 
-
-def as_json_model(model: type[BaseModel]) -> type[BaseModel]:
-    return model

@@ -16,9 +16,10 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from iab.analyze import failure_modes, summarise, survival   # noqa: E402
 
 
-def run(cond, depth, total=4, passed=False, steps=4, reasons=(), clarified=False):
-    return {"model": "m", "domain": "rail", "condition": cond,
-            "task_id": f"t{depth}", "passed": passed, "reasons": list(reasons),
+def run(cond, depth, total=4, passed=False, steps=4, reasons=(), clarified=False,
+        task_id=None, trial=0):
+    return {"model": "m", "domain": "rail", "condition": cond, "trial": trial,
+            "task_id": task_id or f"t{depth}", "passed": passed, "reasons": list(reasons),
             "checkpoint_depth": depth, "checkpoints_total": total, "steps": steps,
             "stop_reason": "completed", "asked_clarification": clarified,
             "survival": list(range(1, depth + 1)), "actions": [], "transcript": []}
@@ -42,6 +43,43 @@ class TestSummary(unittest.TestCase):
     def test_clarification_rate_is_tracked(self):
         rows = [run("C1", 1, clarified=True), run("C1", 1)]
         self.assertAlmostEqual(summarise(rows)[0]["clarified"], 0.5)
+
+
+class TestTrialStability(unittest.TestCase):
+    """Repeated trials are the only way to tell a real gap from noise.
+
+    Two identical C1 runs of gpt-oss-120b disagreed on rail-004 and sch-009 --
+    generation is not deterministic even at temperature 0. A single-trial
+    C1-vs-C3 difference smaller than that wobble is not evidence of anything,
+    so the summary has to surface the wobble rather than hide it behind a
+    point estimate.
+    """
+
+    def test_flaky_task_is_counted_as_unstable(self):
+        rows = [run("C1", 4, task_id="a", trial=0, passed=True),
+                run("C1", 2, task_id="a", trial=1, passed=False),
+                run("C1", 4, task_id="b", trial=0, passed=True),
+                run("C1", 4, task_id="b", trial=1, passed=True)]
+        t = summarise(rows)[0]
+        self.assertEqual(t["trials"], 2)
+        self.assertEqual(t["tasks"], 2)
+        self.assertAlmostEqual(t["unstable"], 0.5)        # task a flipped
+        self.assertAlmostEqual(t["pass_all_trials"], 0.5)  # only b passed twice
+        self.assertAlmostEqual(t["pass_rate"], 0.75)       # 3 of 4 runs
+
+    def test_stable_results_report_zero_instability(self):
+        rows = [run("C1", 4, task_id="a", trial=i, passed=True) for i in range(3)]
+        t = summarise(rows)[0]
+        self.assertAlmostEqual(t["unstable"], 0.0)
+        self.assertAlmostEqual(t["pass_all_trials"], 1.0)
+
+    def test_pass_all_trials_is_stricter_than_mean(self):
+        """A model that passes each task half the time has pass^k of zero."""
+        rows = [run("C1", 4, task_id=f"t{i}", trial=0, passed=True) for i in range(4)]
+        rows += [run("C1", 1, task_id=f"t{i}", trial=1, passed=False) for i in range(4)]
+        t = summarise(rows)[0]
+        self.assertAlmostEqual(t["pass_rate"], 0.5)
+        self.assertAlmostEqual(t["pass_all_trials"], 0.0)
 
 
 class TestSurvival(unittest.TestCase):

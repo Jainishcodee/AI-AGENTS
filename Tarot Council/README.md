@@ -96,7 +96,7 @@ belonging to one person are not.
 Phases 1–4 built, and Phase 5's quality gate ahead of its features: reasoning engine, web
 client, SQLite persistence, projects, the calibration loop, replay/backtesting, stage
 re-run, mid-deliberation interjection, resumable deliberations, a spoken briefing, an MCP
-server, and a divergence harness. 369 tests. See [docs/ROADMAP.md](docs/ROADMAP.md) for
+server, and a divergence harness. 445 tests. See [docs/ROADMAP.md](docs/ROADMAP.md) for
 what each phase claims and — more usefully — what it does not.
 
 ## Documentation
@@ -109,7 +109,7 @@ Read in this order:
 | [SPEC-FORMAT.md](docs/SPEC-FORMAT.md) | the meta-spec: the seven questions every module must answer |
 | [ARTIFACTS.md](docs/ARTIFACTS.md) | the artifact registry and every machine-checked invariant |
 | [COUNCIL.md](docs/COUNCIL.md) | presets, critique routing, synthesis contract, Decision Cards, calibration |
-| [DECISIONS.md](docs/DECISIONS.md) | 29 ADRs, including what each one gave up |
+| [DECISIONS.md](docs/DECISIONS.md) | 30 ADRs, including what each one gave up |
 | `docs/agents/*.md` | the six formal reasoning specifications |
 
 ## Quick start
@@ -129,7 +129,7 @@ python -m app.cli --provider mock "Should I quit my internship?"
 # for real
 python -m app.cli --preset strategy --depth quick "Should I quit my internship?"
 
-pytest                                  # 369 tests, ~5s
+pytest                                  # 445 tests, ~7s
 uvicorn app.main:app --reload --port 8787
 ```
 
@@ -249,6 +249,62 @@ script is produced either way.
 
 Presets: `full` · `strategy` · `people` · `execution` · `life` · `solo:<module>`.
 Depths: `quick` (~9 calls) · `standard` (~26) · `deep` (~56).
+
+**Authoring a seventh module**
+
+```powershell
+python -m app.cli modules                                       # built-in and authored
+python -m app.cli modules --load scripts/example-module.yaml     # validate and save
+python -m app.cli modules --activate historian
+python -m app.cli --preset with:historian "Should I take the smaller offer?"
+```
+
+A module is an `AgentProgram` in the same YAML the built-in six are written in, so the way
+to author one is to copy `app/programs/analyst.yaml` and edit it. It is held to the **same
+ten rules**, including the one that matters most: every stage's `produces` must name an
+artifact type with a machine-checkable invariant, which is what stops an authored module
+being a persona with a prompt (ADR-012).
+
+You get there by declaring the artifact's shape rather than writing Python:
+
+```yaml
+  - id: precedents
+    produces: Table
+    table:
+      columns: [precedent, mechanism, outcome_rate, applicability]
+      min_rows: 3                              # a "rate" over two cases is a story
+      required: [precedent, mechanism]         # non-empty in every row
+      distinct: [precedent]                    # no double-counting the same case
+      required_tags: [ended_well, ended_badly] # forbid a one-sided reference class
+      ranges: [{column: outcome_rate, minimum: 0.0, maximum: 1.0}]
+
+  - id: divergence
+    produces: Table
+    group: differentiate                       # a different group, on purpose
+    table:
+      columns: [precedent, difference, weakens_or_strengthens]
+      covers: {stage: precedents, column: precedent}   # every precedent, no omissions
+```
+
+These are checked in code, in the same pass as the probability tree and the stakeholder
+graph. `covers` reaches across a stage boundary, which is what makes a multi-stage authored
+module more than a sequence of unrelated prompts — and it must point at a *different* group,
+because grouped stages become one call and the covered artifact would not exist yet.
+
+The vocabulary was extracted, not invented: every rule is a shape the built-in validators
+already assert, and the test suite proves it by restating `OptionSet`'s real invariant
+declaratively. What it cannot express — recursive structures, cross-field semantics — stays
+hand-written, so an authored module is held to a real but weaker standard than the six
+(ADR-030).
+
+A module that breaks a rule is **saved and quarantined**, not rejected: it is listed with its
+full error list and cannot run until it validates and you activate it. Built-ins still fail
+loudly — a malformed built-in refuses to let the server start — because that is a developer
+error, whereas a half-finished draft is the normal state of authoring and a draft you cannot
+save is a draft you cannot fix (ADR-030).
+
+The engine has no idea any of this exists. An authored module executes through the same
+`run_program` with no new code path, which is what ADR-011's "an agent is a program" was for.
 
 **Storage.** SQLite by default — one file under `apps/api/var/`, no service, FTS5 with
 BM25 for recall (ADR-024). Coming from an earlier JSON-file build:

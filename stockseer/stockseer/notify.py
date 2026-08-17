@@ -16,6 +16,7 @@ from __future__ import annotations
 import json
 import logging
 import threading
+import time
 import uuid
 from dataclasses import asdict, dataclass, field
 from datetime import datetime
@@ -25,6 +26,10 @@ log = logging.getLogger(__name__)
 
 STORE = Path(__file__).resolve().parent.parent / "artifacts" / "notifications.json"
 _LOCK = threading.Lock()
+
+
+def _now() -> float:
+    return time.monotonic()
 
 # Android vibration patterns, in milliseconds: [wait, buzz, wait, buzz, ...].
 #
@@ -71,6 +76,7 @@ class NotificationHub:
         self.path = Path(path or STORE)
         self.keep = keep
         self.items: list[Notification] = []
+        self._last_poll = 0.0
         self._load()
 
     def _load(self) -> None:
@@ -106,17 +112,34 @@ class NotificationHub:
             self._save()
         log.info("[%s] %s", notif.urgency, notif.title)
 
-        # Fan out to the phone directly, if a relay is configured. Done after
-        # the local save so a push failure can never lose the alert: Jarvis can
-        # still collect it from the queue when the PC is next reachable.
+        # Fan out to the relay only when Jarvis is not already collecting.
+        #
+        # Both transports delivering the same alert means the phone buzzes
+        # twice for one event -- exactly the noise that gets notifications
+        # swiped away unread. Jarvis gives richer alerts (custom vibration
+        # rhythms, full body text), so it wins when it is present; ntfy is the
+        # fallback for when the PC is off and nothing is polling.
         try:
             from .push import configured, push_notification
 
-            if configured():
+            if configured() and not self.client_recently_polled():
                 push_notification(notif)
         except Exception as exc:
             log.debug("push transport unavailable: %s", exc)
         return notif
+
+    # ------------------------------------------------------------------ #
+    def note_poll(self) -> None:
+        """Called when a client fetches pending alerts."""
+        self._last_poll = _now()
+
+    def client_recently_polled(self, within: float = 90.0) -> bool:
+        """Is Jarvis actively collecting right now?
+
+        The window is generous relative to the 5-20s poll interval, so one
+        dropped request does not cause a duplicate buzz.
+        """
+        return (_now() - self._last_poll) < within
 
     def alert(self, kind: str, urgency: str, title: str, body: str,
               symbol: str = "", dedupe_key: str | None = None,

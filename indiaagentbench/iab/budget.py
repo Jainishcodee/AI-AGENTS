@@ -14,7 +14,8 @@ why resumability is a hard requirement of this design rather than a convenience.
 import os
 import time
 
-from .providers import ProviderError, QuotaDead, RateLimited, Transient, build
+from .providers import (BadGeneration, ProviderError, QuotaDead, RateLimited,
+                        Transient, build)
 
 
 class AllEndpointsDead(Exception):
@@ -94,7 +95,8 @@ class Rotator:
             self.log(f"    . {self.model_name} pacing {was:.0f}s -> "
                      f"{self.min_interval:.0f}s between requests")
 
-    def chat(self, system, messages, tools, attempts_per_endpoint=6):
+    def chat(self, system, messages, tools, attempts_per_endpoint=6,
+             bad_gen_retries=1):
         """One model turn: back off on throttling, then fail over, then give up.
 
         The retry budget is *per endpoint*, not per call. An earlier version
@@ -105,6 +107,7 @@ class Rotator:
         to move on rather than keep asking.
         """
         last = None
+        bad_gen = 0
         while True:
             p = self.provider()          # raises AllEndpointsDead when none remain
             backoff = 2.0
@@ -122,6 +125,19 @@ class Rotator:
                     delay = min(getattr(e, "retry_after", None) or backoff, self.MAX_BACKOFF)
                     self._cooldown_until = time.time() + delay
                     backoff = min(backoff * 2, self.MAX_BACKOFF)
+                except BadGeneration as e:
+                    # The model's fault, not the host's -- never retire the
+                    # endpoint over it. But give it one more go before scoring a
+                    # zero: MoE routing and batching make generation
+                    # non-deterministic even at temperature 0, so a malformed
+                    # tool call often is not reproducible. Only a repeated
+                    # failure is evidence about the model rather than luck.
+                    last = e
+                    bad_gen += 1
+                    if bad_gen > bad_gen_retries:
+                        raise
+                    self.log(f"    . {self.model_name} unparseable tool call, "
+                             f"retry {bad_gen}/{bad_gen_retries}")
                 except QuotaDead as e:
                     last = e
                     self._next("daily quota exhausted")

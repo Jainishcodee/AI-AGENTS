@@ -25,6 +25,8 @@ from datetime import date, datetime, timezone
 from pathlib import Path
 from typing import Any
 
+from pydantic import ValidationError
+
 from ..core.logging import get_logger
 from ..learning.priors import for_module as priors_for_module
 from ..learning.scoring import all_scores
@@ -40,12 +42,13 @@ from ..schemas.cards import (
     Resolution,
 )
 from ..schemas.checkpoint import Checkpoint
+from ..schemas.module import UserModule
 from ..schemas.common import ModuleId
 from ..schemas.council import Deliberation
 
 log = get_logger(__name__)
 
-SCHEMA_VERSION = 3
+SCHEMA_VERSION = 4
 
 MIGRATIONS: dict[int, list[str]] = {
     1: [
@@ -156,6 +159,24 @@ MIGRATIONS: dict[int, list[str]] = {
         )
         """,
         "CREATE INDEX ix_ckpt_phase ON checkpoints (phase, updated_at DESC)",
+    ],
+    4: [
+        # User-authored modules (ADR-030). Stored rather than dropped in the package
+        # directory so a half-finished draft cannot stop the server booting, and so
+        # `status`/`errors` can be queried without parsing every program.
+        """
+        CREATE TABLE user_modules (
+            id          TEXT PRIMARY KEY,
+            created_at  TEXT NOT NULL,
+            updated_at  TEXT NOT NULL,
+            status      TEXT NOT NULL,
+            author      TEXT NOT NULL DEFAULT 'local',
+            based_on    TEXT,
+            error_count INTEGER NOT NULL DEFAULT 0,
+            doc         TEXT NOT NULL
+        )
+        """,
+        "CREATE INDEX ix_user_modules_status ON user_modules (status, updated_at DESC)",
     ],
 }
 
@@ -576,6 +597,73 @@ class SQLiteStore:
                 self._conn.execute(
                     "DELETE FROM checkpoints WHERE deliberation_id = ?", (deliberation_id,)
                 )
+
+        await self._run(write)
+
+    # -------------------------------------------------------- user modules --
+
+    async def save_module(self, module: UserModule) -> None:
+        """Upsert. `status` and `error_count` are denormalised so the catalog can list
+        what is broken without deserialising every stored program."""
+
+        def write() -> None:
+            with self._conn:
+                self._conn.execute(
+                    """
+                    INSERT INTO user_modules
+                        (id, created_at, updated_at, status, author, based_on,
+                         error_count, doc)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                    ON CONFLICT(id) DO UPDATE SET
+                        updated_at=excluded.updated_at,
+                        status=excluded.status,
+                        based_on=excluded.based_on,
+                        error_count=excluded.error_count,
+                        doc=excluded.doc
+                    """,
+                    (
+                        module.id,
+                        module.created_at.isoformat(),
+                        module.updated_at.isoformat(),
+                        module.status,
+                        module.author,
+                        module.based_on,
+                        len(module.errors),
+                        module.model_dump_json(),
+                    ),
+                )
+
+        await self._run(write)
+
+    async def get_module(self, module_id: ModuleId) -> UserModule | None:
+        def read() -> UserModule | None:
+            row = self._conn.execute(
+                "SELECT doc FROM user_modules WHERE id = ?", (module_id,)
+            ).fetchone()
+            return UserModule.model_validate_json(row["doc"]) if row else None
+
+        return await self._run(read)
+
+    async def list_modules(self) -> list[UserModule]:
+        def read() -> list[UserModule]:
+            rows = self._conn.execute("SELECT doc FROM user_modules ORDER BY id").fetchall()
+            out: list[UserModule] = []
+            for row in rows:
+                try:
+                    out.append(UserModule.model_validate_json(row["doc"]))
+                except ValidationError as exc:
+                    # A stored module that no longer parses must not take the catalog with
+                    # it. The author needs the rest of their modules to keep working while
+                    # they fix or delete this one — the same argument as quarantine.
+                    log.warning("skipping unreadable stored module: %s", exc)
+            return out
+
+        return await self._run(read)
+
+    async def delete_module(self, module_id: ModuleId) -> None:
+        def write() -> None:
+            with self._conn:
+                self._conn.execute("DELETE FROM user_modules WHERE id = ?", (module_id,))
 
         await self._run(write)
 

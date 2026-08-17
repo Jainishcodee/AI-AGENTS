@@ -7,6 +7,7 @@ control live in `registry.py` so the policy is uniform across providers.
 from __future__ import annotations
 
 import json
+import re
 import time
 from collections.abc import Callable
 from typing import Any
@@ -227,6 +228,35 @@ class OllamaProvider(_HttpProvider):
         )
 
 
+def _scoped(prompt: str, stage_id: str) -> str:
+    """Narrow a batched prompt to one stage's own instructions, keeping the shared header.
+
+    A batched call asks for several stages in one response, each under a numbered heading
+    ending `under the key \\`<stage_id>\\``. A fixup reading the whole prompt sees *every*
+    stage's declared shape and picks the first — which for two authored tables in one batch
+    meant the second table was filled with the first one's columns and then correctly
+    rejected by its own invariant.
+
+    Everything before the first heading is shared context (question, priors, memory) and is
+    always kept. If the heading is not found, the full prompt is returned: degrading to the
+    old behaviour beats returning nothing.
+    """
+    marker = f"under the key `{stage_id}`"
+    position = prompt.find(marker)
+    if position == -1:
+        return prompt
+
+    heading = re.compile(r"^\s*\d+\.\s.+?—\s*produce ", re.M)
+    starts = [m.start() for m in heading.finditer(prompt)]
+    if not starts:
+        return prompt
+
+    shared = prompt[: starts[0]]
+    mine = max((s for s in starts if s <= position), default=starts[0])
+    following = [s for s in starts if s > mine]
+    return shared + prompt[mine : following[0] if following else len(prompt)]
+
+
 class MockProvider:
     """Deterministic fake model.
 
@@ -267,7 +297,7 @@ class MockProvider:
                 and issubclass(annotation, BaseModel)
                 and isinstance(data.get(name), dict)
             ):
-                data[name] = self._apply(annotation, data[name], prompt)
+                data[name] = self._apply(annotation, data[name], _scoped(prompt, name))
                 # Append each fixed sibling as a synthetic prior block so a later
                 # stage in the same batch can read what an earlier one produced —
                 # exactly as it would across separate calls.

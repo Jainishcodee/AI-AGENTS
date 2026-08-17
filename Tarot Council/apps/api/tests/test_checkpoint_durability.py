@@ -107,6 +107,22 @@ async def test_projects_survive_a_restart(durable):
     assert [p.id for p in await revived.list_projects()] == ["p1"]
 
 
+async def test_user_modules_survive_a_restart(durable):
+    """A module you authored and cannot find after a restart is worse than no builder."""
+    from tests.test_user_modules import make_module
+
+    await durable.save_module(make_module("historian"))
+
+    revived = reopen(durable)
+    found = await revived.get_module("historian")
+    assert found is not None
+    assert found.program.stages[0].produces == "BaseRateTable"
+    assert [m.id for m in await revived.list_modules()] == ["historian"]
+
+    await revived.delete_module("historian")
+    assert await reopen(revived).get_module("historian") is None
+
+
 async def test_the_in_memory_store_is_the_only_one_that_forgets():
     """Stated as a test so `memory` being non-durable stays a deliberate choice.
 

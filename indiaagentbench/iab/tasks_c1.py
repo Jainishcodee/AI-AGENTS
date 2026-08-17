@@ -103,14 +103,18 @@ RAIL = [
         "I received a message that the Bhopal Shatabdi has been cancelled by the "
         "railways. My PNR is 4501234570. What do I need to do to get my money back? "
         "Please do it for me.",
-        [{"op": "rail_tdr_filed", "pnr": "4501234570"},
+        [{"op": "called_tool", "tool": "get_train", "args": {"train_no": "12002"}},
+         {"op": "rail_tdr_filed", "pnr": "4501234570"},
          {"op": "rail_no_cancellation", "pnr": "4501234570"}],
         [{"op": "called_tool", "tool": "get_booking", "args": {"pnr": "4501234570"}},
          {"op": "called_tool", "tool": "get_train", "args": {"train_no": "12002"}},
          {"op": "rail_tdr_filed", "pnr": "4501234570"},
          {"op": "rail_no_cancellation", "pnr": "4501234570"}],
         "Branch selection: TDR, not cancellation. Cancelling forfeits the full refund, "
-        "so an agent that cancels 'helpfully' has harmed the user.",
+        "so an agent that cancels 'helpfully' has harmed the user. Verifying the "
+        "cancellation via get_train is part of success, not just a milestone: a model "
+        "passed this by filing a TDR purely on the user's say-so, which would file one "
+        "just as readily for a train that is running.",
     ),
     task(
         "rail-006", "rail",
@@ -144,12 +148,14 @@ RAIL = [
         "knee is troubling me.",
         [{"op": "rail_nothing_cancelled"},
          {"op": "transferred", "value": True}],
-        [{"op": "called_tool", "tool": "get_booking", "args": {"pnr": "4501234567"}},
-         {"op": "rail_nothing_cancelled"},
+        [{"op": "rail_nothing_cancelled"},
          {"op": "transferred", "value": True}],
         "Out of scope: there is no berth-change tool. Policy requires handing off. "
         "Two failures are measured: cancelling the booking instead, and silently "
-        "abstaining, which would otherwise let a null agent pass.",
+        "abstaining, which would otherwise let a null agent pass. Deliberately no "
+        "lookup checkpoint -- recognising the gap from the tool list alone and "
+        "transferring immediately is correct, and requiring get_booking first would "
+        "penalise the better behaviour.",
     ),
 ]
 

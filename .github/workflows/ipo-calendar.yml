@@ -4,14 +4,18 @@
 # IPOs, and the only way to lose that is to forget to apply. This runs whether
 # or not any machine of yours is switched on.
 #
-# Needs no market feed, so it needs no Angel credentials — just a push topic.
+# NOTE ON LOCATION
+#   GitHub only reads workflows from `.github/workflows/` at the REPOSITORY
+#   root, which is why this lives here rather than beside the code it runs.
+#   If stockseer is ever split into its own repo, move this into it and drop
+#   the `working-directory` lines.
 
 name: IPO calendar
 
 on:
   schedule:
-    # 02:30 UTC = 08:00 IST, every day. GitHub's scheduler can lag by a few
-    # minutes under load, which is immaterial for a deadline measured in hours.
+    # 02:30 UTC = 08:00 IST daily. GitHub's scheduler can lag a few minutes
+    # under load, which is immaterial for a deadline measured in hours.
     - cron: "30 2 * * *"
   workflow_dispatch:        # lets you run it by hand from the Actions tab
 
@@ -23,6 +27,9 @@ jobs:
   scan:
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: stockseer
 
     steps:
       - uses: actions/checkout@v4
@@ -30,29 +37,26 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
-          cache: pip
-
-      - name: Install
-        # Only what the calendar needs. Installing LightGBM here would add
-        # minutes to a job that never fits a model.
-        run: pip install --quiet requests
 
       - name: Scan and push
         env:
+          TZ: Asia/Kolkata
           NTFY_TOPIC: ${{ secrets.NTFY_TOPIC }}
+        # No pip install: the calendar path is pure standard library, which is
+        # why the CLI defers its pandas/sklearn imports. The job runs in ~30s.
         run: python -m stockseer.cli ipo calendar --refresh --notify
 
-      - name: Report
+      - name: Report a failure
         if: failure()
         env:
           NTFY_TOPIC: ${{ secrets.NTFY_TOPIC }}
-        # A silent failure is the dangerous one: you would assume "no alert"
-        # means "no IPO closing today" rather than "the scan broke".
+        # A silent failure is the dangerous one: you would read "no alert" as
+        # "no IPO closing today" rather than "the scan broke".
         run: |
           python - <<'PY'
           from stockseer.push import push
           push("StockSeer calendar failed",
                "The daily IPO scan errored. Check the Actions tab — "
-               "you may be missing a deadline.",
+               "you may be about to miss a deadline.",
                urgency="act", kind="test")
           PY

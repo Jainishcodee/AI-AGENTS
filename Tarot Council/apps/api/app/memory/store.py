@@ -32,6 +32,7 @@ from ..schemas.cards import (
     Resolution,
 )
 from ..schemas.checkpoint import Checkpoint
+from ..schemas.module import UserModule
 from ..schemas.common import ModuleId
 from ..schemas.council import Deliberation
 
@@ -94,6 +95,15 @@ class MemoryStore(Protocol):
 
     async def delete_checkpoint(self, deliberation_id: str) -> None: ...
 
+    # -- user-authored modules (ADR-030) --
+    async def save_module(self, module: UserModule) -> None: ...
+
+    async def get_module(self, module_id: ModuleId) -> UserModule | None: ...
+
+    async def list_modules(self) -> list[UserModule]: ...
+
+    async def delete_module(self, module_id: ModuleId) -> None: ...
+
 
 class InMemoryStore:
     """Default for tests and for `--no-persist` runs."""
@@ -104,6 +114,7 @@ class InMemoryStore:
         self._memories: dict[ModuleId, list[Memory]] = {}
         self._projects: dict[str, Project] = {}
         self._checkpoints: dict[str, Checkpoint] = {}
+        self._modules: dict[ModuleId, UserModule] = {}
 
     async def save_deliberation(self, deliberation: Deliberation) -> None:
         self._deliberations[deliberation.id] = deliberation
@@ -259,6 +270,18 @@ class InMemoryStore:
     async def delete_checkpoint(self, deliberation_id: str) -> None:
         self._checkpoints.pop(deliberation_id, None)
 
+    async def save_module(self, module: UserModule) -> None:
+        self._modules[module.id] = module
+
+    async def get_module(self, module_id: ModuleId) -> UserModule | None:
+        return self._modules.get(module_id)
+
+    async def list_modules(self) -> list[UserModule]:
+        return sorted(self._modules.values(), key=lambda m: m.id)
+
+    async def delete_module(self, module_id: ModuleId) -> None:
+        self._modules.pop(module_id, None)
+
 
 class FileStore(InMemoryStore):
     """JSON on disk, so a restart does not lose history. Superseded by `SQLiteStore`.
@@ -278,11 +301,13 @@ class FileStore(InMemoryStore):
         self._memory_file = root / "memories.json"
         self._checkpoint_dir = root / "checkpoints"
         self._project_dir = root / "projects"
+        self._module_dir = root / "modules"
         for directory in (
             self._deliberation_dir,
             self._card_dir,
             self._checkpoint_dir,
             self._project_dir,
+            self._module_dir,
         ):
             directory.mkdir(parents=True, exist_ok=True)
         self._load()
@@ -316,6 +341,13 @@ class FileStore(InMemoryStore):
                 )
             except Exception as exc:  # noqa: BLE001
                 log.warning("skipping unreadable project %s: %s", path.name, exc)
+        for path in self._module_dir.glob("*.json"):
+            try:
+                self._modules[path.stem] = UserModule.model_validate_json(
+                    path.read_text(encoding="utf-8")
+                )
+            except Exception as exc:  # noqa: BLE001
+                log.warning("skipping unreadable module %s: %s", path.name, exc)
         if self._memory_file.is_file():
             try:
                 raw = json.loads(self._memory_file.read_text(encoding="utf-8"))
@@ -352,6 +384,14 @@ class FileStore(InMemoryStore):
         await super().delete_checkpoint(deliberation_id)
         (self._checkpoint_dir / f"{deliberation_id}.json").unlink(missing_ok=True)
 
+    async def save_module(self, module: UserModule) -> None:
+        await super().save_module(module)
+        self._write(self._module_dir / f"{module.id}.json", module)
+
+    async def delete_module(self, module_id: ModuleId) -> None:
+        await super().delete_module(module_id)
+        (self._module_dir / f"{module_id}.json").unlink(missing_ok=True)
+
     def _write_memories(self) -> None:
         self._memory_file.write_text(
             json.dumps(
@@ -366,7 +406,10 @@ class FileStore(InMemoryStore):
         )
 
     @staticmethod
-    def _write(path: Path, model: Deliberation | DecisionCard | Project | Checkpoint) -> None:
+    def _write(
+        path: Path,
+        model: Deliberation | DecisionCard | Project | Checkpoint | UserModule,
+    ) -> None:
         path.write_text(
             json.dumps(model.model_dump(mode="json"), indent=2, ensure_ascii=False),
             encoding="utf-8",

@@ -17,6 +17,7 @@ Three properties this has to hold, all forced by the free-tier constraint:
   python -m iab.runner --model mock --domain rail --condition C1 --dry-run
 """
 import argparse
+import hashlib
 import json
 from pathlib import Path
 
@@ -24,10 +25,26 @@ from .budget import AllEndpointsDead, Rotator
 from .common import DATA, RUNS, TASKS, load_json
 from .envs import REGISTRY
 from .policies import POLICIES
-from .providers import ENDPOINTS
+from .providers import ENDPOINTS, BadGeneration
 from .verify import checkpoint_depth, verify
 
 MAX_STEPS = 25
+
+
+def bench_version(task, system):
+    """Short hash of everything that determines what a score means.
+
+    Policy text, success assertions and checkpoints all change scores without
+    changing any label. Two Gemini runs here were silently produced under an
+    older policy and an older rail-005 verifier, and would have sat in the same
+    results table as later runs looking directly comparable. Stamping the
+    version makes that visible instead of invisible.
+    """
+    blob = json.dumps({"policy": system,
+                       "verify": task["verify"],
+                       "checkpoints": task["checkpoints"]},
+                      sort_keys=True, ensure_ascii=False)
+    return hashlib.sha256(blob.encode("utf-8")).hexdigest()[:10]
 
 
 def run_task(task, rotator, max_steps=MAX_STEPS):
@@ -43,7 +60,16 @@ def run_task(task, rotator, max_steps=MAX_STEPS):
     stop = "completed"
 
     for _ in range(max_steps):
-        reply = rotator.chat(system, messages, tools)
+        try:
+            reply = rotator.chat(system, messages, tools)
+        except BadGeneration as e:
+            # The model emitted something that is not a usable tool call. That
+            # ends this trajectory, but it is a measurable outcome rather than a
+            # run-ending error -- and one we expect more of in the non-English
+            # conditions, so it has to be scored, not crashed on.
+            transcript.append({"role": "error", "error": str(e)})
+            stop = "bad_generation"
+            break
         transcript.append({"role": "assistant", **reply})
 
         if not reply["tool_calls"]:
@@ -75,6 +101,7 @@ def run_task(task, rotator, max_steps=MAX_STEPS):
         "condition": task.get("condition", "C1"),
         "domain": domain,
         "stop_reason": stop,
+        "bench_version": bench_version(task, system),
         "asked_clarification": bool(final.strip().endswith("?")),
         "survival": survival,
         "actions": env.actions,
@@ -83,17 +110,19 @@ def run_task(task, rotator, max_steps=MAX_STEPS):
     return scored
 
 
-def done_ids(path):
+def done_keys(path):
+    """(task_id, trial) pairs already on disk, for resumption."""
     if not path.exists():
         return set()
-    ids = set()
+    keys = set()
     with open(path, encoding="utf-8") as f:
         for line in f:
             try:
-                ids.add(json.loads(line)["task_id"])
+                r = json.loads(line)
+                keys.add((r["task_id"], r.get("trial", 0)))
             except (ValueError, KeyError):
                 continue
-    return ids
+    return keys
 
 
 def main():
@@ -103,6 +132,10 @@ def main():
     ap.add_argument("--condition", default="C1")
     ap.add_argument("--limit", type=int, default=0, help="stop after N tasks")
     ap.add_argument("--fresh", action="store_true", help="ignore existing results")
+    ap.add_argument("--trials", type=int, default=1,
+                    help="repeats per task. Generation is not deterministic even "
+                         "at temperature 0, so a single trial cannot tell a real "
+                         "cross-condition gap from run-to-run noise.")
     args = ap.parse_args()
 
     tasks = load_json(TASKS / f"{args.domain}_{args.condition}.json")
@@ -111,35 +144,51 @@ def main():
 
     out = RUNS / f"{args.model}_{args.domain}_{args.condition}.jsonl"
     out.parent.mkdir(parents=True, exist_ok=True)
-    seen = set() if args.fresh else done_ids(out)
+    seen = set() if args.fresh else done_keys(out)
     if args.fresh and out.exists():
-        out.unlink()
+        # Archive, never delete. Free-tier trajectories are scarce and slow to
+        # earn -- a --fresh that unlinks threw away a complete 20-task baseline
+        # here, and the replacement run then died one task in on daily quota.
+        n = 1
+        while (bak := out.with_suffix(f".jsonl.bak{n}")).exists():
+            n += 1
+        out.rename(bak)
+        print(f"  previous results archived -> {bak.name}")
 
     if args.model not in ENDPOINTS:
         raise SystemExit(f"unknown model '{args.model}'. known: {sorted(ENDPOINTS)}")
     rotator = Rotator(args.model, ENDPOINTS[args.model])
 
-    todo = [t for t in tasks if t["task_id"] not in seen]
+    # Trial-major order: finish a full sweep of every task before starting the
+    # next repeat. A run cut short by quota then yields complete trials rather
+    # than every trial of the first few tasks and nothing for the rest.
+    todo = [(t, i) for i in range(args.trials) for t in tasks
+            if (t["task_id"], i) not in seen]
     print(f"{args.model} / {args.domain} / {args.condition}: "
-          f"{len(todo)} to run, {len(seen)} already done")
+          f"{len(todo)} runs to go ({len(tasks)} tasks x {args.trials} trials), "
+          f"{len(seen)} already done")
 
     passed = 0
+    done = 0
     with open(out, "a", encoding="utf-8") as f:
-        for t in todo:
+        for t, trial in todo:
             try:
                 res = run_task(t, rotator)
             except AllEndpointsDead as e:
                 print(f"\n  stopped: {e}\n  resume later -- completed work is kept.")
                 break
+            res["trial"] = trial
             f.write(json.dumps(res, ensure_ascii=False) + "\n")
             f.flush()
             passed += res["passed"]
+            done += 1
             mark = "pass" if res["passed"] else "FAIL"
             depth = f"{res['checkpoint_depth']}/{res['checkpoints_total']}"
-            print(f"  [{mark}] {res['task_id']}  depth {depth}  steps {res['steps']}"
+            tag = f" t{trial}" if args.trials > 1 else ""
+            print(f"  [{mark}] {res['task_id']}{tag}  depth {depth}  steps {res['steps']}"
                   + ("" if res["passed"] else f"  <- {res['reasons'][0]}"))
 
-    print(f"\n{passed}/{len(todo)} passed -> {out}")
+    print(f"\n{passed}/{done} passed -> {out}")
 
 
 if __name__ == "__main__":

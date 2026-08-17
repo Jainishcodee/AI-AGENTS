@@ -41,6 +41,71 @@ class Inputs(Frozen):
     optional: tuple[InputSpec, ...] = ()
 
 
+class NumericRange(Frozen):
+    """`range` on a numeric column — the leaf-probability floor generalised."""
+
+    column: str
+    minimum: float | None = None
+    maximum: float | None = None
+
+
+class Coverage(Frozen):
+    """`covers` — every value in an earlier stage's column must appear in this one.
+
+    The generalisation of the psychologist's hardest invariant: every person named in the
+    cast gets a profile, no partial sets and no skipping the awkward one. It is also the rule
+    that makes a two-stage module more than two independent prompts, because it is checked
+    across a stage boundary.
+    """
+
+    stage: StageId
+    column: str
+    """Column in *this* table holding the reference. Defaults to the same name."""
+    into: str = ""
+
+
+class SumRule(Frozen):
+    """`sums_to` over a column, within a tolerance. Percentages and allocations."""
+
+    column: str
+    total: float = 1.0
+    tolerance: float = 0.02
+
+
+class TableSpec(Frozen):
+    """Declarative invariants for an authored table (ADR-030).
+
+    Not invented — *extracted*. Every rule here is a shape the hand-written validators in
+    `engine/invariants.py` already assert for the built-in six, which is the argument that
+    the vocabulary is expressive enough to hold an authored module to a real standard rather
+    than a stylistic one:
+
+        min_rows      OptionSet (>=7), FailureModeTable (>=3)
+        required      the psychologist's nine dimensions, non-empty every time
+        distinct      no two options may share a label
+        required_tags REQUIRED_OPTION_TAGS; also ADR-014's forced `reckless` option
+        ranges        the leaf-probability floor
+        covers        PersonProfileSet must cover PersonList
+        sums_to       probability-tree siblings, flattened to one column
+
+    What it cannot express is stated in ADR-030 rather than hidden: recursive structures
+    (tree depth, sibling sums over nesting) and cross-field semantics ("the ten-year regret
+    must not contradict the one-year row"). Those stay hand-written, so an authored module is
+    held to a weaker standard than the six — knowable and checkable, but weaker.
+    """
+
+    columns: tuple[str, ...] = ()
+    min_rows: int = 1
+    required: tuple[str, ...] = ()
+    """Columns that must be present and non-empty in *every* row."""
+    distinct: tuple[str, ...] = ()
+    required_tags: tuple[str, ...] = ()
+    """Each must be carried by at least one row."""
+    ranges: tuple[NumericRange, ...] = ()
+    covers: Coverage | None = None
+    sums_to: SumRule | None = None
+
+
 class Stage(Frozen):
     id: StageId
     name: str
@@ -51,6 +116,8 @@ class Stage(Frozen):
     must_not: tuple[str, ...]
     terminal: bool = False
     min_items: int | None = None
+    table: TableSpec | None = None
+    """Required when `produces` is `Table`; forbidden otherwise."""
     isolate: bool = False
     """Never batched with a neighbour, at any depth.
 

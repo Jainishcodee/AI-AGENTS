@@ -702,6 +702,124 @@ def fix_extraction(data: dict[str, Any], prompt: str) -> dict[str, Any]:
     return data
 
 
+def fix_table(data: dict[str, Any], prompt: str) -> dict[str, Any]:
+    """Fill an authored table well enough to satisfy whatever its stage declared.
+
+    The columns and rules are not available here as data — the mock provider has no access
+    to the program — so they are read back out of the *prompt*. That is a feature rather
+    than a workaround: it means the mock only succeeds when the declared shape was actually
+    rendered into the prompt, so a spec the template forgets to describe fails the mock run
+    instead of silently producing a table the real model could never have known how to fill.
+    """
+    columns = _prompt_list(prompt, r"^\s*- columns: (.+)$")
+    if not columns:
+        return data
+
+    required = _prompt_list(prompt, r"^\s*- these must be non-empty in EVERY row: (.+)$")
+    distinct = _prompt_list(prompt, r"^\s*- these must differ between rows: (.+)$")
+    tags = _prompt_list(prompt, r"^\s*- at least one row must be tagged with each of: (.+)$")
+
+    min_rows = 1
+    match = re.search(r"^\s*- at least (\d+) rows$", prompt, re.M)
+    if match:
+        min_rows = int(match.group(1))
+
+    # `covers` first: it dictates how many rows there are and what identifies them.
+    covered: list[str] = []
+    into = ""
+    match = re.search(
+        r"^\s*- one row for every `([^`]+)` in stage `([^`]+)`, carried in `([^`]+)`", prompt, re.M
+    )
+    if match:
+        source_column, source_stage, into = match.group(1), match.group(2), match.group(3)
+        covered = _prior_column(prompt, source_stage, source_column)
+
+    count = max(min_rows, len(covered), 1)
+    rows: list[dict[str, Any]] = []
+    for index in range(count):
+        cells: dict[str, Any] = {}
+        for column in columns:
+            cells[column] = f"[mock] {column} {index + 1}"
+        for column in distinct:
+            cells[column] = f"[mock] distinct {column} {index + 1}"
+        # The covered value goes in *last*, after `distinct`. The other order let the
+        # distinct filler overwrite it whenever a spec declared `distinct` on the same
+        # column it covers — which is the natural way to write it — so coverage failed on a
+        # perfectly legal module and the fault looked like the module's.
+        if into and index < len(covered):
+            cells[into] = covered[index]
+        rows.append({"id": f"t{index + 1}", "cells": cells, "tags": []})
+
+    # Every required tag on the first row: the rule is "carried by at least one row".
+    if rows and tags:
+        rows[0]["tags"] = list(tags)
+
+    for column, low, high in _prompt_ranges(prompt):
+        value = low if low is not None else (high if high is not None else 1.0)
+        if low is not None and high is not None:
+            value = round((low + high) / 2, 3)
+        for row in rows:
+            row["cells"][column] = value
+
+    match = re.search(r"^\s*- `([^`]+)` across all rows must sum to ([\d.]+)$", prompt, re.M)
+    if match and rows:
+        column, total = match.group(1), float(match.group(2))
+        share = round(total / len(rows), 4)
+        for row in rows:
+            row["cells"][column] = share
+        # Put the rounding error on the last row so the total is exact.
+        rows[-1]["cells"][column] = round(total - share * (len(rows) - 1), 4)
+
+    data["rows"] = rows
+    data.setdefault("title", "[mock] authored table")
+    return data
+
+
+def _prompt_list(prompt: str, pattern: str) -> list[str]:
+    match = re.search(pattern, prompt, re.M)
+    if not match:
+        return []
+    return [part.strip() for part in match.group(1).split(",") if part.strip()]
+
+
+def _prompt_ranges(prompt: str) -> list[tuple[str, float | None, float | None]]:
+    out: list[tuple[str, float | None, float | None]] = []
+    for line in re.findall(r"^\s*- `([^`]+)` must be a number([^\n]*)$", prompt, re.M):
+        column, bounds = line
+        low = re.search(r">= ([-\d.]+)", bounds)
+        high = re.search(r"<= ([-\d.]+)", bounds)
+        out.append(
+            (
+                column,
+                float(low.group(1)) if low else None,
+                float(high.group(1)) if high else None,
+            )
+        )
+    return out
+
+
+def _prior_column(prompt: str, stage_id: str, column: str) -> list[str]:
+    """Read a column out of an earlier stage's artifact, as rendered in the prompt."""
+    match = re.search(
+        rf'<prior stage="{re.escape(stage_id)}"[^>]*>\s*(\{{.*?\}})\s*</prior>', prompt, re.S
+    )
+    if not match:
+        return []
+    try:
+        payload = json.loads(match.group(1))
+    except json.JSONDecodeError:
+        return []
+    values: list[str] = []
+    for row in payload.get("rows") or []:
+        if not isinstance(row, dict):
+            continue
+        cells = row.get("cells") if isinstance(row.get("cells"), dict) else {}
+        value = cells.get(column) or row.get(column) or row.get("id")
+        if value is not None and str(value).strip():
+            values.append(str(value).strip())
+    return values
+
+
 FIXUPS: dict[str, Fixup] = {
     "IntakeResult": fix_intake,
     "GraderResult": fix_grader,
@@ -731,6 +849,7 @@ FIXUPS: dict[str, Fixup] = {
     "ValueAudit": fix_values,
     "HarmLedger": fix_harm,
     "RegretMatrix": fix_regret,
+    "Table": fix_table,
     "Conclusion": fix_conclusion,
 }
 

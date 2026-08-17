@@ -9,6 +9,7 @@ from __future__ import annotations
 
 from functools import lru_cache
 from pathlib import Path
+from collections.abc import Callable
 from typing import Any
 
 import yaml
@@ -16,7 +17,7 @@ from pydantic import ValidationError
 
 from ..core.errors import ProgramInvalid
 from ..engine.invariants import has_coverage
-from ..schemas.artifacts import ARTIFACT_MODELS, TERMINAL_KIND
+from ..schemas.artifacts import ARTIFACT_MODELS, TABLE_KIND, TERMINAL_KIND
 from ..schemas.common import ModuleId
 from ..schemas.program import CONTEXT_REF, AgentProgram, Preset
 
@@ -41,9 +42,161 @@ def _read_yaml(path: Path) -> Any:
         raise ProgramInvalid(f"{path.name}: invalid YAML — {exc}") from exc
 
 
-def _validate(program: AgentProgram, source: str) -> None:
+def _check_table_spec(
+    stage,
+    earlier: set[str],
+    fail: Callable[[int, str], None],
+    groups: dict[str, str] | None = None,
+    produces: dict[str, str] | None = None,
+) -> None:
+    """A declarative spec that references nothing real is worse than no spec.
+
+    Every one of these was a way to write a table that *looks* constrained and enforces
+    nothing: a `required` column that is not in `columns` is never checked, and a `covers`
+    pointing at a later stage can never resolve. Caught at load time, because the author is
+    right there and a deliberation is not.
+    """
+    spec = stage.table
+    declared = set(spec.columns)
+
+    if not declared:
+        fail(4, f"stage '{stage.id}' declares a table with no columns")
+    if spec.min_rows < 1:
+        fail(4, f"stage '{stage.id}' has min_rows={spec.min_rows}; a table needs a row")
+
+    for field_name, columns in (
+        ("required", spec.required),
+        ("distinct", spec.distinct),
+    ):
+        unknown = sorted(set(columns) - declared)
+        if unknown:
+            fail(
+                4,
+                f"stage '{stage.id}' lists {field_name} column(s) {', '.join(unknown)} "
+                f"that are not in `columns`; the rule would never be checked",
+            )
+
+    for rule in spec.ranges:
+        if rule.column not in declared:
+            fail(4, f"stage '{stage.id}' ranges an undeclared column '{rule.column}'")
+        if rule.minimum is None and rule.maximum is None:
+            fail(4, f"stage '{stage.id}' has a range on '{rule.column}' with no bound")
+
+    if spec.sums_to is not None and spec.sums_to.column not in declared:
+        fail(4, f"stage '{stage.id}' sums an undeclared column '{spec.sums_to.column}'")
+
+    if spec.covers is not None:
+        covered_kind = (produces or {}).get(spec.covers.stage)
+        if spec.covers.stage not in earlier:
+            fail(
+                4,
+                f"stage '{stage.id}' covers '{spec.covers.stage}', which is not an earlier "
+                "stage of this module",
+            )
+        elif covered_kind is not None and covered_kind != TABLE_KIND:
+            # Coverage reads the covered artifact's `rows`, which only a `Table` has. Every
+            # built-in kind keeps its entries under a different key (`people`, `actors`,
+            # `options`), so the expected set would come back empty and the rule would
+            # silently approve any table at all — the quietest way to fake a guarantee.
+            fail(
+                4,
+                f"stage '{stage.id}' covers '{spec.covers.stage}', which produces "
+                f"'{covered_kind}' rather than {TABLE_KIND}. Coverage can only read another "
+                "declared table, so this rule would silently pass anything",
+            )
+        elif groups and groups.get(spec.covers.stage) == stage.group:
+            # Grouped stages become one call (ADR-013), so the covered artifact does not
+            # exist yet when this one is produced and the check would silently never fire.
+            # A coverage rule that cannot run is worse than none: it reads as a guarantee.
+            fail(
+                4,
+                f"stage '{stage.id}' covers '{spec.covers.stage}', which is in the same "
+                f"group ('{stage.group}'). Grouped stages run in one call, so the covered "
+                "artifact does not exist yet — put them in different groups",
+            )
+        into = spec.covers.into or spec.covers.column
+        if into not in declared:
+            fail(
+                4,
+                f"stage '{stage.id}' covers into column '{into}', which is not declared",
+            )
+
+    # A spec with columns but no actual constraint is the persona-with-a-prompt case wearing
+    # a table for a hat. `min_rows` defaults to 1, which is not a constraint worth the name.
+    constrained = bool(
+        spec.required
+        or spec.distinct
+        or spec.required_tags
+        or spec.ranges
+        or spec.covers
+        or spec.sums_to
+        or spec.min_rows > 1
+    )
+    if not constrained:
+        fail(
+            4,
+            f"stage '{stage.id}' declares a table with columns but no constraint. Add at "
+            "least one of: min_rows, required, distinct, required_tags, ranges, covers, "
+            "sums_to — otherwise nothing about this artifact is actually checked",
+        )
+
+
+def with_constitution(program: AgentProgram) -> AgentProgram:
+    """Return the program with `SHARED_FORBIDDEN` merged into `voice.forbidden`.
+
+    Built-ins get this during YAML load. Authored modules need it too, and putting it in one
+    named function is what stops the two paths diverging: submitting a program as JSON used
+    to skip the merge entirely, so rule 10 fired on every save and the HTTP route could not
+    store a valid module at all. A caller reproducing the constitution by hand is a caller
+    who will get it subtly wrong.
+
+    The author's own `forbidden` lines are kept — this appends, it does not replace.
+    """
+    forbidden = list(program.voice.forbidden)
+    for line in SHARED_FORBIDDEN:
+        if line not in forbidden:
+            forbidden.append(line)
+    return program.model_copy(
+        update={"voice": program.voice.model_copy(update={"forbidden": tuple(forbidden)})}
+    )
+
+
+def rule_violations(program: AgentProgram, source: str = "program") -> list[str]:
+    """Every SPEC-FORMAT rule this program breaks, as messages rather than an exception.
+
+    Split out from `_validate` so built-in and user-authored programs are held to the *same*
+    rulebook while failing differently (ADR-030): a malformed built-in must refuse to let the
+    server start, whereas a user's half-finished draft must be quarantined and reported —
+    the person who can fix it is the person running the process, and taking their server away
+    takes away the tool they would fix it with.
+
+    Collecting all violations rather than raising on the first is what makes this usable for
+    authoring: an editor that reports one error per save is an editor nobody finishes a
+    module in.
+    """
+    problems: list[str] = []
+
     def fail(rule: int, message: str) -> None:
-        raise ProgramInvalid(f"{source} violates rule {rule}: {message}")
+        problems.append(f"{source} violates rule {rule}: {message}")
+
+    _check_rules(program, fail)
+    return problems
+
+
+def _validate(program: AgentProgram, source: str) -> None:
+    """Boot-time validation for built-ins: the first violation stops the server."""
+    problems = rule_violations(program, source)
+    if problems:
+        raise ProgramInvalid(problems[0])
+
+
+def _check_rules(program: AgentProgram, fail: Callable[[int, str], None]) -> None:
+    # A program with no stages fails everything downstream and would crash several checks
+    # that index into `stages`. Previously the first `fail` raised and short-circuited;
+    # now that violations accumulate, the guard has to be explicit.
+    if not program.stages:
+        fail(1, "has no stages; a module that executes nothing is not a module")
+        return
 
     # 1 — exactly one terminal stage, and it is last.
     terminals = [s for s in program.stages if s.terminal]
@@ -77,6 +230,9 @@ def _validate(program: AgentProgram, source: str) -> None:
         fail(3, "duplicate stage ids")
 
     # 4 — every produced type is registered and has invariant coverage.
+    earlier: set[str] = set()
+    stage_groups = {s.id: s.group for s in program.stages}
+    stage_produces = {s.id: s.produces for s in program.stages}
     for stage in program.stages:
         if stage.produces not in ARTIFACT_MODELS:
             fail(4, f"stage '{stage.id}' produces unknown artifact '{stage.produces}'")
@@ -86,6 +242,28 @@ def _validate(program: AgentProgram, source: str) -> None:
                 f"artifact '{stage.produces}' has no invariant validator; add one in "
                 "engine/invariants.py or list it in NO_EXTRA_INVARIANTS",
             )
+
+        # 4b — an authored `Table` must declare what it is. The whole reason rule 4 exists
+        # is that an artifact nobody can check is an artifact whose content is whatever the
+        # model felt like; a generic table with no spec would be a hole straight through it.
+        if stage.produces == TABLE_KIND:
+            if stage.table is None:
+                fail(
+                    4,
+                    f"stage '{stage.id}' produces {TABLE_KIND} but declares no `table:` "
+                    "spec. Declare its columns and at least one constraint — an artifact "
+                    "with no constraints cannot be validated, which is what this rule is for",
+                )
+            else:
+                _check_table_spec(stage, earlier, fail, stage_groups, stage_produces)
+        elif stage.table is not None:
+            fail(
+                4,
+                f"stage '{stage.id}' declares a `table:` spec but produces "
+                f"'{stage.produces}', which has its own validator. The spec would be "
+                "silently ignored",
+            )
+        earlier.add(stage.id)
 
     # 5 — group keys are contiguous. A group cannot be interleaved, because grouped
     # stages become one call.
@@ -129,10 +307,16 @@ def _validate(program: AgentProgram, source: str) -> None:
             "advice cannot be scored cannot be trusted with a confidence number",
         )
 
-    # 10 — the shared constitution is merged in by `_load_one`; verify it took.
-    for line in SHARED_FORBIDDEN:
-        if line not in program.voice.forbidden:
-            fail(10, "shared constitution was not merged into voice.forbidden")
+    # 10 — the shared constitution is merged in before validation; verify it took.
+    # Reported once with the missing lines named, not once per line: four identical
+    # messages for one problem is a worse error report than one accurate one.
+    absent = [line for line in SHARED_FORBIDDEN if line not in program.voice.forbidden]
+    if absent:
+        fail(
+            10,
+            f"{len(absent)} shared-constitution line(s) missing from voice.forbidden — "
+            "merge them with `loader.with_constitution` rather than restating them",
+        )
 
 
 def _load_one(path: Path) -> AgentProgram:

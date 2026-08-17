@@ -607,6 +607,37 @@ class Conclusion(ArtifactData):
     veto_grounds: str | None = None
 
 
+# ══════════════════════════════════════════════════════ authored artifacts ══
+
+
+class TableRow(Strict):
+    """One row of an authored table.
+
+    `cells` is an open mapping rather than named fields because the columns are declared by
+    the module's author, not here — the *shape* is checked against the stage's `TableSpec`
+    at validation time (ADR-030). This is the one place in the artifact registry where the
+    Pydantic model is deliberately looser than the thing it validates, and the declarative
+    rules are what close that gap.
+    """
+
+    id: str
+    cells: dict[str, str | float | int | bool | None] = Field(default_factory=dict)
+    tags: list[str] = Field(default_factory=list)
+
+
+class Table(ArtifactData):
+    """The artifact kind an authored module produces.
+
+    Deliberately generic and deliberately *not* freeform: a module declares its columns and
+    its constraints, and the engine enforces them. A table with no declared rules would be a
+    persona with a prompt, which is the thing loader rule 4 exists to prevent — so the
+    loader refuses a stage that produces `Table` without a `TableSpec`.
+    """
+
+    title: str = ""
+    rows: list[TableRow] = Field(default_factory=list)
+
+
 # ═════════════════════════════════════════════════════════════════ registry ══
 
 ARTIFACT_MODELS: dict[str, type[ArtifactData]] = {
@@ -648,11 +679,15 @@ ARTIFACT_MODELS: dict[str, type[ArtifactData]] = {
         RegretMatrix,
         IntegrityCheck,
         InactionHarm,
+        Table,
         Conclusion,
     )
 }
 
 TERMINAL_KIND = "Conclusion"
+
+TABLE_KIND = "Table"
+"""The one artifact kind an authored module may define the shape of (ADR-030)."""
 
 
 def model_for(kind: str) -> type[ArtifactData]:

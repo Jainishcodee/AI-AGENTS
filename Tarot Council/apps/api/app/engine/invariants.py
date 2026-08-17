@@ -54,6 +54,8 @@ from ..schemas.artifacts import (
     SimplestPath,
     SituationRead,
     StakeholderGraph,
+    Table,
+    TableRow,
     TreeNode,
     UnexpectedMove,
     ValueAudit,
@@ -61,7 +63,7 @@ from ..schemas.artifacts import (
 )
 from ..schemas.common import DO_NOTHING_ID
 from ..schemas.council import DecisionContext
-from ..schemas.program import Stage
+from ..schemas.program import Coverage, Stage
 
 PROBABILITY_TOLERANCE = 0.02
 POWER_GAP_THRESHOLD = 0.4
@@ -832,6 +834,177 @@ def _v_conclusion(d: Conclusion, ctx: InvariantContext) -> list[str]:
 
 # ═════════════════════════════════════════════════════════════════ registry ══
 
+def _cell(row: TableRow, column: str) -> str:
+    value = row.cells.get(column)
+    return "" if value is None else str(value).strip()
+
+
+def _number(row: TableRow, column: str) -> float | None:
+    try:
+        return float(row.cells.get(column))  # type: ignore[arg-type]
+    except (TypeError, ValueError):
+        return None
+
+
+def _v_table(d: Table, ctx: InvariantContext) -> list[str]:
+    """Enforce the stage's declared `TableSpec` (ADR-030).
+
+    This is the interpreter that makes "no code" mean something. Every branch below is a
+    declarative restatement of a rule the built-in six already assert in hand-written
+    Python, so an authored module is held to the same *kind* of standard even though it
+    ships no Python of its own.
+
+    The messages are written to be repaired: the executor feeds them straight back to the
+    model, so "row 'r2' has an empty 'mechanism'" is worth several times "invalid table".
+    """
+    spec = ctx.stage.table
+    if spec is None:
+        # Refusing rather than passing. A table with no declared constraints is a freeform
+        # blob the model fills however it likes — the persona-with-a-prompt failure that
+        # loader rule 4 exists to prevent, and the loader normally catches it first. Reaching
+        # here means something bypassed the loader.
+        return [
+            f"stage '{ctx.stage.id}' produces a Table but declares no table spec; "
+            "an artifact with no constraints cannot be validated"
+        ]
+
+    problems: list[str] = []
+    rows = list(d.rows)
+
+    if len(rows) < spec.min_rows:
+        problems.append(
+            f"{len(rows)} row(s); this stage requires at least {spec.min_rows}."
+        )
+
+    ids = [r.id.strip() for r in rows]
+    if len(ids) != len(set(ids)):
+        problems.append("Two rows share an id; every row needs a distinct one to be citable.")
+    if any(not i for i in ids):
+        problems.append("A row has an empty id.")
+
+    declared = set(spec.columns)
+    for row in rows:
+        unknown = set(row.cells) - declared
+        if declared and unknown:
+            problems.append(
+                f"row '{row.id}' has undeclared column(s) {', '.join(sorted(unknown))}; "
+                f"this table's columns are: {', '.join(spec.columns)}."
+            )
+        empties = [c for c in spec.required if not _cell(row, c)]
+        if empties:
+            problems.append(
+                f"row '{row.id}' has empty required column(s): {', '.join(empties)}. "
+                "Every row must fill all of them."
+            )
+
+    for column in spec.distinct:
+        values = [_cell(row, column).lower() for row in rows if _cell(row, column)]
+        if len(values) != len(set(values)):
+            problems.append(
+                f"Two rows share a '{column}'; values in that column must be genuinely "
+                "distinct."
+            )
+
+    present = {tag for row in rows for tag in row.tags}
+    missing_tags = [t for t in spec.required_tags if t not in present]
+    if missing_tags:
+        problems.append(
+            "The table is missing required kinds: "
+            + ", ".join(missing_tags)
+            + ". Each must be carried by at least one row."
+        )
+
+    for rule in spec.ranges:
+        for row in rows:
+            if not _cell(row, rule.column):
+                continue
+            value = _number(row, rule.column)
+            if value is None:
+                problems.append(
+                    f"row '{row.id}' has a non-numeric '{rule.column}'; it must be a number."
+                )
+                continue
+            if rule.minimum is not None and value < rule.minimum:
+                problems.append(
+                    f"row '{row.id}' has {rule.column}={value}, below the minimum "
+                    f"{rule.minimum}."
+                )
+            if rule.maximum is not None and value > rule.maximum:
+                problems.append(
+                    f"row '{row.id}' has {rule.column}={value}, above the maximum "
+                    f"{rule.maximum}."
+                )
+
+    if spec.sums_to is not None:
+        rule = spec.sums_to
+        # Name the offending cell rather than reporting the total. `or 0.0` used to swallow a
+        # non-numeric value, so "about half" produced "sums to 0.500" and sent the repair
+        # pass to fix arithmetic instead of the cell that is not a number.
+        unparseable = [r.id for r in rows if _number(r, rule.column) is None]
+        if unparseable:
+            problems.append(
+                f"row(s) {', '.join(unparseable)} have a non-numeric '{rule.column}'; "
+                f"it must be a number so the column can be summed."
+            )
+        else:
+            total = sum(_number(row, rule.column) or 0.0 for row in rows)
+            if abs(total - rule.total) > rule.tolerance:
+                problems.append(
+                    f"'{rule.column}' sums to {total:.3f}; it must sum to {rule.total} "
+                    f"(±{rule.tolerance})."
+                )
+
+    if spec.covers is not None:
+        problems += _check_coverage(d, ctx, spec.covers)
+
+    return problems
+
+
+def _check_coverage(d: Table, ctx: InvariantContext, covers: "Coverage") -> list[str]:
+    """Every value in an earlier stage's column must appear in this table.
+
+    Checked across a stage boundary, which is what makes a multi-stage authored module more
+    than a sequence of unrelated prompts. Generalises the psychologist's rule that every
+    person named in the cast gets a full profile.
+    """
+    prior = ctx.prior.get(covers.stage)
+    if prior is None:
+        # Not the model's fault, and not silently ignorable either: the loader checks that
+        # `covers.stage` is an earlier stage, so an absent artifact means that stage
+        # abstained. Skipping the check is right — there is nothing to cover.
+        return []
+
+    expected: set[str] = set()
+    for row in (prior.data.get("rows") or []):
+        if isinstance(row, dict):
+            cells = row.get("cells") or {}
+            value = cells.get(covers.column) if isinstance(cells, dict) else None
+            if value is None:
+                value = row.get(covers.column) or row.get("id")
+            if value is not None and str(value).strip():
+                expected.add(str(value).strip())
+
+    if not expected:
+        return []
+
+    into = covers.into or covers.column
+    got = {_cell(row, into) for row in d.rows if _cell(row, into)}
+    missing = expected - got
+    problems: list[str] = []
+    if missing:
+        problems.append(
+            f"Missing a row for: {', '.join(sorted(missing))}. Every '{covers.column}' from "
+            f"stage '{covers.stage}' needs one here — no partial coverage, no skipping the "
+            "awkward one."
+        )
+    invented = got - expected
+    if invented:
+        problems.append(
+            f"Rows for values not in stage '{covers.stage}': {', '.join(sorted(invented))}."
+        )
+    return problems
+
+
 INVARIANTS: dict[str, Validator] = {
     "DecisionFrame": _v_decision_frame,
     "EvidenceLedger": _v_evidence_ledger,
@@ -865,11 +1038,16 @@ INVARIANTS: dict[str, Validator] = {
     "HarmLedger": _v_harm,
     "RegretMatrix": _v_regret,
     "InactionHarm": _v_inaction,
+    "Table": _v_table,
     "Conclusion": _v_conclusion,
 }
 
 # Types with no type-specific rules beyond the universals. Listed explicitly so a
 # missing validator is a loader error rather than a silent gap.
+#
+# `Table` is deliberately NOT here: it has a validator, and that validator refuses a table
+# whose stage declared no spec. An authored artifact with no declared constraints is exactly
+# what rule 4 exists to prevent.
 NO_EXTRA_INVARIANTS: frozenset[str] = frozenset(
     {"RelationshipEdges", "EmotionalCostTable", "SystemDesign", "IntegrityCheck"}
 )

@@ -60,6 +60,17 @@ class Transient(ProviderError):
     """
 
 
+class BadGeneration(ProviderError):
+    """The model produced output the provider could not parse as a tool call.
+
+    Not an endpoint problem and not retryable in any useful sense -- it is the
+    model failing at the task. Recording it as a trajectory outcome rather than
+    an infrastructure error matters: malformed tool-call output is exactly the
+    failure mode H2 expects to rise under romanized input, so a run that dies on
+    it would destroy the measurement it exists to make.
+    """
+
+
 def _post(url, **kw):
     """requests.post with network faults mapped into the retry taxonomy."""
     try:
@@ -109,6 +120,8 @@ class OpenAICompat(Provider):
             # not exhausted, it is busy -- retiring it would throw away capacity
             # that is fine again in seconds.
             raise Transient(f"{self.model} HTTP {r.status_code}: {r.text[:200]}")
+        if r.status_code == 400 and "output_parse_failed" in r.text:
+            raise BadGeneration(f"{self.model}: unparseable tool call")
         if r.status_code >= 400:
             raise ProviderError(f"{self.model} HTTP {r.status_code}: {r.text[:400]}")
 
@@ -363,11 +376,25 @@ ENDPOINTS = {
     "gemini-3.1-flash-lite": [
         ("gemini", None, "GEMINI_API_KEY", "gemini-3.1-flash-lite"),
     ],
-    "llama-70b": [
+    # Verified live against GET /v1/models on 2026-08-16. Groq no longer serves
+    # any Llama chat model -- the earlier llama-3.3-70b-versatile entry 404s.
+    # Catalogues churn fast enough that guessing an id is never safe; run
+    # `python -m iab.check_endpoints` before any run.
+    #
+    # gpt-oss at two sizes is deliberate: same family, ~6x parameter gap, so any
+    # cross-condition effect can be read against model scale rather than being
+    # confounded with it.
+    "gpt-oss-120b": [
         ("openai-compat", "https://api.groq.com/openai/v1", "GROQ_API_KEY",
-         "llama-3.3-70b-versatile"),
-        ("openai-compat", "https://api.cerebras.ai/v1", "CEREBRAS_API_KEY",
-         "llama-3.3-70b"),                            # UNCONFIRMED id
+         "openai/gpt-oss-120b"),
+    ],
+    "gpt-oss-20b": [
+        ("openai-compat", "https://api.groq.com/openai/v1", "GROQ_API_KEY",
+         "openai/gpt-oss-20b"),
+    ],
+    "qwen3.6-27b": [
+        ("openai-compat", "https://api.groq.com/openai/v1", "GROQ_API_KEY",
+         "qwen/qwen3.6-27b"),
     ],
 }
 

@@ -102,6 +102,21 @@ calling `record_decision` with the specific exclusion codes that apply, so
 refusing correctly is distinguishable from refusing blindly. See
 `test_null_agent_scores_zero_on_every_task`.
 
+**Scores are stochastic — always run multiple trials.** Two identical C1 runs of
+`gpt-oss-120b` disagreed on rail-004 and sch-009. Generation is not deterministic
+at temperature 0: MoE routing and server-side batching both introduce variance.
+So a single-trial C1-vs-C3 gap cannot be distinguished from run-to-run noise, and
+the whole result rests on that comparison. `--trials 3` is the minimum; the
+summary reports `flaky` (tasks the model both passes and fails on identical
+input), which is the honest noise floor. **Any cross-condition gap smaller than
+`flaky` is not evidence of anything.**
+
+**Results are version-stamped.** Policy text, success assertions and checkpoints
+all change what a score means without changing any label. Every result carries a
+`bench_version` hash of those three, and the analyzer refuses to let mixed
+versions sit in one table unremarked — two early Gemini runs were made under an
+older policy and would otherwise have looked directly comparable.
+
 ### Environments are simulated, always
 
 Nothing here touches real IRCTC, UPI, DigiLocker or any government endpoint.
@@ -137,8 +152,15 @@ python -m iab.seed                  # regenerate the seeded databases
 python -m iab.tasks_c1              # regenerate the C1 task files
 python -m unittest discover -s tests -v
 
-python -m iab.runner --model llama-70b --domain rail --condition C1
+python -m iab.check_endpoints                      # which models are actually usable
+python -m iab.runner --model gpt-oss-120b --domain rail --condition C1 --trials 3
+python -m iab.analyze
 ```
+
+Model catalogues churn fast and silently -- `llama-3.3-70b-versatile` 404s on Groq
+now, and both `sarvam-30b` and `sarvam-m` were deprecated between this benchmark
+being designed and being built. Always run `check_endpoints` first: it probes for
+*native tool calling*, which is what actually gates a model's inclusion.
 
 Nothing but `requests` is needed to run the tests — they use the scripted `Mock`
 provider, so the entire harness is exercised without spending a token.
@@ -158,10 +180,14 @@ Set whichever of these you have: `GROQ_API_KEY`, `CEREBRAS_API_KEY`,
 
 ## Status
 
-- [x] Environments, rules, seeds, verifiers, harness, **85 tests**
+- [x] Environments, rules, seeds, verifiers, harness, **102 tests**
 - [x] C1 (English): 20 tasks — 8 rail, 12 schemes
 - [x] Condition pipeline: generation, quality gates, human-override layer
 - [x] C2/C3 (Hindi + Hinglish): 40 tasks drafted, 0 hard failures
+- [x] First live baseline: `gpt-oss-120b` on Groq, both domains
+- [ ] Task set under-discriminates at the top (C1 ~88%). Needs deeper tasks —
+      more checkpoints per task is also what gives the survival curve the
+      resolution H1 needs
 - [ ] **Native-speaker sign-off on C2/C3** — 40 drafts outstanding. Open
       `review_hindi.html`, edit in place, download the override files. This is
       the credibility blocker: unvalidated MT sinks the result regardless of how

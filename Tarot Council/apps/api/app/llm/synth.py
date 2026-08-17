@@ -92,7 +92,13 @@ def _build_type(
         return get_args(annotation)[0]
 
     if origin in (list, tuple, set):
-        (inner,) = get_args(annotation) or (str,)
+        args = [a for a in get_args(annotation) if a is not Ellipsis]
+        # `tuple[X, ...]` yields (X, Ellipsis) and `tuple[X, Y]` yields two real types.
+        # Taking the first after dropping Ellipsis handles the variadic form and degrades
+        # sensibly on the fixed-length one. Unpacking directly raised ValueError, which
+        # surfaced as an unexplained module abstention the first time an artifact used a
+        # tuple field instead of a list.
+        inner = args[0] if args else str
         # Stop self-referential recursion (TreeNode.children) by returning an
         # empty list once the inner model is already on the path.
         if isinstance(inner, type) and issubclass(inner, BaseModel) and inner in path:

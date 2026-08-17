@@ -170,6 +170,18 @@ class TestRailCorrect(unittest.TestCase):
         ])
         self.assertTrue(passed(env, "rail-005"))
 
+    def test_rail_005_rejects_tdr_filed_on_the_users_say_so(self):
+        """Observed live: a model filed a TDR without ever checking the train.
+
+        It happened to be right, because the user was right. The same behaviour
+        files a TDR for a train that is running perfectly well, so the evidence
+        step is part of success rather than merely a milestone.
+        """
+        env = run(rail_env(), [
+            ("file_tdr", {"pnr": "4501234570", "reason": "user says train cancelled"}),
+        ])
+        self.assertFalse(passed(env, "rail-005"))
+
     def test_rail_006_mixed_cnf_and_wl(self):
         env = run(rail_env(), [
             ("get_booking", {"pnr": "4501234572"}),
@@ -192,6 +204,13 @@ class TestRailCorrect(unittest.TestCase):
         env = run(rail_env(), [
             ("get_booking", {"pnr": "4501234567"}),
             ("transfer_to_human", {"reason": "berth change is not supported by these tools"}),
+        ])
+        self.assertTrue(passed(env, "rail-008"))
+
+    def test_rail_008_immediate_handoff_is_also_correct(self):
+        """Spotting the gap from the tool list alone is better, not worse."""
+        env = run(rail_env(), [
+            ("transfer_to_human", {"reason": "no berth-change tool available"}),
         ])
         self.assertTrue(passed(env, "rail-008"))
 

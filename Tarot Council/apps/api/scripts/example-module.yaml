@@ -1,0 +1,163 @@
+# An example authored module (Phase 5, ADR-030).
+#
+# Load it with:   python -m app.cli modules --load scripts/example-module.yaml
+# Activate it:    python -m app.cli modules --activate historian
+# Use it:         python -m app.cli --provider mock --preset with:historian "…?"
+#
+# Written in the same format as the built-in six (app/programs/*.yaml) on purpose: the
+# fastest way to author a module is to copy one of those and edit it, and anything a
+# graphical builder could produce has to be expressible here anyway.
+#
+# The interesting part is `produces: Table` plus a `table:` block. That block is the
+# declarative invariant vocabulary — the answer to "how does a module with no code get
+# machine-checked artifacts?" Every rule in it is a shape the built-in six already assert
+# in hand-written Python; see the table in ADR-030. What it *cannot* express (recursive
+# structures, cross-field semantics) is stated there too rather than papered over.
+
+id: historian
+version: 1
+
+skin:
+  name: Historian
+  title: what happened last time
+  accent: "#8a7f6a"
+
+summary: >
+  Finds the closest prior cases and what they actually cost, then argues from the base
+  rate rather than from the specifics of this decision.
+
+mental_model: >
+  Most decisions are not new. The person making one is unusually bad at seeing that,
+  because their own case feels specific and everybody else's looks like a category.
+  So the useful contribution is not analysis of this situation — it is the outside
+  view: how this class of decision has tended to end, and how often.
+
+inputs:
+  required:
+    - id: decision
+      description: The decision under consideration.
+      missing_policy: abstain
+  optional:
+    - id: history
+      description: Prior attempts at anything similar, by this person or others.
+      missing_policy: infer_labelled
+
+stages:
+  # Stage 1 — an authored artifact. The `table:` block is what makes it checkable.
+  - id: precedents
+    name: Assemble the reference class
+    group: gather
+    reads: [context]
+    produces: Table
+    instruction: >
+      List comparable prior situations — the same *class* of decision, not the same
+      surface details. For each, name the mechanism that drove the outcome, how often
+      that class ends well, and how closely it applies here. Tag at least one case that
+      went badly and at least one that went well: a reference class with only one
+      outcome in it is a story, not a base rate.
+    must_not:
+      - Recommending anything. This stage only assembles the outside view.
+      - Citing a rate you cannot attach to a named class of case.
+    table:
+      columns: [precedent, mechanism, outcome_rate, applicability]
+      # min_rows: three cases is the floor at which a "rate" means anything at all.
+      min_rows: 3
+      # Every row must carry all four. A precedent with no mechanism is a rhyme.
+      required: [precedent, mechanism, outcome_rate, applicability]
+      # Two rows describing the same prior case inflate the reference class.
+      distinct: [precedent]
+      # The structural bias correction (ADR-014 in miniature): the stage cannot produce
+      # a one-sided reference class, because that is this module's characteristic failure.
+      required_tags: [ended_well, ended_badly]
+      ranges:
+        - column: outcome_rate
+          minimum: 0.0
+          maximum: 1.0
+        - column: applicability
+          minimum: 0.0
+          maximum: 1.0
+
+  # Stage 2 — a second authored artifact, tied to the first by `covers`. This is what
+  # makes a two-stage module more than two unrelated prompts: the engine checks across
+  # the stage boundary that nothing from stage 1 was quietly dropped.
+  - id: divergence
+    name: Say where this case differs
+    # Its own group, not `gather`, and the loader enforces that: grouped stages become one
+    # call (ADR-013), so a `covers` rule pointing into the same group could never fire —
+    # the artifact it covers would not exist yet. One extra call, in exchange for the
+    # cross-stage check actually meaning something.
+    group: differentiate
+    reads: [precedents]
+    produces: Table
+    instruction: >
+      For every precedent above, state the one way this decision genuinely differs from
+      it, and whether that difference makes the precedent more or less applicable. If a
+      precedent differs in no material way, say so explicitly — that is the strongest
+      thing you can report.
+    must_not:
+      - Skipping a precedent because the difference is hard to name.
+      - Introducing a case that was not in the table above.
+    table:
+      columns: [precedent, difference, weakens_or_strengthens]
+      min_rows: 3
+      required: [precedent, difference, weakens_or_strengthens]
+      covers:
+        stage: precedents
+        column: precedent
+
+  - id: commit
+    name: Commit to the outside view
+    group: commit
+    reads: [precedents, divergence]
+    produces: Conclusion
+    instruction: >
+      State what the base rates imply for this decision, and how confident that makes
+      you. Name the observation that would tell you this case is genuinely the exception.
+    must_not:
+      - Citing a precedent that is not in the tables above.
+      - Treating this decision as unprecedented without saying why the table does not apply.
+    terminal: true
+
+biases:
+  - id: false_analogy
+    description: >
+      Treats a superficially similar case as a precedent when the causal mechanism
+      differs, which makes an irrelevant base rate look authoritative.
+    watch_for: >
+      A cited precedent whose mechanism differs from this decision's, or a rate quoted
+      without the class of case it was computed over.
+    detectable_by: [analyst, strategist]
+
+  - id: outside_view_absolutism
+    description: >
+      Dismisses genuinely load-bearing specifics because the base rate is legible and
+      the specifics are not.
+    watch_for: >
+      A conclusion that never engages with any fact particular to this decision, or a
+      `divergence` table where every difference is dismissed as immaterial.
+    detectable_by: [tactician, psychologist]
+
+critique_lens: >
+  Whether the claim survives the base rate — and whether the base rate being cited was
+  computed over cases that actually resemble this one.
+
+critics: [analyst, tactician]
+
+success_metrics:
+  - id: precedent_held
+    question: Did the class of case this cited actually behave as predicted?
+    horizon_days: 90
+  - id: was_new
+    question: Was this decision genuinely without useful precedent?
+    horizon_days: 30
+
+risk_tolerance: 0.35
+time_horizon: long
+# `memory_kind` is a closed set — an authored module picks from the existing kinds rather
+# than inventing one, because each kind is what the extractor knows how to produce.
+memory_kind: fact
+
+voice:
+  tone: dry, specific about numbers, uninterested in how this case feels
+  forbidden:
+    - Quoting a statistic without the class of case it describes.

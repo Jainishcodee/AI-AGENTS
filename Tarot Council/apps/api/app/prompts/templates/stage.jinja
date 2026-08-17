@@ -59,6 +59,29 @@ WHAT TO DO NOW
 {{ loop.index }}. {{ stage.name }} — produce `{{ stage.produces }}`{% if not batch.is_single %} under the key `{{ stage.id }}`{% endif %}
 
 {{ stage.instruction | trim | indent(3, true) }}
+{% if stage.table %}
+   TABLE SHAPE. Return `rows`: a list of objects, each with `id` (short, unique,
+   citable), `cells` (an object keyed by the column names below), and `tags` (a list
+   of strings, possibly empty).
+   - columns: {{ stage.table.columns | join(', ') }}
+{% if stage.table.min_rows > 1 %}   - at least {{ stage.table.min_rows }} rows
+{% endif %}
+{%- if stage.table.required %}   - these must be non-empty in EVERY row: {{ stage.table.required | join(', ') }}
+{% endif %}
+{%- if stage.table.distinct %}   - these must differ between rows: {{ stage.table.distinct | join(', ') }}
+{% endif %}
+{%- if stage.table.required_tags %}   - at least one row must be tagged with each of: {{ stage.table.required_tags | join(', ') }}
+{% endif %}
+{%- for r in stage.table.ranges %}   - `{{ r.column }}` must be a number{% if r.minimum is not none %} >= {{ r.minimum }}{% endif %}{% if r.maximum is not none %} <= {{ r.maximum }}{% endif %}
+
+{% endfor %}
+{%- if stage.table.sums_to %}   - `{{ stage.table.sums_to.column }}` across all rows must sum to {{ stage.table.sums_to.total }}
+{% endif %}
+{%- if stage.table.covers %}   - one row for every `{{ stage.table.covers.column }}` in stage `{{ stage.table.covers.stage }}`, carried in `{{ stage.table.covers.into or stage.table.covers.column }}`. No omissions.
+{% endif %}
+   These are checked in code. A row that breaks one is rejected and you will be asked
+   to fix it, so fill them properly the first time.
+{% endif %}
 
    YOU MAY NOT:
 {% for rule in stage.must_not %}   - {{ rule }}

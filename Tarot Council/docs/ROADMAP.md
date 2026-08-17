@@ -292,7 +292,7 @@ path is left inherited (ADR-027).
 
 ---
 
-## Phase 5 — Marketplace *(harness built)*
+## Phase 5 — Marketplace *(authoring built)*
 
 - [x] **Divergence harness** — `learning/divergence.py`, `GET /divergence`,
       `app.cli divergence [--live]` (ADR-026). Structural half — artifact distinctness,
@@ -306,9 +306,52 @@ path is left inherited (ADR-027).
       fails it** at 1.00 stance overlap. That failure is the evidence the instrument
       detects anything at all; without it, a passing score on the real six would mean
       nothing.
-- [ ] Module builder over `AgentProgram` — stages, artifacts, biases, metrics; no code
-- [ ] Sharing, forking, versioning of modules, presets, and whole councils
+- [x] **Authoring, validation and quarantine** — `app.cli modules [--load|--activate|
+      --retire|--delete]`, `GET/PUT/POST/DELETE /catalog/...` (ADR-030). A user module is
+      *the same* `AgentProgram` the engine already executes, stored in SQLite (schema v4)
+      rather than dropped in the package directory.
+
+      Two properties carry the design. First, **the engine never learns that user modules
+      exist**: an authored module runs through `run_program` with no new code path and no
+      branch on origin anywhere — which is ADR-011 finally paying for itself. Second,
+      **a broken module cannot take the server down.** Built-ins stay loud (a malformed
+      built-in still refuses to boot, because that is a developer error); user content gets
+      quarantined with its full error list and excluded from every preset. A draft that
+      won't save is a draft nobody can fix.
+
+      Authored modules are held to the *same* ten rules — `loader.rule_violations` is one
+      rulebook with two failure modes — and `with:<module>` runs the built-in six plus one
+      authored module on the same question, which is the shape the exit criterion needs.
+- [x] **Declarative artifact vocabulary** — the other half of "no code". One artifact kind,
+      `Table`, plus a `TableSpec` on the stage producing it: `min_rows`, `required`,
+      `distinct`, `required_tags`, `ranges`, `sums_to`, and `covers` (across a stage
+      boundary). Every rule was **extracted** from a shape the built-in validators already
+      assert, and the proof is a test: the vocabulary restates `OptionSet`'s real invariant —
+      ≥7 options, five required tags, no two labels alike — and rejects each violation the
+      hand-written Python does.
+
+      Each rule is tested in both directions, because a declarative rule that never fails is
+      decoration. The loader refuses specs that *look* like guarantees but cannot fire: a
+      column not in `columns`, a `covers` pointing forward, a spec on a non-`Table` stage,
+      a spec with no constraint at all, and a `covers` into the same group — grouped stages
+      become one call, so the covered artifact would not exist yet. That last rule caught a
+      bug in the shipped example module.
+
+      What it cannot express is named rather than hidden (ADR-030): recursive structures and
+      cross-field semantics stay hand-written, so an authored module is held to a real but
+      weaker standard than the six.
+- [ ] Module builder *UI* — the CLI takes YAML today, which is the format the six are
+      written in, so copy-and-edit already works. A form is presentation over the same model.
+- [ ] Sharing, forking, versioning of modules, presets, and whole councils. Deliberately
+      last: importing a stranger's module means running their prose inside a system prompt,
+      which needs a review step and its own decision.
 - [ ] Domain councils: hiring, medical, legal, product
 
-**Exit criterion.** A user-authored module measurably changes the recommendation on
-a decision where the built-in six agreed.
+**Exit criterion — not yet met.** A user-authored module must *measurably* change the
+recommendation on a decision where the built-in six agreed. What exists: an authored module
+runs as a seventh council member (`with:historian`, 17 calls at `quick`), produces validated
+artifacts, is critiqued by the modules it names, and appears in the synthesis. What is
+missing is the *measurement* — the divergence harness (ADR-026) has to be pointed at a
+`with:` preset and run against a real provider, because the mock council agrees with itself
+by construction (1.00 stance overlap) and therefore cannot show one module moving a verdict.
+`scripts/example-module.yaml` is the module the criterion will be measured with.

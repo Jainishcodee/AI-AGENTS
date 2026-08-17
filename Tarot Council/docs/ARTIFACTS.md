@@ -528,3 +528,55 @@ artifacts (the citation check — a conclusion resting on nothing is caught here
 That last invariant is the mechanical version of "never hallucinate confidence":
 high confidence is *arithmetically unavailable* to a module whose own load-bearing
 evidence is labelled an assumption.
+
+---
+
+## `Table` — the one artifact an authored module may shape (ADR-030)
+
+Every kind above is defined in Python with a hand-written validator. A user-authored module
+can write neither, so it gets exactly one generic kind and declares the constraints itself:
+
+```yaml
+produces: Table
+table:
+  columns: [precedent, mechanism, outcome_rate]
+  min_rows: 3
+  required: [precedent, mechanism]
+  distinct: [precedent]
+  required_tags: [ended_well, ended_badly]
+  ranges: [{column: outcome_rate, minimum: 0.0, maximum: 1.0}]
+  sums_to: {column: share, total: 1.0, tolerance: 0.02}
+  covers: {stage: cast, column: person, into: person}
+```
+
+```
+title: str
+rows: list[TableRow]
+  id: str                          # short, unique, citable
+  cells: dict[str, str|float|int|bool|None]   # keyed by the declared columns
+  tags: list[str]
+```
+
+**Invariants** · every declared rule above, plus: unique non-empty row ids; no column
+outside `columns`. Each rule is a restatement of a shape the built-ins already assert —
+
+| rule | the built-in it generalises |
+|---|---|
+| `min_rows` | `OptionSet` ≥7, `FailureModeTable` ≥3 |
+| `required` | the psychologist's nine dimensions, non-empty every time |
+| `distinct` | no two options may share a label |
+| `required_tags` | `REQUIRED_OPTION_TAGS`; ADR-014's forced `reckless` option |
+| `ranges` | the leaf-probability floor |
+| `sums_to` | probability-tree siblings, flattened to one column |
+| `covers` | `PersonProfileSet` must cover `PersonList` |
+
+**The loader refuses a spec that cannot fire**, because such a spec reads as a guarantee: a
+`required`/`distinct`/`ranges`/`sums_to` column absent from `columns`; a `covers` pointing
+forward; a `table:` block on a stage producing something else; a spec with columns but no
+constraint at all; and a `covers` pointing into the **same group** — grouped stages become one
+call (ADR-013), so the covered artifact does not exist yet.
+
+**What this cannot express**, stated rather than hidden: recursive structure (tree depth,
+sibling sums over nesting) and cross-field semantics ("the ten-year regret must not contradict
+the one-year row"). An authored module is therefore held to a real but weaker standard than
+the six.

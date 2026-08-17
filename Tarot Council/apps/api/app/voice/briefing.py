@@ -24,9 +24,7 @@ the useful half and it is fully testable.
 
 from __future__ import annotations
 
-import asyncio
 import re
-import shutil
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -173,14 +171,20 @@ async def synthesise(briefing: Briefing, out_dir: Path) -> Path | None:
             await edge_tts.Communicate(line.text, line.voice).save(str(part))
         except Exception as exc:  # noqa: BLE001 - a network TTS endpoint can simply fail
             log.warning("could not synthesise line %d: %s", index, exc)
+            # Leave nothing half-written behind. Returning here with the earlier parts
+            # still on disk litters the output directory with fragments of a briefing
+            # nobody can play, and the caller has already been told this failed.
+            for orphan in parts:
+                orphan.unlink(missing_ok=True)
             return None
         parts.append(part)
 
     combined = out_dir / f"{briefing.deliberation_id}.mp3"
     if not _concatenate(parts, combined):
-        # Without ffmpeg the parts are still playable in order, which is worth more than
-        # failing outright.
-        log.info("ffmpeg not found; leaving %d separate audio parts", len(parts))
+        # The join is byte-wise and needs no tools, so a failure here is the filesystem
+        # (full disk, permissions), not a missing dependency. The separate parts are still
+        # playable in order, which beats failing outright.
+        log.info("could not write the joined file; leaving %d separate parts", len(parts))
         return parts[0] if parts else None
 
     for part in parts:
@@ -212,10 +216,6 @@ def engine_available() -> bool:
     except ImportError:
         return False
     return True
-
-
-def ffmpeg_available() -> bool:
-    return shutil.which("ffmpeg") is not None
 
 
 _MARKUP = re.compile(r"[`*_#\[\]]+")

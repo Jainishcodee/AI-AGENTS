@@ -46,9 +46,23 @@ def summarise(rows):
     for (model, domain, cond), rs in sorted(groups.items()):
         n = len(rs)
         depth = [r["checkpoint_depth"] / max(r["checkpoints_total"], 1) for r in rs]
+
+        # Per-task outcomes across trials. `unstable` is the honest noise floor:
+        # tasks this model both passes and fails on identical input. Any
+        # cross-condition gap smaller than that is not evidence of anything.
+        by_task = defaultdict(list)
+        for r in rs:
+            by_task[r["task_id"]].append(bool(r["passed"]))
+        trials = max(len(v) for v in by_task.values())
+        unstable = sum(1 for v in by_task.values() if 0 < sum(v) < len(v))
+        pass_all = sum(1 for v in by_task.values() if all(v))
+
         out.append({
             "model": model, "domain": domain, "condition": cond, "n": n,
+            "tasks": len(by_task), "trials": trials,
             "pass_rate": sum(r["passed"] for r in rs) / n,
+            "pass_all_trials": pass_all / len(by_task),
+            "unstable": unstable / len(by_task),
             "mean_depth": sum(depth) / n,
             "mean_steps": sum(r["steps"] for r in rs) / n,
             "clarified": sum(bool(r.get("asked_clarification")) for r in rs) / n,
@@ -116,6 +130,8 @@ def failure_modes(rows):
             buckets[g][tag] += 1
         if r.get("asked_clarification"):
             buckets[g]["asked_clarification"] += 1
+        if r.get("stop_reason") == "bad_generation":
+            buckets[g]["malformed_tool_call"] += 1
     return buckets
 
 
@@ -130,13 +146,23 @@ def main():
 
     table = summarise(rows)
     w = max(len(t["model"]) for t in table)
-    print(f"{'model':<{w}}  {'domain':<8} {'cond':<5} {'n':>3} "
-          f"{'pass':>6} {'depth':>6} {'steps':>6} {'clarif':>7}")
-    print("-" * (w + 47))
+    print(f"{'model':<{w}}  {'domain':<8} {'cond':<5} {'n':>3} {'k':>2} "
+          f"{'pass':>6} {'all-k':>6} {'flaky':>6} {'depth':>6} {'steps':>6}")
+    print("-" * (w + 52))
     for t in table:
         print(f"{t['model']:<{w}}  {t['domain']:<8} {t['condition']:<5} {t['n']:>3} "
-              f"{t['pass_rate']:>6.0%} {t['mean_depth']:>6.0%} "
-              f"{t['mean_steps']:>6.1f} {t['clarified']:>7.0%}")
+              f"{t['trials']:>2} {t['pass_rate']:>6.0%} {t['pass_all_trials']:>6.0%} "
+              f"{t['unstable']:>6.0%} {t['mean_depth']:>6.0%} {t['mean_steps']:>6.1f}")
+
+    single = [t for t in table if t["trials"] < 2]
+    if single:
+        print("\nNOTE -- these groups ran a single trial, so their noise floor is "
+              "unknown:")
+        for t in single:
+            print(f"  {t['model']} / {t['domain']} / {t['condition']}")
+        print("  Re-run with --trials 3. Identical inputs already produced "
+              "different outcomes here, so a one-shot gap between conditions "
+              "cannot be distinguished from run-to-run variance.")
 
     print("\nsurvival  P(depth >= k | task has >= k checkpoints)   [n in brackets]")
     for (model, domain, cond), curve in survival(rows).items():
@@ -151,6 +177,22 @@ def main():
             print(f"  {' / '.join(g)}")
             for tag, count in sorted(tags.items(), key=lambda x: -x[1]):
                 print(f"      {tag:<20} {count}")
+
+    # A results table that silently mixes benchmark versions is worse than no
+    # table: the rows look comparable and are not.
+    versions = defaultdict(set)
+    for r in rows:
+        versions[key(r)].add(r.get("bench_version", "unstamped"))
+    stale = {g: v for g, v in versions.items() if len(v) > 1 or "unstamped" in v}
+    if stale:
+        print("\nWARNING -- these groups are not comparable:")
+        for g, v in stale.items():
+            print(f"  {' / '.join(g)}: versions {sorted(v)}")
+        print("  Re-run them against the current policy and verifiers, or drop them.")
+    allv = {v for s in versions.values() for v in s} - {"unstamped"}
+    if len(allv) > 1:
+        print(f"\nWARNING -- {len(allv)} distinct benchmark versions across the table. "
+              "Cross-model comparison is only valid within one version.")
 
     conds = {t["condition"] for t in table}
     if len(conds) < 2:
