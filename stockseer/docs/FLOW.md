@@ -104,6 +104,45 @@ Priority maps to how hard the phone tries:
 
 ---
 
+## 1c. What actually has to be running?
+
+The single most confusing part, so here it is as a table. **Tailscale is only
+needed for the Jarvis path.** ntfy travels over the ordinary internet and does
+not care whether Tailscale is connected, or whether your PC exists.
+
+| | PC awake | PC asleep | PC off / you are out |
+|---|---|---|---|
+| **Calendar alerts** (apply, LAST DAY) | ✅ | ✅ scheduler wakes it | ✅ **GitHub Actions** |
+| **Listing alerts** (buy, target, stop) | ✅ | ✅ scheduler wakes it | ✅ **GitHub Actions** |
+| Rich 3.2s vibration rhythms | ✅ | ✅ | ❌ ntfy priority instead |
+| Dashboard in a browser | ✅ | ✅ | ❌ |
+| **Tailscale required?** | yes | yes | **no** |
+| **Jarvis open required?** | for live prices | for live prices | **no** |
+
+Read the last column twice. With GitHub Actions configured, **nothing of yours
+has to be on.** Everything else is an upgrade, not a requirement.
+
+```
+   ┌─ Is the PC awake? ─────────────────────────────────────────────┐
+   │                                                                │
+   │  YES ──► Jarvis polls over Tailscale                           │
+   │          full alert text, custom vibration rhythms             │
+   │                                                                │
+   │  ASLEEP ─► Task Scheduler wakes it at 08:00 and 09:40          │
+   │            then exactly as above                               │
+   │                                                                │
+   │  OFF ────► GitHub Actions runs in the cloud, pushes to ntfy    │
+   │            no PC, no Tailscale, no Jarvis. Just your phone.    │
+   └────────────────────────────────────────────────────────────────┘
+```
+
+**Do you have to wake the PC each morning?** No, provided you leave it
+**asleep** rather than shut down — the scheduler wakes it. And once GitHub
+Actions is on, not even that: the cloud covers the days the machine is off,
+unplugged, or with you in another city.
+
+---
+
 ## 2. Two delivery paths — this is the key idea
 
 Alerts reach your phone in **two completely different ways**, because the two
@@ -352,25 +391,38 @@ uses roughly 100 (about 15 listing days at 2 hours, plus a minute a day).
 
 ## 7. Setup checklist
 
-**On the PC, every time:**
+**Once, ever — the PC starts itself after this:**
 
 ```powershell
-python -m stockseer.cli ui --lan          # --lan matters: without it,
-                                          # only the PC itself can connect
-python -m stockseer.cli ipo watch         # listing mornings only
+# Admin PowerShell
+cd "g:\AI AGENTS\stockseer"
+.\scripts\install-scheduler.ps1
 ```
 
-**Once, ever:**
+Registers three tasks, all able to **wake the PC from sleep**:
+
+```
+StockSeer-Dashboard    at logon        the server, so Jarvis has something to reach
+StockSeer-Calendar     08:00 daily     IPO deadline alerts
+StockSeer-Listing      09:40 daily     watches, or exits in a second
+```
+
+Undo with `.\scripts\install-scheduler.ps1 -Uninstall`.
+
+**In Jarvis, once:** tap the chart icon, set the PC address to its Tailscale
+address (`http://100.x.y.z:8765`), leave the access code blank.
+
+**Manual runs, if you want them:**
 
 ```powershell
-# Admin PowerShell — let the phone through the firewall
-New-NetFirewallRule -DisplayName "StockSeer" -Direction Inbound `
-  -LocalPort 8765 -Protocol TCP -Action Allow
+python -m stockseer.cli ui --lan          # --lan matters: without it only
+                                          # the PC itself can connect
+python -m stockseer.cli ipo watch         # listing mornings
+python -m stockseer.cli ipo calendar      # what is open right now
 ```
 
-**In Jarvis, once:** tap the 📈 icon → **Find my PC automatically**.
-
-**On listing morning:** keep Jarvis open. That is the only manual step.
+**On listing morning:** if you want the rich Jarvis alerts, have it open from
+about 09:55. If you are content with ntfy, do nothing at all.
 
 ---
 
@@ -378,6 +430,9 @@ New-NetFirewallRule -DisplayName "StockSeer" -Direction Inbound `
 
 | Symptom | Cause | Fix |
 |---------|-------|-----|
+| Jarvis: connection error | The server is not running | `Get-ScheduledTask StockSeer-Dashboard`; or start it by hand with `ui --lan` |
+| Jarvis fails, ntfy works | Tailscale is off on one device | ntfy needs no Tailscale; Jarvis does |
+| Nothing at 09:40 | PC was shut down, not asleep | Windows can wake a sleeping PC, not power one on. GitHub Actions covers this |
 | Cloud alerts never arrive | `NTFY_TOPIC` secret missing or misspelt | It must match the app's topic exactly — case sensitive |
 | ntfy works locally, not from Actions | Secret not added in repo settings | Settings → Secrets → Actions |
 | Listing workflow exits immediately | Nothing lists today | Correct behaviour — that is the ~350-day case |

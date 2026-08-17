@@ -1,22 +1,29 @@
 <#
-    Arms StockSeer to run itself on listing mornings.
+    Arms StockSeer to run itself, so nothing depends on you remembering.
 
-    Registers two Windows scheduled tasks that can WAKE THE PC FROM SLEEP:
+    Registers three Windows scheduled tasks. All of them can WAKE THE PC FROM
+    SLEEP:
 
-      StockSeer-Calendar   08:00 daily  -- queues IPO deadline alerts, exits
-      StockSeer-Listing    09:40 daily  -- if something lists today, starts the
-                                          dashboard and the listing watcher;
-                                          otherwise exits in about a second
+      StockSeer-Dashboard  at logon     the web server, so Jarvis always has
+                                        something to reach
+      StockSeer-Calendar   08:00 daily  queues IPO deadline alerts, then exits
+      StockSeer-Listing    09:40 daily  if something lists today, starts the
+                                        watcher; otherwise exits in a second
 
-    IMPORTANT LIMITATION
-      Windows can wake a SLEEPING PC. It cannot start one that is SHUT DOWN or
-      hibernated. Use Sleep, not Shut down, the night before a listing.
+    LIMITATION
+      Windows can wake a SLEEPING PC. It cannot power on one that is SHUT DOWN
+      or hibernated. Use Sleep, not Shut down, the night before a listing.
 
-    Run from an ADMIN PowerShell:
-      powershell -ExecutionPolicy Bypass -File scripts\install-scheduler.ps1
+    RUN IT (from an ADMIN PowerShell):
+      cd "g:\AI AGENTS\stockseer"
+      .\scripts\install-scheduler.ps1
 
-    Remove everything later:
-      powershell -ExecutionPolicy Bypass -File scripts\install-scheduler.ps1 -Uninstall
+    REMOVE EVERYTHING LATER:
+      .\scripts\install-scheduler.ps1 -Uninstall
+
+    This file is deliberately plain ASCII. PowerShell 5.1 reads a script with
+    no byte-order mark as ANSI, so any smart quote or dash becomes mojibake and
+    the parser fails somewhere unrelated to the real problem.
 #>
 
 param(
@@ -27,37 +34,42 @@ param(
 )
 
 $ErrorActionPreference = "Stop"
+
 $repo = Split-Path -Parent $PSScriptRoot
 $calendarTask = "StockSeer-Calendar"
 $listingTask = "StockSeer-Listing"
+$uiTask = "StockSeer-Dashboard"
 
 function Assert-Admin {
     $id = [Security.Principal.WindowsIdentity]::GetCurrent()
-    $p = New-Object Security.Principal.WindowsPrincipal($id)
-    if (-not $p.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
-        throw "Run this from an ADMIN PowerShell — registering a wake timer needs it."
+    $principal = New-Object Security.Principal.WindowsPrincipal($id)
+    $admin = [Security.Principal.WindowsBuiltInRole]::Administrator
+    if (-not $principal.IsInRole($admin)) {
+        throw "Run this from an ADMIN PowerShell. Registering a wake timer needs it."
     }
 }
 
 Assert-Admin
 
 if ($Uninstall) {
-    foreach ($t in @($calendarTask, $listingTask)) {
-        if (Get-ScheduledTask -TaskName $t -ErrorAction SilentlyContinue) {
-            Unregister-ScheduledTask -TaskName $t -Confirm:$false
-            Write-Host "removed $t"
+    foreach ($name in @($calendarTask, $listingTask, $uiTask)) {
+        if (Get-ScheduledTask -TaskName $name -ErrorAction SilentlyContinue) {
+            Unregister-ScheduledTask -TaskName $name -Confirm:$false
+            Write-Host "removed $name"
         }
     }
-    Write-Host "`nDone. StockSeer will no longer start on its own."
+    Write-Host ""
+    Write-Host "Done. StockSeer will no longer start on its own."
     return
 }
 
 $python = (Get-Command python).Source
 Write-Host "repo   : $repo"
-Write-Host "python : $python`n"
+Write-Host "python : $python"
+Write-Host ""
 
 # Wake the machine, and do not stop the watcher just because it runs for hours
-# or the laptop is on battery -- the market does not care about either.
+# or the laptop moves to battery. The market cares about neither.
 $settings = New-ScheduledTaskSettingsSet `
     -WakeToRun `
     -AllowStartIfOnBatteries `
@@ -66,50 +78,52 @@ $settings = New-ScheduledTaskSettingsSet `
     -ExecutionTimeLimit (New-TimeSpan -Hours 9) `
     -MultipleInstances IgnoreNew
 
-$principal = New-ScheduledTaskPrincipal -UserId $env:USERNAME -LogonType Interactive -RunLevel Highest
+$principal = New-ScheduledTaskPrincipal `
+    -UserId $env:USERNAME -LogonType Interactive -RunLevel Highest
 
-# --- 1. Calendar: cheap, runs every day -----------------------------------
-$calAction = New-ScheduledTaskAction -Execute $python `
-    -Argument "-m stockseer.cli ipo calendar --refresh --notify" `
-    -WorkingDirectory $repo
-$calTrigger = New-ScheduledTaskTrigger -Daily -At $CalendarTime
+function Register-One {
+    param($Name, $Arguments, $Trigger, $Label)
 
-Register-ScheduledTask -TaskName $calendarTask -Action $calAction `
-    -Trigger $calTrigger -Settings $settings -Principal $principal -Force | Out-Null
-Write-Host "registered $calendarTask  ($CalendarTime daily, wakes the PC)"
+    $action = New-ScheduledTaskAction -Execute $python `
+        -Argument $Arguments -WorkingDirectory $repo
 
-# --- 2. Listing morning: only does work when something actually lists ------
-$listAction = New-ScheduledTaskAction -Execute $python `
-    -Argument "-m stockseer.cli ipo autorun --capital $Capital" `
-    -WorkingDirectory $repo
-$listTrigger = New-ScheduledTaskTrigger -Daily -At $ListingTime
+    Register-ScheduledTask -TaskName $Name -Action $action `
+        -Trigger $Trigger -Settings $settings -Principal $principal -Force | Out-Null
 
-Register-ScheduledTask -TaskName $listingTask -Action $listAction `
-    -Trigger $listTrigger -Settings $settings -Principal $principal -Force | Out-Null
-Write-Host "registered $listingTask   ($ListingTime daily, wakes the PC)"
+    Write-Host ("registered {0,-22} {1}" -f $Name, $Label)
+}
 
-# The dashboard has to be up for the phone to collect alerts, so start it with
-# the machine rather than relying on it already running.
-$uiTask = "StockSeer-Dashboard"
-$uiAction = New-ScheduledTaskAction -Execute $python `
-    -Argument "-m stockseer.cli ui --lan --no-open" -WorkingDirectory $repo
-$uiTrigger = New-ScheduledTaskTrigger -AtLogOn
-Register-ScheduledTask -TaskName $uiTask -Action $uiAction `
-    -Trigger $uiTrigger -Settings $settings -Principal $principal -Force | Out-Null
-Write-Host "registered $uiTask ( at logon )"
+# 1. The dashboard. Without this running, Jarvis has nothing to poll.
+Register-One -Name $uiTask `
+    -Arguments "-m stockseer.cli ui --lan --no-open" `
+    -Trigger (New-ScheduledTaskTrigger -AtLogOn) `
+    -Label "at logon"
 
-Write-Host @"
+# 2. Calendar. Cheap, runs every day, needs no market feed.
+Register-One -Name $calendarTask `
+    -Arguments "-m stockseer.cli ipo calendar --refresh --notify" `
+    -Trigger (New-ScheduledTaskTrigger -Daily -At $CalendarTime) `
+    -Label "$CalendarTime daily, wakes the PC"
 
-------------------------------------------------------------------
- Two things still need to be true on a listing morning:
+# 3. Listing morning. Exits in about a second when nothing lists.
+Register-One -Name $listingTask `
+    -Arguments "-m stockseer.cli ipo autorun --capital $Capital" `
+    -Trigger (New-ScheduledTaskTrigger -Daily -At $ListingTime) `
+    -Label "$ListingTime daily, wakes the PC"
 
-   1. The PC must be ASLEEP, not shut down.
-      Windows can wake a sleeping machine; it cannot power one on.
-
-   2. Jarvis must be open on your phone from ~09:55.
-      Calendar alerts arrive with it closed; live price alerts cannot.
-
- Check what is armed:   Get-ScheduledTask StockSeer-*
- Test the listing task: Start-ScheduledTask -TaskName $listingTask
-------------------------------------------------------------------
-"@
+Write-Host ""
+Write-Host "------------------------------------------------------------------"
+Write-Host " Two things still have to be true on a listing morning:"
+Write-Host ""
+Write-Host "   1. The PC must be ASLEEP, not shut down."
+Write-Host "      Windows can wake a sleeping machine; it cannot power one on."
+Write-Host ""
+Write-Host "   2. Jarvis open on your phone from about 09:55, for live price"
+Write-Host "      alerts. Calendar alerts arrive with it closed."
+Write-Host ""
+Write-Host " If ntfy is configured, alerts reach you even with all of the above"
+Write-Host " switched off. That is the safety net."
+Write-Host ""
+Write-Host " Check:  Get-ScheduledTask StockSeer-*"
+Write-Host " Test :  Start-ScheduledTask -TaskName $listingTask"
+Write-Host "------------------------------------------------------------------"
