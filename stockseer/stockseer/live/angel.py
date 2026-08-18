@@ -89,24 +89,13 @@ def _fix_sdk_public_ip(api) -> str:
 
 
 def _load_dotenv() -> None:
-    """Minimal .env reader -- avoids a dependency for a handful of variables.
+    """Kept as an alias so existing callers and scripts keep working.
 
-    Searches the repo root, the package directory, and the working directory,
-    because "which folder does .env go in" is a guess everyone gets wrong once
-    and the failure mode is an unhelpful "missing credentials".
+    The implementation lives in `config`, which imports nothing third-party.
     """
-    here = Path(__file__).resolve()
-    for candidate in (here.parents[2] / ".env", here.parents[1] / ".env",
-                      here.parents[0] / ".env", Path.cwd() / ".env"):
-        if not candidate.exists():
-            continue
-        log.debug("loading credentials from %s", candidate)
-        for line in candidate.read_text(encoding="utf-8").splitlines():
-            line = line.strip()
-            if not line or line.startswith("#") or "=" not in line:
-                continue
-            key, _, val = line.partition("=")
-            os.environ.setdefault(key.strip(), val.strip().strip("\"'"))
+    from ..config import load_dotenv
+
+    load_dotenv()
 
 
 class AngelError(RuntimeError):

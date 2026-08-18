@@ -184,6 +184,21 @@ def cmd_inspect(a: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_check(a: argparse.Namespace) -> int:
+    """How risky is this stock, and how many shares should I buy?"""
+    from .checkup import check, print_checkup
+
+    for ticker in [t.strip() for t in a.ticker.split(",") if t.strip()]:
+        try:
+            k = check(ticker, capital=a.capital, risk_pct=a.risk_pct,
+                      stop_atr=a.stop_atr, reward_multiple=a.reward,
+                      max_position_pct=a.max_position)
+            print_checkup(k, a.capital)
+        except Exception as exc:
+            print(f"\n {ticker}: {exc}\n")
+    return 0
+
+
 def cmd_plan(a: argparse.Namespace) -> int:
     from .planner import compare_capital, plan_report
 
@@ -606,6 +621,21 @@ def main(argv: list[str] | None = None) -> int:
     p = sub.add_parser("inspect", help="dataset shape and raw feature/target correlations")
     _add_common(p)
     p.set_defaults(func=cmd_inspect)
+
+    p = sub.add_parser("check",
+                       help="how risky is this stock, and how many shares to buy")
+    p.add_argument("--ticker", required=True,
+                   help="one symbol, or several separated by commas")
+    p.add_argument("--capital", type=float, default=40_000.0)
+    p.add_argument("--risk-pct", type=float, default=0.02,
+                   help="fraction of capital you accept losing on this trade")
+    p.add_argument("--stop-atr", type=float, default=2.0,
+                   help="stop distance in multiples of the stock's daily range")
+    p.add_argument("--reward", type=float, default=2.0,
+                   help="target as a multiple of the risk")
+    p.add_argument("--max-position", type=float, default=0.35,
+                   help="never put more than this share of capital in one stock")
+    p.set_defaults(func=cmd_check)
 
     p = sub.add_parser("plan", help="what a capital + profit target actually requires")
     p.add_argument("--capital", type=float, required=True)

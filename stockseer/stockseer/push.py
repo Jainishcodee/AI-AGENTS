@@ -52,20 +52,12 @@ TAGS = {
 def _env(name: str) -> str:
     """Read a setting from the environment, falling back to .env.
 
-    GitHub Actions injects real environment variables; a local run keeps them in
-    .env. Reading only the former would mean the topic works in the cloud and
-    silently does nothing on your own machine.
+    Goes through `config`, which has no third-party imports, so this keeps
+    working on a runner that never ran `pip install`.
     """
-    val = os.environ.get(name, "").strip()
-    if val:
-        return val
-    try:
-        from .live.angel import _load_dotenv
+    from .config import setting
 
-        _load_dotenv()
-    except Exception:
-        return ""
-    return os.environ.get(name, "").strip()
+    return setting(name)
 
 
 def configured() -> bool:

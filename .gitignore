@@ -27,3 +27,13 @@ instagram-*/
 reelflow/data/
 pilot/audio/
 pilot/transcripts/
+
+# ---- Health data — NEVER COMMIT -----------------------------------------
+# Body photos, measurements, lab values, and anything derived from them.
+# Unlike the reel deck, there is no version of this that ships. If a Jarvis
+# health module is built, its output belongs here too, not in Jarvis/assets/.
+# Do not narrow this rule to specific files -- the whole tree stays out.
+health/
+**/health_private/
+*.health.json
+*.health.md

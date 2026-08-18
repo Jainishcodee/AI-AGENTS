@@ -7,6 +7,7 @@ import 'package:flutter_dotenv/flutter_dotenv.dart';
 
 import 'screens/facts_screen.dart';
 import 'screens/fake_call_sheet.dart';
+import 'screens/health_screen.dart';
 import 'screens/incoming_call_screen.dart';
 import 'screens/library_screen.dart';
 import 'screens/market_alerts_sheet.dart';
@@ -14,13 +15,24 @@ import 'screens/today_screen.dart';
 import 'services/deck_db.dart';
 import 'services/digest_settings.dart';
 import 'services/fake_call_service.dart';
+import 'services/health_db.dart';
+import 'services/jain_calendar.dart';
 import 'services/jarvis_brain.dart';
 import 'services/reminder_service.dart';
 import 'services/stock_alert_service.dart';
+import 'services/training_plan.dart';
 import 'services/voice_service.dart';
 import 'widgets/mascot.dart';
 
 final deckDb = DeckDb();
+
+// Health lives in its own database file, deliberately separate from the reel
+// deck. The deck ships as a tracked asset and is rebuilt by the pipeline; this
+// is personal data that never leaves the device and must never be swept into an
+// export or a commit alongside it.
+final healthDb = HealthDb();
+final jainCalendar = JainCalendar();
+final trainingPlan = TrainingPlan();
 // One instance app-wide: reminders and the daily digest share a notification
 // channel setup, so permission is only ever requested once.
 final reminders = ReminderService();
@@ -58,6 +70,12 @@ Future<void> main() async {
     await deckDb.init();
   } catch (_) {
     // No deck yet — the Today tab shows its empty state rather than crashing.
+  }
+  try {
+    await healthDb.init();
+  } catch (_) {
+    // Health tab degrades to its empty state. Failing here must not block
+    // launch — the rest of the app has nothing to do with it.
   }
   // Must be set before init(), which is what registers the tap handler.
   reminders.onTapped = (payload) {
@@ -127,6 +145,13 @@ class _RootShellState extends State<RootShell> {
         children: [
           const JarvisHome(),
           SafeArea(child: TodayScreen(deck: deckDb, digest: digest)),
+          SafeArea(
+            child: HealthScreen(
+              db: healthDb,
+              calendar: jainCalendar,
+              plan: trainingPlan,
+            ),
+          ),
           SafeArea(child: FactsScreen(deck: deckDb)),
           SafeArea(child: LibraryScreen(deck: deckDb)),
         ],
@@ -148,6 +173,11 @@ class _RootShellState extends State<RootShell> {
             icon: Icon(Icons.check_circle_outline, color: Colors.white54),
             selectedIcon: Icon(Icons.check_circle, color: Color(0xFFE74848)),
             label: 'Today',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.favorite_outline, color: Colors.white54),
+            selectedIcon: Icon(Icons.favorite, color: Color(0xFFE74848)),
+            label: 'Health',
           ),
           NavigationDestination(
             icon: Icon(Icons.lightbulb_outline, color: Colors.white54),
