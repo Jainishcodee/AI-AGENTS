@@ -5,6 +5,25 @@ is done when the criterion is demonstrably met.
 
 ---
 
+## Outstanding measurements
+
+Four criteria are unmet, and they are listed together because they turn out to share one
+cause: **every one of them needs a real person using this on real decisions over real time
+with a real key.** None of them is blocked on code.
+
+| phase | what is unmeasured | what it needs |
+|---|---|---|
+| 1b | a non-technical person identifies which module they disagree with | one person, one real question, ~20 minutes |
+| 2 | recall surfaces the right memory on a later, related decision | a corpus — needs ~10 decisions across weeks |
+| 3 | calibration separates a well-calibrated module from a badly-calibrated one | ~8 *resolved* cards per module |
+| 5 | an authored module measurably changes a recommendation | ~300 real calls (`divergence --live`), 1–2 hours, deferred 2026-08-19 |
+
+The pattern is not a coincidence and it is not a coding problem. Phases 1–5 built machinery
+whose value is a function of accumulated real use, and the corpus is currently empty. That
+is what Phase 6 is about.
+
+---
+
 ## Phase 0 — Specification ✅
 
 Deliberately front-loaded. The reasoning algorithms are the product; discovering
@@ -292,7 +311,7 @@ path is left inherited (ADR-027).
 
 ---
 
-## Phase 5 — Marketplace *(authoring built)*
+## Phase 5 — Marketplace *(authoring built · exit criterion UNMEASURED)*
 
 - [x] **Divergence harness** — `learning/divergence.py`, `GET /divergence`,
       `app.cli divergence [--live]` (ADR-026). Structural half — artifact distinctness,
@@ -347,7 +366,16 @@ path is left inherited (ADR-027).
       which needs a review step and its own decision.
 - [ ] Domain councils: hiring, medical, legal, product
 
-**Exit criterion — not yet met.** A user-authored module must *measurably* change the
+**Exit criterion — UNMEASURED, deliberately deferred (2026-08-19).** Not "failed" and not
+"met": the measurement has not been run. It needs a real provider and roughly 300 calls at
+~5 requests a minute, and the owner chose to defer that spend rather than pay it now. Nothing
+is blocked by the deferral except the claim itself.
+
+To run it: `python -m app.cli divergence --live` against a `with:historian` preset, having
+loaded `scripts/example-module.yaml`. Until then this phase claims only that an authored
+module *runs*, which is demonstrated, and not that it *changes anything*, which is not.
+
+A user-authored module must *measurably* change the
 recommendation on a decision where the built-in six agreed. What exists: an authored module
 runs as a seventh council member (`with:historian`, 17 calls at `quick`), produces validated
 artifacts, is critiqued by the modules it names, and appears in the synthesis. What is
@@ -355,3 +383,53 @@ missing is the *measurement* — the divergence harness (ADR-026) has to be poin
 `with:` preset and run against a real provider, because the mock council agrees with itself
 by construction (1.00 stance overlap) and therefore cannot show one module moving a verdict.
 `scripts/example-module.yaml` is the module the criterion will be measured with.
+
+---
+
+## Phase 6 — The loop closes *(designing)*
+
+**The thesis.** Phases 1–5 built machinery whose value is a function of accumulated real
+use: calibration needs resolved cards, priors need calibration, replay needs a corpus,
+divergence needs decisions worth diverging on. The corpus currently holds **zero** resolved
+decisions. Every one of the four outstanding measurements is downstream of that, and none of
+them is a coding problem.
+
+So this phase adds no reasoning at all. It is about the gap between *"this system works"*
+and *"this system gets used"*, which is the gap the previous five phases quietly assumed away.
+
+**Where the funnel actually breaks.** Walk the path to one resolved card:
+
+```
+  1. you have a decision                     ← not our problem
+  2. you remember this exists                ← BREAKS: nothing reaches you
+  3. you get it running                      ← friction: venv, key, .env, migrations
+  4. you ask                                 ← works
+  5. you wait ~6 min at 5 RPM                ← BREAKS: cost is invisible until spent
+  6. you get a recommendation                ← works, and is the fun part
+  ~~~ 30–90 days pass ~~~
+  8. you record what happened                ← BREAKS: nothing reminds you, ever
+  9. it grades, extracts memories, learns     ← works, and never runs
+```
+
+Steps 6 and 9 are built and excellent. Steps 2 and 8 are the product, and they do not exist:
+`check_on` is written into every card and **nothing ever reads it out loud**. The nudge line
+only prints if you already ran a CLI command; the nav badge only shows if you already opened
+the app. Both require you to be there already, which is precisely the assumption that fails.
+
+- [ ] **Reminders that arrive without opening anything.** The hard constraint is free and
+      no service (ADR-020's spirit): no Twilio, no SendGrid, no push infrastructure.
+- [ ] **`app.cli checkin`** — a guided pass over every due card in one sitting, rather than
+      `resolve <id> --chose … --outcome …` typed once per card from memory.
+- [ ] **`app.cli doctor`** — one command that says what is wrong: key missing, store
+      unmigrated, model unavailable on the free tier, nothing due.
+- [ ] **Cost preview before spending** — `call_estimate` already exists per program and
+      depth; it is never shown before a run. On a metered free tier that is the number that
+      decides whether you press go.
+- [ ] **Export** — the corpus is the moat and it currently lives in one SQLite file with no
+      door out. Your data needs to be portable or the claim that it is yours is decorative.
+
+**Exit criterion.** Ten real decisions recorded and at least five resolved, by one person,
+with **the system doing the remembering** — no prompting from me, and no manual `cards
+--status due` habit. That number is not arbitrary: it is the point at which `scores` crosses
+`MIN_N_TO_DISPLAY` and calibration stops being machinery and starts being a measurement,
+which in turn unblocks the Phase 2 and Phase 3 criteria above.
