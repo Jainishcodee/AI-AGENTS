@@ -208,3 +208,79 @@ def find(symbol: str) -> IPO | None:
 
 def to_dict(ipo: IPO) -> dict:
     return {**asdict(ipo), "yf_symbol": ipo.yf_symbol, "is_sme": ipo.is_sme}
+
+
+# --------------------------------------------------------------------------- #
+# Live subscription (how many times the book is covered)
+# --------------------------------------------------------------------------- #
+SUBSCRIPTION = "/api/ipo-active-category?symbol={symbol}"
+
+
+@dataclass
+class Subscription:
+    """Official NSE demand figures, published live while bidding is open.
+
+    Preferred over grey-market premium: GMP is an unregulated rumour quoted by
+    dealers with a position, while this is the exchange reporting how many
+    times the book is actually covered.
+    """
+
+    symbol: str
+    retail_x: float | None
+    qib_x: float | None
+    nii_x: float | None
+    updated: str = ""
+
+    @property
+    def summary(self) -> str:
+        parts = []
+        if self.retail_x is not None:
+            parts.append(f"Retail {self.retail_x:.1f}x")
+        if self.qib_x is not None:
+            parts.append(f"QIB {self.qib_x:.1f}x")
+        if self.nii_x is not None:
+            parts.append(f"NII {self.nii_x:.1f}x")
+        return "  ".join(parts) or "no bids yet"
+
+
+def _as_float(val) -> float | None:
+    try:
+        f = float(str(val).strip())
+        return f if f == f else None
+    except (TypeError, ValueError):
+        return None
+
+
+def subscription(symbol: str) -> Subscription | None:
+    """Fetch live demand for one open issue. Returns None if unavailable."""
+    try:
+        op = _opener()
+        raw = op.open(BASE + SUBSCRIPTION.format(symbol=symbol.upper()),
+                      timeout=25).read().decode("utf-8", "replace")
+        data = json.loads(raw)
+    except Exception as exc:
+        log.info("%s: subscription unavailable (%s)", symbol, exc)
+        return None
+
+    rows = data.get("dataList") or []
+    out = {"retail": None, "qib": None, "nii": None}
+    for row in rows:
+        cat = str(row.get("category", "")).lower()
+        times = _as_float(row.get("noOfTotalMeant"))
+        if times is None:
+            continue
+        # Match only the top-level rows; the sub-rows (1(a), 2.1 ...) break
+        # the totals down and would otherwise overwrite them.
+        sr = str(row.get("srNo", "")).strip()
+        if sr == "3" and "retail" in cat:
+            out["retail"] = times
+        elif sr == "1" and "qualified institutional" in cat:
+            out["qib"] = times
+        elif sr == "2" and "non institutional" in cat:
+            out["nii"] = times
+
+    if all(v is None for v in out.values()):
+        return None
+    return Subscription(symbol=symbol.upper(), retail_x=out["retail"],
+                        qib_x=out["qib"], nii_x=out["nii"],
+                        updated=str(data.get("updateTime", "")))

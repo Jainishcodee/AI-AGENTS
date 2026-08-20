@@ -2,6 +2,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:jarvis/services/jain_calendar.dart';
 import 'package:jarvis/services/nutrition_engine.dart';
 import 'package:jarvis/services/training_plan.dart';
+import 'package:jarvis/services/yoga_library.dart';
 
 /// The health module's rules are the kind that fail silently: a sunset that is
 /// twenty minutes late doesn't crash, it just quietly tells him he has time to
@@ -77,19 +78,126 @@ void main() {
       expect(jd.window?.isDeload, isTrue);
     });
 
-    test('Ayambil Oli is picked up in October', () {
-      expect(cal.day(_d(2026, 10, 20)).window?.name, 'Navpad Ayambil Oli');
+    test('Ayambil Oli is NOT flagged — he does not observe it', () {
+      // A calendar that warns about nine days he will train through normally
+      // teaches him to dismiss the banner, and Paryushan gets dismissed with it.
+      for (final day in [17, 20, 26]) {
+        expect(cal.day(_d(2026, 10, day)).window?.name, isNot('Navpad Ayambil Oli'));
+        expect(cal.day(_d(2026, 10, day)).window?.isDeload ?? false, isFalse);
+      }
     });
 
-    test('chauvihar defaults on during chaumasa and off outside it', () {
-      expect(cal.day(_d(2026, 8, 18)).observingChauvihar, isTrue);
-      expect(cal.day(_d(2026, 7, 1)).observingChauvihar, isFalse);
+    test('the evening vow defaults to TIVIHAR in chaumasa, not chauvihar', () {
+      // He keeps water. Defaulting to chauvihar would fire dehydration and
+      // heat warnings at him every single evening for four months.
+      expect(cal.day(_d(2026, 8, 25)).eveningVow, EveningVow.tivihar);
+      expect(cal.day(_d(2026, 7, 1)).eveningVow, EveningVow.none);
     });
 
-    test('an explicit chauvihar value overrides the chaumasa default', () {
-      final jd = cal.day(_d(2026, 8, 18), observingChauvihar: false);
-      expect(jd.observingChauvihar, isFalse);
+    test('tivihar closes the food window but keeps water', () {
+      final jd = cal.day(_d(2026, 8, 25));
+      expect(jd.closesFoodWindow, isTrue);
+      expect(jd.eveningVow.waterAfterSunset, isTrue);
+      expect(jd.timeLeftToEat(), isNotNull);
+    });
+
+    test('an explicit vow overrides the chaumasa default', () {
+      final jd = cal.day(_d(2026, 8, 25), eveningVow: EveningVow.none);
+      expect(jd.closesFoodWindow, isFalse);
       expect(jd.timeLeftToEat(), isNull);
+    });
+  });
+
+  group('tithi', () {
+    // Anchored on two dates established independently of this code:
+    // Samvatsari 2026 (Bhadrapada Shukla Chaturthi) and the chaumasa close
+    // (Kartik Purnima). If the lunar series drifts, these break first.
+    test('15 Sep 2026 is Shukla Chaturthi — Samvatsari', () {
+      expect(cal.tithiOnDay(_d(2026, 9, 15)), 4);
+    });
+
+    test('24 Nov 2026 is Shukla Purnima — Kartik Purnima', () {
+      expect(cal.tithiOnDay(_d(2026, 11, 24)), 15);
+    });
+
+    test('23 Nov 2026 is Chaudas, the day before', () {
+      expect(cal.tithiOnDay(_d(2026, 11, 23)), 14);
+    });
+
+    test('tithi stays inside 1..30 across a full lunation', () {
+      for (var i = 0; i < 40; i++) {
+        final t = cal.tithiOnDay(_d(2026, 9, 1).add(Duration(days: i)));
+        expect(t, inInclusiveRange(1, 30));
+      }
+    });
+
+    test('Shukla Panchami recurs once per lunar month, not once per calendar',
+        () {
+      final found =
+          cal.sudPanchamsBetween(_d(2026, 8, 1), _d(2026, 11, 30));
+      expect(found.length, 4);
+      expect(found.map((d) => '${d.day}/${d.month}').toList(),
+          ['17/8', '16/9', '15/10', '14/11']);
+    });
+  });
+
+  group('his observance, encoded', () {
+    test('Paryushan days 1-7 suggest ekasana, not atthai', () {
+      for (final day in [8, 10, 12, 14]) {
+        final s = cal.day(_d(2026, 9, day)).suggestion;
+        expect(s?.kind, FastKind.ekasana, reason: 'Sep $day');
+      }
+    });
+
+    test('Samvatsari suggests tivihar — his settled practice, no prompt', () {
+      final s = cal.day(_d(2026, 9, 15)).suggestion;
+      expect(s?.kind, FastKind.tivihar);
+      expect(s?.needsWaterRule, isFalse);
+      expect(s?.reason, contains('Samvatsari'));
+    });
+
+    test('none of his fasts are chauvihar, so nothing raises a heat warning',
+        () {
+      for (final d in [_d(2026, 9, 15), _d(2026, 9, 16), _d(2026, 10, 15)]) {
+        final s = cal.day(d).suggestion!;
+        expect(s.kind, FastKind.tivihar);
+        expect(cal.day(d, fast: s.kind).needsHeatWarning, isFalse,
+            reason: d.toString());
+      }
+    });
+
+    test('Sud Pancham is detected from the tithi, not a hardcoded date', () {
+      final s = cal.day(_d(2026, 10, 15)).suggestion;
+      expect(s?.kind.isFullFast, isTrue);
+      expect(s?.reason, contains('Sud Pancham'));
+    });
+
+    test('October suggests nothing — Oli is not his observance', () {
+      for (final day in [17, 20, 24, 26]) {
+        expect(cal.day(_d(2026, 10, day)).suggestion, isNull,
+            reason: 'Oct \$day');
+      }
+    });
+
+    test('an ordinary chaumasa day suggests nothing', () {
+      expect(cal.day(_d(2026, 8, 25)).suggestion, isNull);
+    });
+
+    // The finding that matters most in this whole file: Samvatsari and his
+    // monthly Sud Pancham fall on consecutive days in September 2026, at the
+    // end of seven ekasana days.
+    test('15 and 16 Sep 2026 are back-to-back full fasts', () {
+      final a = cal.day(_d(2026, 9, 15)).suggestion;
+      final b = cal.day(_d(2026, 9, 16)).suggestion;
+      expect(a?.kind.isFullFast, isTrue);
+      expect(b?.kind.isFullFast, isTrue);
+      expect(b?.reason, contains('Sud Pancham'));
+    });
+
+    test('the seven days before that collision are all restricted', () {
+      for (var i = 8; i <= 14; i++) {
+        expect(cal.day(_d(2026, 9, i)).suggestion?.kind, FastKind.ekasana);
+      }
     });
   });
 
@@ -333,6 +441,95 @@ void main() {
     });
   });
 
+  group('yoga library', () {
+    test('every posture he named from 2021 is accounted for', () {
+      final names = YogaLibrary.his.map((a) => a.sanskrit).join(' ');
+      for (final want in [
+        'Halasana',
+        'Uttanasana',
+        'Garudasana',
+        'Vrikshasana',
+        'Bhujangasana',
+        'Ustrasana',
+      ]) {
+        expect(names, contains(want));
+      }
+    });
+
+    test('five of his six survive; halasana is the one that does not', () {
+      final his = YogaLibrary.his;
+      final dropped = his.where((a) => a.isExcluded).toList();
+      expect(dropped.length, 1);
+      expect(dropped.single.sanskrit, 'Halasana');
+    });
+
+    test('every excluded posture carries a reason AND a substitute', () {
+      // An exclusion with no alternative is one he will simply ignore.
+      for (final a in YogaLibrary.excluded) {
+        expect(a.caution, isNotNull, reason: a.name);
+        expect(a.substitute, isNotNull, reason: a.name);
+        expect(a.substitute, isNotEmpty, reason: a.name);
+      }
+    });
+
+    test('no excluded posture leaks into a practising sequence', () {
+      for (final week in [1, 3, 6, 12, 52]) {
+        for (final a in YogaLibrary.sequenceForWeek(week)) {
+          expect(a.isExcluded, isFalse, reason: '${a.name} in week \$week');
+        }
+      }
+    });
+
+    test('camel waits until week 3, bow until week 6', () {
+      String seq(int w) =>
+          YogaLibrary.sequenceForWeek(w).map((a) => a.sanskrit).join(' ');
+      expect(seq(1), isNot(contains('Ustrasana')));
+      expect(seq(2), isNot(contains('Ustrasana')));
+      expect(seq(3), contains('Ustrasana'));
+      expect(seq(3), isNot(contains('Dhanurasana')));
+      expect(seq(6), contains('Dhanurasana'));
+    });
+
+    test('a fast day collapses to restorative work only', () {
+      final r = YogaLibrary.restorativeOnly;
+      final names = r.map((a) => a.sanskrit).join(' ');
+      // The loaded extension and the deep openers must not appear.
+      expect(names, isNot(contains('Salabhasana')));
+      expect(names, isNot(contains('Ustrasana')));
+      expect(names, isNot(contains('Adho Mukha')));
+      // Legs up the wall and slow breathing must.
+      expect(names, contains('Viparita Karani'));
+      expect(names, contains('Savasana'));
+      expect(r.length, lessThan(YogaLibrary.sequenceForWeek(1).length));
+    });
+
+    test('the restorative subset is genuinely shorter', () {
+      expect(YogaLibrary.minutesFor(YogaLibrary.restorativeOnly),
+          lessThan(YogaLibrary.minutesFor(YogaLibrary.sequenceForWeek(1))));
+    });
+
+    test('forceful breathing is excluded, slow breathing is not', () {
+      final ex = YogaLibrary.excluded.map((a) => a.name).join(' ');
+      expect(ex, contains('Kapalbhati'));
+      final keep =
+          YogaLibrary.sequenceForWeek(1).map((a) => a.hold).join(' ');
+      expect(keep, contains('6/min'));
+    });
+
+    test('the full week-1 sequence is a realistic length', () {
+      final m = YogaLibrary.minutesFor(YogaLibrary.sequenceForWeek(1));
+      expect(m, greaterThan(20));
+      expect(m, lessThan(35));
+    });
+
+    test('every practising posture explains why it is in HIS plan', () {
+      for (final a in YogaLibrary.practising) {
+        expect(a.purpose, isNotEmpty, reason: a.name);
+        expect(a.cues, isNotEmpty, reason: a.name);
+      }
+    });
+  });
+
   group('the on-ramp holds back the deficit', () {
     final plan = TrainingPlan(startedOn: _d(2026, 8, 18));
 
@@ -341,8 +538,31 @@ void main() {
       expect(plan.phaseFor(2), contains('MAINTENANCE'));
     });
 
-    test('the deficit only appears from week 3', () {
-      expect(plan.phaseFor(3), isNot(contains('MAINTENANCE')));
+    test('the deficit waits for week 5, because week 3 IS Paryushan', () {
+      expect(plan.phaseFor(3), contains('MAINTENANCE'));
+      expect(plan.phaseFor(4), contains('MAINTENANCE'));
+      expect(plan.phaseFor(5), isNot(contains('MAINTENANCE')));
+    });
+
+    test('a deload window overrides the week number entirely', () {
+      expect(plan.phaseFor(9, deload: true), contains('MAINTENANCE'));
+      expect(plan.phaseFor(9, deload: true), contains('Deload'));
+    });
+
+    test('Paryushan reports as a deload', () {
+      for (final d in [_d(2026, 9, 10), _d(2026, 9, 14)]) {
+        expect(plan.dayFor(cal.day(d)).phase, contains('Deload'),
+            reason: d.toString());
+      }
+    });
+
+    test('October is a BUILD month again now that Oli is out', () {
+      for (final d in [_d(2026, 10, 20), _d(2026, 10, 26)]) {
+        expect(plan.dayFor(cal.day(d)).phase, isNot(contains('Deload')),
+            reason: d.toString());
+        expect(plan.dayFor(cal.day(d)).clearance, TrainingClearance.full,
+            reason: d.toString());
+      }
     });
 
     test('sets and effort both start low', () {

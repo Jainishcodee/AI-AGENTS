@@ -93,11 +93,16 @@ belonging to one person are not.
 
 ## Status
 
-Phases 1–4 built, and Phase 5's quality gate ahead of its features: reasoning engine, web
-client, SQLite persistence, projects, the calibration loop, replay/backtesting, stage
-re-run, mid-deliberation interjection, resumable deliberations, a spoken briefing, an MCP
-server, and a divergence harness. 445 tests. See [docs/ROADMAP.md](docs/ROADMAP.md) for
-what each phase claims and — more usefully — what it does not.
+Phases 1–4 built; Phase 5 authoring built with its exit criterion **unmeasured**; Phase 6
+in progress. Reasoning engine, web client, SQLite persistence, projects, the calibration
+loop, replay/backtesting, stage re-run, mid-deliberation interjection, resumable
+deliberations, a spoken briefing, an MCP server, a divergence harness, user-authored modules,
+and calendar-delivered check-ins. 475 tests.
+
+Four exit criteria are unmet and share one cause — nobody has yet used this on real decisions
+over real time, so the corpus is empty. They are tabulated at the top of
+[docs/ROADMAP.md](docs/ROADMAP.md), which says what each phase claims and — more usefully —
+what it does not. Closing that gap is what Phase 6 is for.
 
 ## Documentation
 
@@ -109,7 +114,7 @@ Read in this order:
 | [SPEC-FORMAT.md](docs/SPEC-FORMAT.md) | the meta-spec: the seven questions every module must answer |
 | [ARTIFACTS.md](docs/ARTIFACTS.md) | the artifact registry and every machine-checked invariant |
 | [COUNCIL.md](docs/COUNCIL.md) | presets, critique routing, synthesis contract, Decision Cards, calibration |
-| [DECISIONS.md](docs/DECISIONS.md) | 30 ADRs, including what each one gave up |
+| [DECISIONS.md](docs/DECISIONS.md) | 31 ADRs, including what each one gave up |
 | `docs/agents/*.md` | the six formal reasoning specifications |
 
 ## Quick start
@@ -129,7 +134,7 @@ python -m app.cli --provider mock "Should I quit my internship?"
 # for real
 python -m app.cli --preset strategy --depth quick "Should I quit my internship?"
 
-pytest                                  # 445 tests, ~7s
+pytest                                  # 475 tests, ~8s
 uvicorn app.main:app --reload --port 8787
 ```
 
@@ -305,6 +310,26 @@ save is a draft you cannot fix (ADR-030).
 
 The engine has no idea any of this exists. An authored module executes through the same
 `run_program` with no new code path, which is what ADR-011's "an agent is a program" was for.
+
+**Closing the loop — the half that actually makes it yours**
+
+```powershell
+python -m app.cli checkin       # walks every due card, three questions each
+python -m app.cli calendar      # writes an .ics of every open check-in
+```
+
+Every card is written with a falsifiable prediction and a check-in date, and until Phase 6
+**nothing ever read that date out loud** — the nudge printed only if you had already run a
+command, and the badge showed only if you had already opened the app. Both assume you are
+already there, which is the assumption that fails sixty days later.
+
+So the reminder rides on the calendar you already check: import the `.ics` once, or subscribe
+to `/calendar.ics` if the API is reachable. Each event carries the original question and what
+the council predicted before it knew, so the check-in takes thirty seconds instead of
+requiring you to reconstruct the decision (ADR-031).
+
+`checkin` then asks three questions per card and grades every module against what it said.
+Nothing in the system learns anything until that happens.
 
 **Storage.** SQLite by default — one file under `apps/api/var/`, no service, FTS5 with
 BM25 for recall (ADR-024). Coming from an earlier JSON-file build:

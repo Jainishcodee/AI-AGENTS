@@ -25,7 +25,7 @@ from dataclasses import dataclass, field
 import numpy as np
 import pandas as pd
 
-from .data import load_prices
+from .data import load_prices, load_prices_live
 
 log = logging.getLogger(__name__)
 

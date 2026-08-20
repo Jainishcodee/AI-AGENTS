@@ -104,7 +104,7 @@ class TrainingDay {
 
 class TrainingPlan {
   TrainingPlan({DateTime? startedOn})
-      : startedOn = startedOn ?? DateTime(2026, 8, 18);
+      : startedOn = startedOn ?? DateTime(2026, 8, 24);
 
   /// Week 1 of the on-ramp.
   final DateTime startedOn;
@@ -116,28 +116,43 @@ class TrainingPlan {
     return (days ~/ 7) + 1;
   }
 
-  /// The 12-week on-ramp.
+  /// The on-ramp, laid over the observance calendar rather than over a clean
+  /// twelve weeks.
   ///
   /// He is stacking four new stressors at once — new lifting, new running, a
   /// calorie deficit, and chaumasa fasting. Starting all four at full volume in
   /// week one is the classic pattern that ends in injury or burnout by week six.
-  /// Note that the deficit deliberately does not start until week three, and
-  /// only once protein is consistently above 115 g.
-  String phaseFor(int week) {
+  ///
+  /// The deficit deliberately does **not** start in week 3 as a generic plan
+  /// would have it, because week 3 from a 24 Aug start lands squarely on
+  /// Paryushan. Seven ekasana days already produce a large involuntary deficit;
+  /// stacking a deliberate one on top is precisely how a novice loses the muscle
+  /// he is trying to build. It waits for week 5, the first genuinely clear
+  /// block.
+  ///
+  /// [deload] is passed by [dayFor] from the calendar, so a named observance
+  /// window overrides the week number rather than arguing with it.
+  String phaseFor(int week, {bool deload = false}) {
+    if (deload) {
+      return 'Deload · observance window · MAINTENANCE, no progression';
+    }
     if (week <= 2) {
       return 'On-ramp · 3 days, 2 sets, 3 RIR · eat at MAINTENANCE';
     }
-    if (week <= 6) {
-      return 'Build · 3–4 days, 3 sets, 2 RIR · small deficit once protein >115 g';
+    if (week <= 4) {
+      return 'Hold · keep the habit, still MAINTENANCE';
     }
-    if (week <= 12) {
+    if (week <= 7) {
+      return 'Build · 3–4 days, 3 sets, 2 RIR · deficit once protein >115 g';
+    }
+    if (week <= 13) {
       return 'Load · 4 days, 1–2 RIR, 10–14 sets/muscle/wk · deficit 350–450 kcal';
     }
     return 'Reassess · waist, photos, training log';
   }
 
   int setsForWeek(int week) => week <= 2 ? 2 : 3;
-  String rirForWeek(int week) => week <= 2 ? '3' : (week <= 6 ? '2' : '1–2');
+  String rirForWeek(int week) => week <= 2 ? '3' : (week <= 7 ? '2' : '1–2');
 
   /// Running volume, in km for the whole week.
   ///
@@ -248,7 +263,7 @@ class TrainingPlan {
   TrainingDay dayFor(JainDay jd) {
     final week = weekOf(jd.date);
     final clearance = jd.clearance;
-    final phase = phaseFor(week);
+    final phase = phaseFor(week, deload: jd.window?.isDeload ?? false);
 
     // Upvas and ayambil override the programme entirely. This is the rule the
     // whole module exists to enforce: chauvihar upvas is ~36 hours with no

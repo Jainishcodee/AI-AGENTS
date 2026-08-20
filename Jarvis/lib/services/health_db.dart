@@ -21,7 +21,7 @@ class HealthDay {
   const HealthDay({
     required this.day,
     this.fast = FastKind.none,
-    this.observingChauvihar,
+    this.eveningVow,
     this.weightKg,
     this.waistCm,
     this.proteinG,
@@ -35,7 +35,10 @@ class HealthDay {
 
   final String day; // yyyy-MM-dd
   final FastKind fast;
-  final bool? observingChauvihar;
+
+  /// Null means "not stated" — the calendar then falls back to his chaumasa
+  /// default (tivihar) rather than to no vow at all.
+  final EveningVow? eveningVow;
   final double? weightKg;
   final double? waistCm;
   final double? proteinG;
@@ -49,9 +52,7 @@ class HealthDay {
   Map<String, Object?> toRow() => {
         'day': day,
         'fast_kind': fast.name,
-        'chauvihar': observingChauvihar == null
-            ? null
-            : (observingChauvihar! ? 1 : 0),
+        'evening_vow': eveningVow?.name,
         'weight_kg': weightKg,
         'waist_cm': waistCm,
         'protein_g': proteinG,
@@ -69,8 +70,12 @@ class HealthDay {
           (f) => f.name == r['fast_kind'],
           orElse: () => FastKind.none,
         ),
-        observingChauvihar:
-            r['chauvihar'] == null ? null : (r['chauvihar'] as int) == 1,
+        eveningVow: r['evening_vow'] == null
+            ? null
+            : EveningVow.values.firstWhere(
+                (v) => v.name == r['evening_vow'],
+                orElse: () => EveningVow.tivihar,
+              ),
         weightKg: (r['weight_kg'] as num?)?.toDouble(),
         waistCm: (r['waist_cm'] as num?)?.toDouble(),
         proteinG: (r['protein_g'] as num?)?.toDouble(),
@@ -157,7 +162,7 @@ class HealthDb {
       CREATE TABLE IF NOT EXISTS day_log(
         day TEXT PRIMARY KEY,
         fast_kind TEXT NOT NULL DEFAULT 'none',
-        chauvihar INTEGER,
+        evening_vow TEXT,
         weight_kg REAL, waist_cm REAL,
         protein_g REAL, kcal REAL,
         trained INTEGER NOT NULL DEFAULT 0,

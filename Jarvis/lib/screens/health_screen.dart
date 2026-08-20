@@ -6,6 +6,8 @@ import '../services/health_db.dart';
 import '../services/jain_calendar.dart';
 import '../services/nutrition_engine.dart';
 import '../services/training_plan.dart';
+import '../services/yoga_library.dart';
+import 'yoga_screen.dart';
 
 /// The health tab.
 ///
@@ -75,7 +77,7 @@ class _HealthScreenState extends State<HealthScreen> {
     final jd = widget.calendar.day(
       DateTime.now(),
       fast: log?.fast ?? FastKind.none,
-      observingChauvihar: log?.observingChauvihar,
+      eveningVow: log?.eveningVow,
     );
 
     // Targets need a body to compute against. Height and age come from the
@@ -201,9 +203,15 @@ class _HealthScreenState extends State<HealthScreen> {
             _setupCard(),
             const SizedBox(height: 12),
           ],
+          if (jd.suggestion != null && jd.fast == FastKind.none) ...[
+            _suggestionCard(jd.suggestion!),
+            const SizedBox(height: 12),
+          ],
           _windowCard(jd, t),
           const SizedBox(height: 12),
           _trainingCard(td, jd),
+          const SizedBox(height: 12),
+          _yogaCard(jd, td),
           const SizedBox(height: 12),
           if (t != null) ...[
             _proteinCard(t, jd),
@@ -218,6 +226,102 @@ class _HealthScreenState extends State<HealthScreen> {
       ),
     );
   }
+
+  /// The calendar knows today is an observance day; it asks rather than assumes.
+  ///
+  /// His practice is settled — tivihar, water always — so the two-button branch
+  /// below is currently dead for him. It stays because the tivihar/chauvihar
+  /// distinction decides whether a day is "rest" or "rest, and stay out of the
+  /// heat", and a future change must not silently inherit today's answer.
+  Widget _suggestionCard(FastSuggestion s) => _card(
+        border: _amber,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _label('TODAY LOOKS LIKE A FAST', _amber),
+            const SizedBox(height: 8),
+            Text(
+              s.reason,
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 15,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+            const SizedBox(height: 10),
+            if (s.needsWaterRule) ...[
+              Text(
+                'Which one are you keeping? This changes the safety rules, so '
+                'it is not guessed.',
+                style: TextStyle(
+                  color: Colors.white.withValues(alpha: 0.7),
+                  fontSize: 12.5,
+                  height: 1.4,
+                ),
+              ),
+              const SizedBox(height: 10),
+              Row(
+                children: [
+                  Expanded(
+                    child: _choice('Tivihar', 'water in daylight',
+                        () => _setFast(FastKind.tivihar)),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: _choice('Chauvihar', 'nothing at all',
+                        () => _setFast(FastKind.chauvihar)),
+                  ),
+                ],
+              ),
+            ] else
+              _choice(s.kind.label, 'confirm', () => _setFast(s.kind)),
+            const SizedBox(height: 8),
+            Text(
+              'Computed from the tithi at sunrise. Check it against your '
+              'family panchang — calendars can differ by a day.',
+              style: TextStyle(
+                color: Colors.white.withValues(alpha: 0.35),
+                fontSize: 10.5,
+                height: 1.3,
+              ),
+            ),
+          ],
+        ),
+      );
+
+  Widget _choice(String title, String sub, VoidCallback onTap) =>
+      GestureDetector(
+        onTap: onTap,
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+          decoration: BoxDecoration(
+            color: _amber.withValues(alpha: 0.14),
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: _amber.withValues(alpha: 0.55)),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                title,
+                style: const TextStyle(
+                  color: _amber,
+                  fontSize: 13,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              const SizedBox(height: 2),
+              Text(
+                sub,
+                style: TextStyle(
+                  color: Colors.white.withValues(alpha: 0.5),
+                  fontSize: 10.5,
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
 
   Widget _setupCard() => _card(
         border: _teal,
@@ -346,7 +450,7 @@ class _HealthScreenState extends State<HealthScreen> {
       );
     }
 
-    if (!jd.observingChauvihar) {
+    if (!jd.closesFoodWindow) {
       return _card(
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -354,7 +458,7 @@ class _HealthScreenState extends State<HealthScreen> {
             _label('EATING WINDOW', _teal),
             const SizedBox(height: 6),
             Text(
-              'Open — not observing chauvihar today.',
+              'Open — no evening vow today.',
               style: TextStyle(
                 color: Colors.white.withValues(alpha: 0.8),
                 fontSize: 14,
@@ -419,10 +523,21 @@ class _HealthScreenState extends State<HealthScreen> {
           ),
           if (urgent) ...[
             const SizedBox(height: 10),
-            _warnRow(
-              'Keep this last meal low-fibre — dairy or paneer, under ~8 g. '
-              'It sits 11–13 h with no water behind it.',
-            ),
+            if (jd.eveningVow.waterAfterSunset)
+              Text(
+                'Water continues after sunset under tivihar — only food stops. '
+                'Aim the last meal at protein, not volume.',
+                style: TextStyle(
+                  color: Colors.white.withValues(alpha: 0.55),
+                  fontSize: 11.5,
+                  height: 1.4,
+                ),
+              )
+            else
+              _warnRow(
+                'Keep this last meal low-fibre — dairy or paneer, under ~8 g. '
+                'Under chauvihar it sits 11–13 h with no water behind it.',
+              ),
           ],
         ],
       ),
@@ -624,7 +739,7 @@ class _HealthScreenState extends State<HealthScreen> {
             ),
           ],
 
-          if (jd.observingChauvihar) ...[
+          if (jd.closesFoodWindow) ...[
             const SizedBox(height: 12),
             Text(
               'Finish by ${_hhmm(trainBy)} so the post-workout meal lands '
@@ -637,6 +752,76 @@ class _HealthScreenState extends State<HealthScreen> {
             ),
           ],
         ],
+      ),
+    );
+  }
+
+  /// Entry point to the asana cards.
+  ///
+  /// Surfaces the count and length for today rather than a generic "Yoga"
+  /// button, because on a fast day the sequence collapses to the restorative
+  /// subset and the card should say so before he taps into it.
+  Widget _yogaCard(JainDay jd, TrainingDay td) {
+    final restricted = td.clearance == TrainingClearance.rest ||
+        td.clearance == TrainingClearance.lightOnly;
+    final seq = restricted
+        ? YogaLibrary.restorativeOnly
+        : YogaLibrary.sequenceForWeek(widget.plan.weekOf(jd.date));
+    final mins = YogaLibrary.minutesFor(seq);
+
+    return GestureDetector(
+      onTap: () => Navigator.of(context).push(
+        MaterialPageRoute(
+          builder: (_) => YogaScreen(
+            week: widget.plan.weekOf(jd.date),
+            clearance: td.clearance,
+            fastLabel: jd.fast == FastKind.none ? null : jd.fast.label,
+          ),
+        ),
+      ),
+      child: _card(
+        child: Row(
+          children: [
+            Container(
+              width: 42,
+              height: 42,
+              decoration: BoxDecoration(
+                color: const Color(0xFF9B8AFF).withValues(alpha: 0.15),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: const Icon(Icons.self_improvement,
+                  color: Color(0xFF9B8AFF), size: 22),
+            ),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    'Yoga',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 15,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  const SizedBox(height: 3),
+                  Text(
+                    restricted
+                        ? '${seq.length} restorative postures — fast day'
+                        : '${seq.length} postures · ~$mins min',
+                    style: TextStyle(
+                      color: Colors.white.withValues(alpha: 0.5),
+                      fontSize: 12,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            Icon(Icons.chevron_right,
+                color: Colors.white.withValues(alpha: 0.3)),
+          ],
+        ),
       ),
     );
   }

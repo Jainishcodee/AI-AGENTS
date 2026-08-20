@@ -995,54 +995,60 @@ their `instruction` text inside a system prompt, which is prompt injection with 
 Authoring your own modules locally has no such exposure, so that ships first; import gets a
 review step and its own decision when there is anything to import.
 
-
 ---
 
 ## ADR-031 — Check-in reminders ride on the calendar you already have
 
 **Decision.** Cards' `check_on` dates are published as an **iCalendar feed** — a `.ics` file
-from `app.cli calendar` and a `GET /calendar.ics` endpoint. One VEVENT per unresolved card,
-with an alarm, the original question, and what the council predicted. No daemon, no push, no
-mail.
+from `app.cli calendar`, and `GET /calendar.ics`. One VEVENT per unresolved card, with an
+alarm, the original question, and the prediction the council made before it knew. No daemon,
+no push, no mail.
 
-**Why this is the whole product problem.** Every card is written with a falsifiable
-prediction and a `check_on` date, and until now **nothing ever read that date out loud**. The
-nudge line prints only if you already ran a CLI command; the nav badge shows only if you
-already opened the app. Both assume you are already there, which is exactly the assumption
-that fails 60 days later. A learning loop nobody is reminded to close does not learn — and
-that is why the corpus is empty and four exit criteria are unmeasurable.
+**Why this was the whole product problem.** Every card is written with a falsifiable
+prediction and a check-in date, and until now **nothing ever read that date out loud**. The
+CLI nudge printed only if you had already run a command; the nav badge showed only if you had
+already opened the app. Both assume you are already there — exactly the assumption that fails
+sixty days later. A learning loop nobody is reminded to close does not learn, and that is why
+the corpus is empty and four exit criteria are unmeasurable.
 
 **Options weighed.**
 
-- **A background daemon / scheduled task.** Native toasts, immediate. But OS-specific,
-  needs an install step, and fails silently — a dead scheduler is indistinguishable from
-  "nothing due", which is the worst possible failure for a reminder.
-- **Email via the user's own SMTP.** Free and reaches a phone, but wants an app password
+- **A background daemon or scheduled task.** Native toasts, immediate. But OS-specific, needs
+  an install step, and fails *silently* — a dead scheduler is indistinguishable from "nothing
+  due", which is the worst possible failure mode for a reminder.
+- **Email through the user's own SMTP.** Free and reaches a phone, but wants an app password
   stored somewhere, and lands in spam often enough to be untrustworthy for something that
   fires twice a month.
 - **Web push.** Already rejected in ADR-029: service worker, VAPID keys, a subscription
   store — infrastructure for one user.
 - **An iCalendar feed.** Chosen.
 
-**Why the calendar wins on the merits, not just on cost.** The reminding infrastructure
-already exists, is already installed on the user's phone, and is *already checked daily*.
-Building a notification channel means building the delivery, the retry, the snooze, the
-dismissal and the cross-device sync that a calendar has had for twenty years. It is also the
-only option that works when the app is not running, the laptop is closed, and the API is
-down — the exact conditions 60 days after a decision.
+**Why the calendar wins on merits, not just on cost.** The reminding infrastructure already
+exists, is already installed on the user's phone, and is already checked daily. Building a
+notification channel means building delivery, retry, snooze, dismissal and cross-device sync
+that a calendar has had for twenty years. It is also the only option that works when the app
+is closed, the laptop is shut and the API is down — the exact conditions sixty days after a
+decision.
 
 **Given up, and stated plainly.** A subscribed feed only auto-refreshes if the URL is
 reachable by the calendar provider's servers, which a localhost API is not. So there are two
-modes and the docs say so: `app.cli calendar` writes a file to import (works offline, is a
-snapshot, re-import to refresh), and `/calendar.ics` is a live feed for anyone who exposes
-the API or points a local client at it. Pretending one mechanism covers both would be worse
-than the limitation.
+modes and the docs say so rather than implying one covers both: `app.cli calendar` writes a
+file to import (works offline, is a snapshot, re-import to refresh), and `/calendar.ics` is a
+live feed for anyone who exposes the API or points a local client at it.
 
-**The part that is easy to get wrong.** RFC 5545 is unforgiving in ways that fail *silently*
-— a calendar importing a malformed file usually drops events rather than complaining. So the
-builder is tested against the format rather than trusted: CRLF line endings, folding at 75
-octets with a leading space on continuations, `\` `;` `,` and newline escaped inside TEXT
-values, `DTSTAMP` present, all-day events as `VALUE=DATE` with `DTEND` on the following day,
-and a **stable UID derived from the card id** so re-importing updates an event instead of
-duplicating it. That last one is the difference between a calendar that stays clean and one
-the user deletes after the third import.
+**The part that is easy to get wrong.** RFC 5545 is unforgiving in ways that fail *silently* —
+a calendar handed a malformed file usually drops the event rather than complaining, which
+looks exactly like the problem this feature exists to solve. So the builder is tested against
+the format rather than trusted, by parsing the document back: CRLF endings; folding at 75
+**octets** (not characters — a question with an em-dash is multi-byte, and folding on
+character count yields over-length lines some parsers truncate) without ever splitting a
+UTF-8 sequence; backslash, semicolon, comma and newline escaped inside TEXT values; `DTSTAMP`
+present; all-day events as `VALUE=DATE` with an exclusive `DTEND` on the following day; and a
+**stable UID derived from the card id**, which is the difference between a calendar that stays
+clean and one the user deletes after the third import.
+
+**Two smaller decisions worth recording.** The alarm fires `-PT9H` — 3pm the day before —
+because an all-day event starts at midnight and an alarm "at" the event is a notification in
+the middle of the night that is gone by morning. And events are `TRANSP:TRANSPARENT`, because
+a check-in is a nudge, not an appointment; marking it busy would make a month of decisions
+look like a full calendar.

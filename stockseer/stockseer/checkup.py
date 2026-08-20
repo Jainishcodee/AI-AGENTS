@@ -16,7 +16,7 @@ import numpy as np
 import pandas as pd
 
 from .costs import CostModel
-from .data import load_prices
+from .data import load_prices_live
 from .sizing import size_position
 
 
@@ -128,7 +128,7 @@ def check(symbol: str, capital: float = 40_000.0, risk_pct: float = 0.02,
     A stop placed inside a stock's normal noise is not a stop -- it is a
     guarantee of being taken out by randomness before the idea is tested.
     """
-    px = load_prices(symbol, start=start, min_rows=60)
+    px = load_prices_live(symbol, start=start, min_rows=60)
     c, h, l = px["Close"], px["High"], px["Low"]
     ret = c.pct_change().dropna()
     price = float(c.iloc[-1])

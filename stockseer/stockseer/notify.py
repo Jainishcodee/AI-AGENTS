@@ -19,7 +19,7 @@ import threading
 import time
 import uuid
 from dataclasses import asdict, dataclass, field
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 
 log = logging.getLogger(__name__)
@@ -59,6 +59,8 @@ class Notification:
     id: str = ""
     delivered: bool = False
     delivered_at: str | None = None
+    pushed: bool = False              # reached the phone via the ntfy relay
+    pushed_at: str | None = None
     data: dict = field(default_factory=dict)
 
     def __post_init__(self):
@@ -123,7 +125,15 @@ class NotificationHub:
             from .push import configured, push_notification
 
             if configured() and not self.client_recently_polled():
-                push_notification(notif)
+                if push_notification(notif):
+                    # Record it, or Jarvis re-buzzes for this alert the next
+                    # time it connects -- possibly days later, for an event
+                    # that is long over.
+                    notif.pushed = True
+                    notif.pushed_at = datetime.now().astimezone().isoformat(
+                        timespec="seconds")
+                    with _LOCK:
+                        self._save()
         except Exception as exc:
             log.debug("push transport unavailable: %s", exc)
         return notif
@@ -150,9 +160,27 @@ class NotificationHub:
             dedupe_key=dedupe_key,
         )
 
-    def pending(self, limit: int = 20) -> list[Notification]:
+    def pending(self, limit: int = 20, max_age_hours: float = 12.0
+                ) -> list[Notification]:
+        """Alerts still owed to Jarvis.
+
+        Excludes anything ntfy already delivered, and anything stale. A market
+        alert from two days ago is not news -- buzzing about it on reconnect
+        trains you to ignore the one that arrives during the session.
+        """
+        cutoff = datetime.now().astimezone() - timedelta(hours=max_age_hours)
+        out = []
+        for n in self.items:
+            if n.delivered or n.pushed:
+                continue
+            try:
+                if datetime.fromisoformat(n.created_at) < cutoff:
+                    continue
+            except (TypeError, ValueError):
+                pass
+            out.append(n)
         with _LOCK:
-            return [n for n in self.items if not n.delivered][:limit]
+            return out[:limit]
 
     def mark_delivered(self, ids: list[str]) -> int:
         stamp = datetime.now().astimezone().isoformat(timespec="seconds")

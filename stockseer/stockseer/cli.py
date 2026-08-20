@@ -199,6 +199,181 @@ def cmd_check(a: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_etf(a: argparse.Namespace) -> int:
+    """Gold and silver ETFs: are you paying a fair price today?"""
+    from .etf import REGISTRY, print_study, scan_and_notify, study_premium, verdict
+
+    tickers = ([t.strip() for t in a.ticker.split(",") if t.strip()]
+               if a.ticker else list(REGISTRY))
+
+    if a.action == "scan":
+        print(f"\n{'symbol':<16}{'price':>10}{'fair value':>12}{'gap':>9}   verdict")
+        print("-" * 72)
+        for t in tickers:
+            try:
+                s = study_premium(t, start=a.start, refresh=a.refresh)
+                v, _ = verdict(s)
+                flags = "  (est.)" if s.approx else ""
+                if s.nav_is_stale:
+                    flags += f"  NAV {s.nav_date}"
+                print(f"{t:<16}{s.price:>10,.2f}{s.nav:>12,.2f}"
+                      f"{s.current * 100:>8.2f}%   {v}{flags}")
+            except Exception as exc:
+                print(f"{t:<16}FAILED: {exc}")
+        print("\n Fair value is the fund's published NAV. A gap over ~1% is worth"
+              "\n waiting out; it usually closes within a couple of days.\n")
+        return 0
+
+    if a.action == "notify":
+        pushed = scan_and_notify(tickers, start=a.start, refresh=a.refresh)
+        if pushed:
+            for n in pushed:
+                print(f"  [{n.urgency}] {n.title}")
+        else:
+            print("\n All tracked ETFs are near fair value. Nothing worth an alert.\n")
+        return 0
+
+    for t in tickers:
+        try:
+            print_study(study_premium(t, horizon=a.horizon, start=a.start,
+                                      refresh=a.refresh))
+        except Exception as exc:
+            print(f"\n {t}: {exc}\n")
+    return 0
+
+
+def cmd_alert(a: argparse.Namespace) -> int:
+    """Price alerts: tell me when this gets to my level."""
+    from .watchlist import Watchlist, notify
+
+    wl = Watchlist()
+
+    if a.action == "add":
+        if not a.ticker:
+            print(" --ticker is required")
+            return 1
+        kinds = [(k, v) for k, v in (("below", a.below), ("drop", a.drop),
+                                     ("under_avg", a.under_avg)) if v is not None]
+        if len(kinds) != 1:
+            print(" give exactly one of --below, --drop or --under-avg")
+            return 1
+        kind, val = kinds[0]
+        w = wl.add(a.ticker, kind, val, a.note or "")
+        print(f"\n watching {w.ticker}: alert when {w.describe()}\n")
+        return 0
+
+    if a.action == "remove":
+        print(" removed" if wl.remove(a.id) else f" no watch with id {a.id!r}")
+        return 0
+
+    if a.action == "rearm":
+        print(" re-armed" if wl.rearm(a.id) else f" no watch with id {a.id!r}")
+        return 0
+
+    if a.action == "check":
+        hits = wl.check()
+        if not hits:
+            print("\n Nothing has reached its level.\n")
+            return 0
+        for n in notify(hits):
+            print(f"  [{n.urgency}] {n.title}")
+        return 0
+
+    if not wl.items:
+        print("\n No watches yet. Add one:")
+        print("   stockseer watch add --ticker SILVERBEES.NS --below 200")
+        print("   stockseer watch add --ticker SILVERBEES.NS --drop 10\n")
+        return 0
+
+    print(f"\n {'id':<26}{'wants':<34}{'last price':>12}  state")
+    print(" " + "-" * 76)
+    for w in wl.items:
+        state = "waiting" if w.armed else f"hit {w.triggered_on[:10]}"
+        last = f"Rs.{w.last_price:,.2f}" if w.last_price else "-"
+        print(f" {w.id:<26}{w.describe():<34}{last:>12}  {state}")
+    print()
+    return 0
+
+
+def cmd_portfolio(a: argparse.Namespace) -> int:
+    """Holdings, concentration, and which losses are worth realising."""
+    from .portfolio import Portfolio, harvest, print_harvest, print_portfolio
+
+    pf = Portfolio.load(a.file)
+
+    if a.action == "import":
+        n = pf.import_csv(a.csv)
+        pf.save(a.file)
+        print(f"\n imported {n} holdings\n")
+        return 0
+
+    if not pf.holdings:
+        print("\n No holdings yet. Import a CSV with columns"
+              " symbol,qty,avg_price[,days_held]:")
+        print("   stockseer portfolio import --csv holdings.csv\n")
+        return 1
+
+    if a.gains is not None:
+        pf.realised_gains = a.gains
+        pf.save(a.file)
+
+    positions = pf.price_all()
+
+    if a.action in ("show", "concentration"):
+        print_portfolio(positions)
+        return 0
+
+    if a.action == "harvest":
+        plan = harvest(positions, pf.realised_gains, short_term=not a.long_term)
+        print_harvest(plan, short_term=not a.long_term)
+        return 0
+    return 1
+
+
+def cmd_pulse(a: argparse.Namespace) -> int:
+    """Market check at the times that matter: open, 11:30, 13:30."""
+    from .data import load_prices_live
+    from .regime import snapshot
+
+    names = [t.strip().upper() for t in a.tickers.split(",") if t.strip()]
+    r = snapshot()
+
+    print(f"\n{'=' * 70}")
+    print(f" MARKET PULSE   {r.as_of[11:16]}   {r.summary}")
+    print("=" * 70)
+
+    rows = []
+    for name in names:
+        sym = name if "." in name else f"{name}.NS"
+        try:
+            c = load_prices_live(sym, start="2024-01-01", min_rows=60)["Close"]
+            price = float(c.iloc[-1])
+            rows.append({
+                "sym": name, "price": price,
+                "day": float(price / c.iloc[-2] - 1.0) if len(c) > 1 else 0.0,
+                "vs50": float(price / c.rolling(50).mean().iloc[-1] - 1.0),
+                "from_high": float(price / c.tail(252).max() - 1.0),
+            })
+        except Exception as exc:
+            print(f"  {name}: {exc}")
+
+    rows.sort(key=lambda x: x["from_high"])
+    print(f"\n {'stock':<14}{'price':>10}{'today':>9}{'vs 50d':>9}{'from high':>11}")
+    print(" " + "-" * 52)
+    for x in rows:
+        print(f" {x['sym']:<14}{x['price']:>10,.1f}{x['day'] * 100:>8.1f}%"
+              f"{x['vs50'] * 100:>8.1f}%{x['from_high'] * 100:>10.1f}%")
+
+    print("\n Sorted by distance from the 52-week high -- the cheapest relative")
+    print(" to its own recent range is at the top. That is a price fact, not a")
+    print(" forecast: nothing here says any of them will rise.")
+    if r.vix is not None:
+        print(f"\n India VIX {r.vix:.1f} ({r.vix_band}). VIX predicts the month")
+        print(" ahead (t=9.5), not the next day or two (t=1.0).")
+    print()
+    return 0
+
+
 def cmd_plan(a: argparse.Namespace) -> int:
     from .planner import compare_capital, plan_report
 
@@ -426,9 +601,9 @@ def cmd_ipo(a: argparse.Namespace) -> int:
     from .ipo.registry import refresh_registry, upcoming_listings
 
     if a.action == "calendar":
-        print_calendar(refresh=a.refresh, mainboard_only=a.mainboard_only)
+        print_calendar(refresh=a.refresh, include_sme=a.include_sme)
         if a.notify:
-            pushed = notify_today(refresh=False, mainboard_only=a.mainboard_only)
+            pushed = notify_today(refresh=False, include_sme=a.include_sme)
             print(f" queued {len(pushed)} notification(s) for Jarvis\n")
         return 0
 
@@ -462,7 +637,7 @@ def cmd_ipo(a: argparse.Namespace) -> int:
         cutoff = date.today() - timedelta(days=a.days - 3)
         ipos = [i for i in past_issues() if i.listed and i.listing_day()
                 and i.listing_day() >= cutoff
-                and (not a.mainboard_only or not i.is_sme)]
+                and (a.include_sme or not i.is_sme)]
         print(f"\n {len(ipos)} listings since {cutoff} · feed {feed.describe()}\n")
         run_intraday_study(feed, ipos, interval=a.interval, days_back=a.days)
         return 0
@@ -637,6 +812,48 @@ def main(argv: list[str] | None = None) -> int:
                    help="never put more than this share of capital in one stock")
     p.set_defaults(func=cmd_check)
 
+    p = sub.add_parser("etf", help="gold/silver ETFs: are you paying a fair price?")
+    p.add_argument("action", nargs="?", default="scan",
+                   choices=["scan", "study", "notify"])
+    p.add_argument("--ticker", default=None,
+                   help="default: all tracked ETFs (GOLDBEES, SILVERBEES, "
+                        "TATAGOLD, TATSILV)")
+    p.add_argument("--start", default="2022-01-01")
+    p.add_argument("--horizon", type=int, default=21,
+                   help="days ahead to measure in 'study'")
+    p.add_argument("--refresh", action="store_true", help="re-fetch NAVs")
+    p.set_defaults(func=cmd_etf)
+
+    p = sub.add_parser("alert", help="tell me when a stock reaches my price")
+    p.add_argument("action", nargs="?", default="list",
+                   choices=["list", "add", "remove", "rearm", "check"])
+    p.add_argument("--ticker")
+    p.add_argument("--below", type=float, help="alert below this price")
+    p.add_argument("--drop", type=float, help="alert this %% below the 52-week high")
+    p.add_argument("--under-avg", type=float,
+                   help="alert this %% below the 50-day average")
+    p.add_argument("--note", help="why you want it, shown in the alert")
+    p.add_argument("--id", help="which watch, for remove/rearm")
+    p.set_defaults(func=cmd_alert)
+
+    p = sub.add_parser("portfolio",
+                       help="holdings, concentration, and tax-loss harvesting")
+    p.add_argument("action", nargs="?", default="show",
+                   choices=["show", "concentration", "harvest", "import"])
+    p.add_argument("--file", default=None)
+    p.add_argument("--csv", help="for import: symbol,qty,avg_price[,days_held]")
+    p.add_argument("--gains", type=float, default=None,
+                   help="realised gains booked this financial year")
+    p.add_argument("--long-term", action="store_true",
+                   help="treat the gains as long-term (12.5%% above Rs.1.25L)")
+    p.set_defaults(func=cmd_portfolio)
+
+    p = sub.add_parser("pulse",
+                       help="market check on the quality watchlist")
+    p.add_argument("--tickers", default="TORNTPHARM,PIDILITIND,BRITANNIA,TITAN,BAJFINANCE,MARICO,TVSMOTOR,TRENT,EICHERMOT,NESTLEIND",
+                   help="default: the screened quality list")
+    p.set_defaults(func=cmd_pulse)
+
     p = sub.add_parser("plan", help="what a capital + profit target actually requires")
     p.add_argument("--capital", type=float, required=True)
     p.add_argument("--target", type=float, required=True, help="profit goal in rupees")
@@ -722,8 +939,10 @@ def main(argv: list[str] | None = None) -> int:
                             "watch", "autorun"])
     p.add_argument("--refresh", action="store_true", help="re-fetch from NSE")
     p.add_argument("--notify", action="store_true", help="queue alerts for Jarvis")
-    p.add_argument("--mainboard-only", action="store_true",
-                   help="skip SME issues; they behave like a different asset class")
+    p.add_argument("--include-sme", action="store_true",
+                   help="include SME issues. Off by default: their minimum "
+                        "application is about a lakh, so a small account "
+                        "cannot act on the alert")
     p.add_argument("--days", type=int, default=95)
     p.add_argument("--limit", type=int, default=450, help="IPOs to measure in 'study'")
     p.add_argument("--interval", default="5m")

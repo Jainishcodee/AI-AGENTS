@@ -91,6 +91,7 @@ class ListingWatcher:
         self.cfg = config or WatchConfig()
         self.state = WatchState(ipo=ipo)
         self._hub = hub()
+        self._regime_cache: dict | None = None
 
     # ------------------------------------------------------------------ #
     def price(self) -> float | None:
@@ -103,6 +104,18 @@ class ListingWatcher:
     def _key(self, tag: str) -> str:
         return f"{tag}:{self.ipo.symbol}:{date.today().isoformat()}"
 
+    def _regime(self) -> dict:
+        """Market conditions at alert time, recorded for a future study.
+
+        Cached per session: the listing sequence fires several alerts within
+        an hour and the regime does not meaningfully move between them.
+        """
+        if self._regime_cache is None:
+            from ..regime import as_payload
+
+            self._regime_cache = as_payload()
+        return self._regime_cache
+
     # ------------------------------------------------------------ 1. arm
     def arm(self) -> None:
         i = self.ipo
@@ -114,6 +127,7 @@ class ListingWatcher:
                   f"tracking.\n\n{BASE_RATE}"),
             symbol=i.symbol, dedupe_key=self._key("arm"),
             issue_price=i.issue_price,
+            regime=self._regime(),
         )
 
     # --------------------------------------------------------- 2. listed
@@ -135,6 +149,7 @@ class ListingWatcher:
                   f"You will get a separate alert with a buy price if it holds."),
             symbol=self.ipo.symbol, dedupe_key=self._key("listed"),
             opening_print=price, issue_price=self.ipo.issue_price,
+            regime=self._regime(),
         )
 
     def _held_above_open(self, price: float) -> bool:
@@ -181,6 +196,7 @@ class ListingWatcher:
             symbol=self.ipo.symbol, dedupe_key=self._key("buy"),
             entry=price, target=target, stop=stop, qty=qty,
             target_rupees=gain_rs, stop_rupees=-loss_rs,
+            regime=self._regime(),
         )
 
     # -------------------------------------------------------- 4. nearing

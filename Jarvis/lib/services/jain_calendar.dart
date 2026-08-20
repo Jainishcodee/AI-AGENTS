@@ -56,6 +56,38 @@ enum FastKind {
   chauvihar,
 }
 
+/// The evening vow — what is given up after sunset.
+///
+/// The names matter and are routinely conflated. *Chauvihar* gives up all four
+/// (food, water, fruit, mouth-fresheners). *Tivihar* gives up three and **keeps
+/// water**. Which one is being kept changes almost every downstream warning in
+/// this module, so it is modelled explicitly rather than as a bool.
+enum EveningVow {
+  /// Eating normally after sunset.
+  none,
+
+  /// No food after sunset, water still permitted. **His practice.**
+  tivihar,
+
+  /// Nothing at all after sunset.
+  chauvihar,
+}
+
+extension EveningVowX on EveningVow {
+  String get label => switch (this) {
+        EveningVow.none => 'No evening vow',
+        EveningVow.tivihar => 'Tivihar',
+        EveningVow.chauvihar => 'Chauvihar',
+      };
+
+  /// The food window closes at sunset under either vow.
+  bool get closesFoodWindow => this != EveningVow.none;
+
+  /// Only chauvihar takes water away. This is the flag that should drive any
+  /// hydration or heat warning — never [closesFoodWindow].
+  bool get waterAfterSunset => this != EveningVow.chauvihar;
+}
+
 /// What the day permits, physically.
 enum TrainingClearance {
   /// Heavy compound work is fine.
@@ -108,7 +140,9 @@ extension FastKindX on FastKind {
           'Yoga, mobility and walking only. No dairy, fat or sugar today means '
               'no recovery fuel for hard work.',
         FastKind.tivihar =>
-          'No training. ~36 h without food, water only in daylight.',
+          'Rest day. Water is permitted, so this is a fuel problem rather than a '
+              'fluid one — but 36 h without food still means no lifting and no '
+              'running. Walking and restorative yoga are fine.',
         FastKind.chauvihar =>
           'No training, no running, no heat, no hard yoga. ~36 h with NO water. '
               'Skipping costs nothing — disuse atrophy takes 1–2 weeks.',
@@ -151,6 +185,31 @@ class ObservanceWindow {
   static DateTime _d(DateTime t) => DateTime(t.year, t.month, t.day);
 }
 
+/// A fast the calendar believes today is, when nothing has been logged.
+///
+/// Deliberately a *suggestion* and not an assignment: the calendar proposes,
+/// he confirms, and nothing is logged until he does.
+///
+/// [needsWaterRule] exists for the case where the kind is known but the water
+/// rule is not. His practice is settled — tivihar, water always kept, never
+/// chauvihar — so it is currently never set. It stays because the distinction
+/// is the difference between "rest today" and "stay out of the heat entirely",
+/// and a future change of practice must not silently inherit the safe-sounding
+/// default.
+class FastSuggestion {
+  const FastSuggestion(
+    this.kind,
+    this.reason, {
+    this.needsWaterRule = false,
+  });
+
+  final FastKind kind;
+  final String reason;
+
+  /// True when the kind is known to be a full fast but the water rule is not.
+  final bool needsWaterRule;
+}
+
 /// Everything the rest of the app needs to know about a single day.
 class JainDay {
   const JainDay({
@@ -161,8 +220,9 @@ class JainDay {
     required this.lastMealBy,
     required this.fast,
     required this.inChaumasa,
-    required this.observingChauvihar,
+    required this.eveningVow,
     this.window,
+    this.suggestion,
   });
 
   final DateTime date;
@@ -172,21 +232,29 @@ class JainDay {
   /// Sunrise + 48 min. The earliest anything may be taken under most vows.
   final DateTime navkarsi;
 
-  /// The practical deadline for the last bite or sip: sunset minus a margin.
+  /// The practical deadline for the last bite: sunset minus a margin.
   ///
-  /// Chauvihar means the last intake is *before* sunset, not at it. Cutting it
-  /// fine against an astronomical instant is how a vow gets broken by accident,
-  /// so the app always shows a deadline with the margin already subtracted.
+  /// The vow bites *before* sunset, not at it. Cutting it fine against an
+  /// astronomical instant is how a vow gets broken by accident, so the deadline
+  /// always has the margin subtracted already.
+  ///
+  /// Under tivihar this is a deadline for FOOD only — water continues.
   final DateTime lastMealBy;
 
   final FastKind fast;
   final bool inChaumasa;
 
-  /// Whether he is keeping chauvihar today. Distinct from [fast] — he can keep
-  /// chauvihar (nothing after sunset) while eating normally during the day.
-  final bool observingChauvihar;
+  /// The evening vow today. Distinct from [fast] — he keeps an evening vow on
+  /// ordinary days while eating normally during daylight.
+  final EveningVow eveningVow;
+
+  /// Convenience: does the food window shut at sunset today?
+  bool get closesFoodWindow => eveningVow.closesFoodWindow;
 
   final ObservanceWindow? window;
+
+  /// What the calendar thinks today is, when nothing has been logged yet.
+  final FastSuggestion? suggestion;
 
   TrainingClearance get clearance {
     // A deload window (Paryushan, Ayambil Oli) caps the day even when the day
@@ -202,7 +270,7 @@ class JainDay {
   /// How long is left to eat. Null when there is no eating window today.
   Duration? timeLeftToEat([DateTime? now]) {
     if (fast.isFullFast) return null;
-    if (!observingChauvihar) return null;
+    if (!eveningVow.closesFoodWindow) return null;
     final t = now ?? DateTime.now();
     final left = lastMealBy.difference(t);
     return left.isNegative ? Duration.zero : left;
@@ -274,15 +342,13 @@ class JainCalendar {
           'training block.',
       isDeload: true,
     ),
-    ObservanceWindow(
-      name: 'Navpad Ayambil Oli',
-      start: DateTime(2026, 10, 17),
-      end: DateTime(2026, 10, 26),
-      note: 'Nine consecutive ayambils: one bland meal a day, no milk, curd, '
-          'ghee, oil, sugar, fruit or green vegetables. Expect ~9 days at '
-          '40–60 g protein. Maintain, do not progress.',
-      isDeload: true,
-    ),
+    // Navpad Ayambil Oli (17–26 Oct 2026) is deliberately ABSENT.
+    //
+    // It is a real and widely kept observance, but he does not keep it, and a
+    // calendar that flags nine days he will spend training normally is worse
+    // than one that says nothing — he would learn to dismiss the banner, and
+    // then dismiss Paryushan with it. Only observances he actually keeps earn a
+    // place here. If that changes, add it back with isDeload: true.
     chaumasa2026,
   ];
 
@@ -291,16 +357,21 @@ class JainCalendar {
   JainDay day(
     DateTime date, {
     FastKind fast = FastKind.none,
-    bool? observingChauvihar,
+    EveningVow? eveningVow,
   }) {
     final d = DateTime(date.year, date.month, date.day);
     final sun = _sunTimes(d);
     final inChaumasa = chaumasa2026.contains(d);
 
-    // He does not keep chauvihar year-round, but is attempting it through
+    // He does not keep an evening vow year-round, but is attempting one through
     // chaumasa. Default to the observance rather than making him tick a box
     // every morning — and let an explicit value override it.
-    final chauvihar = observingChauvihar ?? inChaumasa;
+    //
+    // The default is TIVIHAR, not chauvihar: he keeps water. That single fact
+    // switches off the dehydration and heat machinery that a chauvihar default
+    // would (wrongly) keep firing at him.
+    final vow = eveningVow ??
+        (inChaumasa ? EveningVow.tivihar : EveningVow.none);
 
     final navkarsi = sun.sunrise.add(const Duration(minutes: 48));
     final lastMeal =
@@ -322,8 +393,9 @@ class JainCalendar {
       lastMealBy: lastMeal,
       fast: fast,
       inChaumasa: inChaumasa,
-      observingChauvihar: chauvihar,
+      eveningVow: vow,
       window: match,
+      suggestion: suggestFor(d),
     );
   }
 
@@ -335,6 +407,110 @@ class JainCalendar {
     if (!chaumasa2026.contains(d)) return 0;
     return chaumasa2026.end.difference(d).inDays;
   }
+
+  // ------------------------------------------------------------------ tithi
+
+  /// The tithi running at a given instant, 1–30.
+  ///
+  /// A tithi is the time it takes the moon to gain 12 degrees of elongation on
+  /// the sun, so `tithi = floor(elongation / 12) + 1`. 1–15 are the bright
+  /// fortnight (shukla / *sud*), 16–30 the dark (krishna / *vad*).
+  ///
+  /// The lunar term is Meeus' abbreviated series, good to roughly 0.3 degrees.
+  /// The moon moves ~13 deg/day, so that is about half an hour of error on a
+  /// tithi boundary — comfortably inside the day-level precision this is used
+  /// for, and well inside the day that Deravasi and Sthanakvasi panchangs can
+  /// already differ by.
+  ///
+  /// Checked against two independently sourced anchors: **15 Sep 2026 comes out
+  /// Shukla 4** (Samvatsari, Bhadrapada Shukla Chaturthi) and **24 Nov 2026
+  /// comes out Shukla 15** (Kartik Purnima, the chaumasa close). Both exact.
+  int tithiAt(DateTime localInstant) {
+    final utHours = localInstant.hour +
+        localInstant.minute / 60.0 -
+        tzOffsetMinutes / 60.0;
+    final n = _julianDay(localInstant) + utHours / 24.0 - 2451545.0;
+
+    final g = _norm360(357.529 + 0.98560028 * n);
+    final q = _norm360(280.459 + 0.98564736 * n);
+    final sun = _norm360(
+        q + 1.915 * math.sin(_rad(g)) + 0.020 * math.sin(_rad(2 * g)));
+
+    final lm = _norm360(218.316 + 13.176396 * n);
+    final mm = _norm360(134.963 + 13.064993 * n);
+    final dArg = lm - sun; // elongation, used by the correction terms
+
+    final moon = _norm360(lm +
+        6.289 * math.sin(_rad(mm)) +
+        1.274 * math.sin(_rad(2 * dArg - mm)) +
+        0.658 * math.sin(_rad(2 * dArg)) -
+        0.186 * math.sin(_rad(g)) -
+        0.059 * math.sin(_rad(2 * dArg - 2 * mm)) -
+        0.057 * math.sin(_rad(2 * dArg - mm - g)));
+
+    return (_norm360(moon - sun) / 12).floor() + 1;
+  }
+
+  /// The tithi running at sunrise, which is the one a day is named for.
+  int tithiOnDay(DateTime date) => tithiAt(_sunTimes(date).sunrise);
+
+  /// Sud Pancham — Shukla Panchami. His personal monthly fast, kept for about
+  /// two years, so it recurs roughly every 29–30 days rather than on a fixed
+  /// calendar date.
+  bool isSudPancham(DateTime date) => tithiOnDay(date) == 5;
+
+  /// Upcoming Sud Pancham dates, so the training block can be planned around
+  /// them instead of colliding with them.
+  List<DateTime> sudPanchamsBetween(DateTime from, DateTime to) {
+    final out = <DateTime>[];
+    var d = DateTime(from.year, from.month, from.day);
+    final end = DateTime(to.year, to.month, to.day);
+    while (!d.isAfter(end)) {
+      if (isSudPancham(d)) out.add(d);
+      d = d.add(const Duration(days: 1));
+    }
+    return out;
+  }
+
+  // ------------------------------------------------------------ suggestions
+
+  /// Samvatsari 2026 — the last day of Paryushan, and his one planned full fast
+  /// inside it.
+  static final samvatsari2026 = DateTime(2026, 9, 15);
+
+  /// What the calendar believes today is.
+  ///
+  /// Encodes his stated practice: **ekasana for the first seven days of
+  /// Paryushan, a tivihar fast on Samvatsari, and a tivihar fast every Sud
+  /// Pancham.** He does not keep Navpad Ayambil Oli, so October is not flagged.
+  /// All his fasts keep water.
+  FastSuggestion? suggestFor(DateTime date) {
+    final d = DateTime(date.year, date.month, date.day);
+
+    if (_sameDay(d, samvatsari2026)) {
+      return const FastSuggestion(
+        FastKind.tivihar,
+        'Samvatsari — the last day of Paryushan.',
+      );
+    }
+    final paryushan = windows.firstWhere((w) => w.name == 'Paryushan');
+    if (paryushan.contains(d)) {
+      return const FastSuggestion(
+        FastKind.ekasana,
+        'Paryushan — one meal, one sitting.',
+      );
+    }
+    if (isSudPancham(d)) {
+      return const FastSuggestion(
+        FastKind.tivihar,
+        'Sud Pancham — your monthly fast. Water permitted in daylight.',
+      );
+    }
+    return null;
+  }
+
+  static bool _sameDay(DateTime a, DateTime b) =>
+      a.year == b.year && a.month == b.month && a.day == b.day;
 
   // ------------------------------------------------------------- solar maths
 

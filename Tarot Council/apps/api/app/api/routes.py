@@ -6,7 +6,7 @@ from collections.abc import AsyncIterator
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, HTTPException, Query, Request
-from fastapi.responses import StreamingResponse
+from fastapi.responses import Response, StreamingResponse
 from pydantic import BaseModel, Field
 
 from ..core.errors import CognitiveOSError, ProgramInvalid
@@ -16,6 +16,7 @@ from ..engine.planner import call_estimate
 from ..learning import divergence, priors
 from ..learning.scoring import CHANCE_BRIER
 from ..programs import catalog, loader
+from ..reminders import ics
 from ..schemas.cards import (
     MIN_N_TO_DISPLAY,
     CardStatus,
@@ -476,6 +477,25 @@ async def replay_card(request: Request, card_id: str) -> ReplayResult:
         raise HTTPException(status_code=404, detail="no such card") from exc
     except CognitiveOSError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@router.get("/calendar.ics")
+async def calendar_feed(request: Request) -> Response:
+    """Every open check-in as an iCalendar feed (ADR-031).
+
+    The one reminder channel that reaches the user when the app is closed, the laptop is
+    shut and the API is down — because the calendar app already syncs to their phone. A
+    subscription only auto-refreshes if this URL is reachable by the calendar provider, which
+    a localhost API is not; `python -m app.cli calendar` writes the same document to a file
+    for the offline case, and the README says so rather than implying otherwise.
+    """
+    cards = await _council(request).store.list_cards(limit=500)
+    document = ics.render(ics.build(cards))
+    return Response(
+        content=document,
+        media_type="text/calendar; charset=utf-8",
+        headers={"content-disposition": 'inline; filename="decision-checkins.ics"'},
+    )
 
 
 @router.get("/reminders")

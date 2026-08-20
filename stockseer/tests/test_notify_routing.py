@@ -61,11 +61,34 @@ def test_poll_window_tolerates_one_dropped_request(hub, monkeypatch):
     assert hub._sent == []
 
 
-def test_alert_is_always_queued_even_when_pushed(hub):
-    """The queue is the record; the transport is just delivery."""
+def test_a_pushed_alert_is_recorded_but_no_longer_owed(hub):
+    """The queue is the record; the transport is just delivery.
+
+    Once ntfy has delivered an alert it must drop out of `pending`, or Jarvis
+    re-buzzes for it on its next connect -- possibly days later, for an event
+    that is long over.
+    """
     _alert(hub, "kept")
     assert [n.title for n in hub.items] == ["kept"]
-    assert hub.pending()[0].title == "kept"
+    assert hub.items[0].pushed is True
+    assert hub.pending() == [], "ntfy already delivered it"
+
+
+def test_an_undelivered_alert_is_still_owed(hub, monkeypatch):
+    """If the push fails, Jarvis must still get its chance."""
+    monkeypatch.setattr("stockseer.push.push_notification", lambda n: False)
+    _alert(hub, "push failed")
+    assert hub.items[0].pushed is False
+    assert [n.title for n in hub.pending()] == ["push failed"]
+
+
+def test_stale_alerts_are_not_replayed(hub, monkeypatch):
+    """A market alert from two days ago is not news."""
+    monkeypatch.setattr("stockseer.push.configured", lambda: False)
+    n = _alert(hub, "old news")
+    n.created_at = "2020-01-01T09:00:00+05:30"
+    assert hub.pending() == []
+    assert hub.pending(max_age_hours=24 * 365 * 20)
 
 
 def test_push_failure_never_loses_the_alert(tmp_path, monkeypatch):

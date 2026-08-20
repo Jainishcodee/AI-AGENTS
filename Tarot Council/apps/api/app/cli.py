@@ -91,6 +91,8 @@ COMMANDS = (
     "replay",
     "divergence",
     "modules",
+    "calendar",
+    "checkin",
     "resume",
     "brief",
 )
@@ -207,6 +209,20 @@ def build_parser() -> argparse.ArgumentParser:
     )
     projects.add_argument("--brief", default="", help="What the situation is.")
     projects.add_argument("--close", default=None, metavar="ID", help="Close a project.")
+
+    calendar_cmd = sub.add_parser(
+        "calendar", help="Write check-in dates as an .ics file for your calendar app."
+    )
+    calendar_cmd.add_argument(
+        "--out",
+        default=None,
+        metavar="FILE",
+        help="Where to write it. Defaults to var/decision-checkins.ics.",
+    )
+
+    sub.add_parser(
+        "checkin", help="Walk every due card and record what actually happened."
+    )
 
     catalog_cmd = sub.add_parser(
         "modules", help="List modules, or author one from a YAML file."
@@ -383,6 +399,8 @@ async def _run(args: argparse.Namespace) -> int:
             "migrate": _cmd_migrate,
             "projects": _cmd_projects,
             "modules": _cmd_modules,
+            "calendar": _cmd_calendar,
+            "checkin": _cmd_checkin,
             "replay": _cmd_replay,
             "divergence": _cmd_divergence,
             "resume": _cmd_resume,
@@ -401,9 +419,14 @@ async def _nudge_due(council: Council, args: argparse.Namespace) -> None:
 
     A card schedules its own follow-up when it is written; something still has to
     mention it. Printing it after every command is the cheapest reminder that does not
-    need a daemon — and the loop only closes if somebody actually comes back.
+    need a daemon — but it only reaches somebody already at a terminal, which is why
+    ADR-031 puts the same dates on their calendar.
+
+    Skipped for the commands that *are* the check-in: telling someone "1 decision is due,
+    run `cards --status due`" immediately after they ran `checkin` is noise that trains
+    them to stop reading the line.
     """
-    if args.command in ("cards", "resolve", "grade"):
+    if args.command in ("cards", "resolve", "grade", "checkin", "calendar"):
         return
     try:
         due = await council.store.list_cards(limit=5, status="due")
@@ -533,6 +556,152 @@ async def _cmd_modules(council: Council, args: argparse.Namespace) -> int:
         )
     )
     return 0
+
+
+async def _cmd_calendar(council: Council, args: argparse.Namespace) -> int:
+    """Publish check-in dates to the calendar the user already reads (ADR-031).
+
+    This is the only channel that reaches somebody sixty days later with the laptop shut.
+    Everything else in this CLI assumes you already came back, which is the assumption that
+    actually fails.
+    """
+    from .reminders import ics
+
+    cards = await council.store.list_cards(limit=500)
+    calendar = ics.build(cards)
+    document = ics.render(calendar)
+
+    target = Path(args.out) if args.out else get_settings().store_dir / "decision-checkins.ics"
+    target.parent.mkdir(parents=True, exist_ok=True)
+    # newline="" because the document already carries RFC-mandated CRLF endings; letting
+    # Python translate them would produce CRCRLF on Windows and a file some clients reject.
+    target.write_text(document, encoding="utf-8", newline="")
+
+    if calendar.empty:
+        print(_wrap("No open check-ins yet, so the calendar is empty but valid."))
+    else:
+        soonest = calendar.reminders[0]
+        print(_c(f"{len(calendar.reminders)} check-in(s) written", BOLD))
+        print(_c(_wrap(f"next: {soonest.on.isoformat()} {GLYPH['dot']} {_clip(soonest.question, 54)}", indent="  "), DIM))
+    print()
+    print(_wrap(f"file: {target}"))
+    print(
+        _c(
+            _wrap(
+                "Import it once into Google Calendar, Outlook or your phone. It is a "
+                "snapshot — re-run this after new decisions, or subscribe to "
+                "/calendar.ics if the API is reachable, which auto-refreshes."
+            ),
+            DIM,
+        )
+    )
+    return 0
+
+
+async def _cmd_checkin(council: Council, args: argparse.Namespace) -> int:
+    """Walk every due card in one sitting.
+
+    `resolve <id> --chose ... --outcome ...` asks the user to remember a card id and two
+    flags for each card, from a terminal, months later. That friction is why zero cards have
+    ever been resolved. This asks the questions instead.
+    """
+    from datetime import date
+
+    due = await council.store.list_cards(limit=100, status="due")
+    if not due:
+        open_cards = await council.store.list_cards(limit=100, status="open")
+        print(_wrap("Nothing is due for a check-in."))
+        if open_cards:
+            nxt = min(
+                (c for c in open_cards if c.expected_outcome),
+                key=lambda c: c.expected_outcome.check_on,
+                default=None,
+            )
+            if nxt is not None:
+                print(
+                    _c(
+                        _wrap(f"{len(open_cards)} open; the next is due {nxt.expected_outcome.check_on.isoformat()}."),
+                        DIM,
+                    )
+                )
+        return 0
+
+    if not sys.stdin.isatty():
+        # Piped or redirected: asking questions nobody can answer would hang a script.
+        print(_c(f"{len(due)} decision(s) due:", BOLD))
+        for card in due:
+            print(f"  {GLYPH['arrow']} {_c(card.id, BOLD)}  {_clip(card.question, 56)}")
+        print()
+        print(_c(_wrap("Run this in a terminal to be walked through them."), DIM))
+        return 0
+
+    print()
+    print(_c(f"{len(due)} decision(s) due for a check-in", BOLD))
+    print(_c(_wrap("Blank answer skips a card. Nothing is graded until you finish one."), DIM))
+
+    closed = 0
+    for index, card in enumerate(due, start=1):
+        print()
+        print(RULE)
+        print(_c(f"{index} of {len(due)}  {GLYPH['dot']}  {card.question}", BOLD))
+        if card.expected_outcome:
+            print()
+            print(_c("what the council predicted, before it knew", DIM))
+            print(_wrap(card.expected_outcome.statement, indent="  "))
+            if card.expected_outcome.measurable_by:
+                print(_c(_wrap(f"measured by {card.expected_outcome.measurable_by}", indent="  "), DIM))
+        print()
+
+        chose = _ask("What did you actually do?")
+        if not chose:
+            print(_c(_wrap("skipped", indent="  "), DIM))
+            continue
+        outcome = _ask("What happened as a result?")
+        if not outcome:
+            print(_c(_wrap("skipped — an outcome is what gets graded", indent="  "), DIM))
+            continue
+        surprise = _ask("Anything nobody predicted? (enter to skip)")
+
+        resolution = Resolution(
+            chose=chose,
+            actual_outcome=outcome,
+            happened_at=date.today(),
+            surprises=[surprise] if surprise else [],
+        )
+        try:
+            graded = await council.resolve(card.id, resolution)
+        except CognitiveOSError as exc:
+            # The resolution is saved before grading, so the answer is not lost.
+            print(_c(_wrap(f"saved, but grading failed: {exc}", indent="  "), DIM))
+            closed += 1
+            continue
+        closed += 1
+        if graded.scoring:
+            right = [v.module for v in graded.scoring.module_verdicts if v.verdict == "right"]
+            wrong = [v.module for v in graded.scoring.module_verdicts if v.verdict == "wrong"]
+            print()
+            print(_c(_wrap(f"{GLYPH['ok']} graded {GLYPH['dot']} right: {', '.join(right) or 'none'}", indent="  "), DIM))
+            if wrong:
+                print(_c(_wrap(f"wrong: {', '.join(wrong)}", indent="  "), DIM))
+
+    print()
+    print(RULE)
+    print(_c(f"{closed} of {len(due)} closed.", BOLD))
+    if closed:
+        print(_c(_wrap("`app.cli scores` shows how each module is doing. It needs "
+                       f"{MIN_N_TO_DISPLAY} resolved cards per module before the numbers "
+                       "mean anything."), DIM))
+    return 0
+
+
+def _ask(prompt: str) -> str:
+    """One question, trimmed. EOF is a skip rather than a crash."""
+    try:
+        print(f"  {prompt}")
+        return input("  > ").strip()
+    except (EOFError, KeyboardInterrupt):
+        print()
+        return ""
 
 
 async def _cmd_projects(council: Council, args: argparse.Namespace) -> int:

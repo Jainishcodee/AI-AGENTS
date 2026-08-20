@@ -7,20 +7,20 @@ is done when the criterion is demonstrably met.
 
 ## Outstanding measurements
 
-Four criteria are unmet, and they are listed together because they turn out to share one
-cause: **every one of them needs a real person using this on real decisions over real time
-with a real key.** None of them is blocked on code.
+Four criteria are unmet, and they are listed together because they share one cause: **every
+one of them needs a real person using this on real decisions over real time with a real
+key.** None is blocked on code.
 
 | phase | what is unmeasured | what it needs |
 |---|---|---|
 | 1b | a non-technical person identifies which module they disagree with | one person, one real question, ~20 minutes |
-| 2 | recall surfaces the right memory on a later, related decision | a corpus — needs ~10 decisions across weeks |
+| 2 | recall surfaces the right memory on a later, related decision | a corpus — ~10 decisions across weeks |
 | 3 | calibration separates a well-calibrated module from a badly-calibrated one | ~8 *resolved* cards per module |
-| 5 | an authored module measurably changes a recommendation | ~300 real calls (`divergence --live`), 1–2 hours, deferred 2026-08-19 |
+| 5 | an authored module measurably changes a recommendation | ~300 real calls (`divergence --live`), 1–2 hours, deferred 2026-08-20 |
 
 The pattern is not a coincidence and it is not a coding problem. Phases 1–5 built machinery
-whose value is a function of accumulated real use, and the corpus is currently empty. That
-is what Phase 6 is about.
+whose value is a function of accumulated real use, and the corpus is currently empty. That is
+what Phase 6 is about.
 
 ---
 
@@ -366,14 +366,15 @@ path is left inherited (ADR-027).
       which needs a review step and its own decision.
 - [ ] Domain councils: hiring, medical, legal, product
 
-**Exit criterion — UNMEASURED, deliberately deferred (2026-08-19).** Not "failed" and not
-"met": the measurement has not been run. It needs a real provider and roughly 300 calls at
-~5 requests a minute, and the owner chose to defer that spend rather than pay it now. Nothing
-is blocked by the deferral except the claim itself.
+**Exit criterion — UNMEASURED, deliberately deferred (2026-08-20).** Not "failed" and not
+"met": the measurement has simply not been run. It needs a real provider and roughly 300
+calls at ~5 requests a minute, and the owner chose to defer that spend. Nothing is blocked by
+the deferral except the claim itself.
 
-To run it: `python -m app.cli divergence --live` against a `with:historian` preset, having
-loaded `scripts/example-module.yaml`. Until then this phase claims only that an authored
-module *runs*, which is demonstrated, and not that it *changes anything*, which is not.
+To run it: load `scripts/example-module.yaml`, activate it, then
+`python -m app.cli divergence --live` against a `with:historian` preset. Until then this
+phase claims only that an authored module *runs*, which is demonstrated, and not that it
+*changes anything*, which is not.
 
 A user-authored module must *measurably* change the
 recommendation on a decision where the built-in six agreed. What exists: an authored module
@@ -386,50 +387,67 @@ by construction (1.00 stance overlap) and therefore cannot show one module movin
 
 ---
 
-## Phase 6 — The loop closes *(designing)*
+## Phase 6 — The loop closes *(in progress)*
 
 **The thesis.** Phases 1–5 built machinery whose value is a function of accumulated real
 use: calibration needs resolved cards, priors need calibration, replay needs a corpus,
 divergence needs decisions worth diverging on. The corpus currently holds **zero** resolved
-decisions. Every one of the four outstanding measurements is downstream of that, and none of
-them is a coding problem.
+decisions. Every one of the four outstanding measurements above is downstream of that, and
+none of them is a coding problem.
 
-So this phase adds no reasoning at all. It is about the gap between *"this system works"*
-and *"this system gets used"*, which is the gap the previous five phases quietly assumed away.
+So this phase adds no reasoning at all. It is about the gap between *"this system works"* and
+*"this system gets used"* — the gap the previous five phases quietly assumed away.
 
 **Where the funnel actually breaks.** Walk the path to one resolved card:
 
 ```
   1. you have a decision                     ← not our problem
-  2. you remember this exists                ← BREAKS: nothing reaches you
+  2. you remember this exists                ← BROKE: nothing reached you
   3. you get it running                      ← friction: venv, key, .env, migrations
   4. you ask                                 ← works
-  5. you wait ~6 min at 5 RPM                ← BREAKS: cost is invisible until spent
+  5. you wait ~6 min at 5 RPM                ← cost is invisible until spent
   6. you get a recommendation                ← works, and is the fun part
   ~~~ 30–90 days pass ~~~
-  8. you record what happened                ← BREAKS: nothing reminds you, ever
-  9. it grades, extracts memories, learns     ← works, and never runs
+  8. you record what happened                ← BROKE: nothing reminded you, ever
+  9. it grades, extracts memories, learns    ← works, and never ran
 ```
 
-Steps 6 and 9 are built and excellent. Steps 2 and 8 are the product, and they do not exist:
-`check_on` is written into every card and **nothing ever reads it out loud**. The nudge line
-only prints if you already ran a CLI command; the nav badge only shows if you already opened
+Steps 6 and 9 were built and excellent. Steps 2 and 8 are the product, and did not exist:
+`check_on` is written into every card and **nothing ever read it out loud**. The CLI nudge
+printed only if you already ran a command; the nav badge showed only if you already opened
 the app. Both require you to be there already, which is precisely the assumption that fails.
 
-- [ ] **Reminders that arrive without opening anything.** The hard constraint is free and
-      no service (ADR-020's spirit): no Twilio, no SendGrid, no push infrastructure.
-- [ ] **`app.cli checkin`** — a guided pass over every due card in one sitting, rather than
-      `resolve <id> --chose … --outcome …` typed once per card from memory.
+- [x] **Reminders that arrive without opening anything** — `app.cli calendar` writes an
+      `.ics` file; `GET /calendar.ics` serves the same feed (ADR-031). One event per open
+      check-in, an alarm the afternoon before, and in the description the original question
+      plus the prediction the council made before it knew.
+
+      The calendar wins on merits, not just on cost: the reminding infrastructure already
+      exists, is already on the user's phone, and is already checked daily. It is the only
+      option that still works with the app closed, the laptop shut and the API down — the
+      exact conditions sixty days after a decision. A daemon would fail *silently*, and for a
+      reminder that is the worst failure there is.
+
+      RFC 5545 fails quietly — a malformed file drops events rather than erroring — so the
+      output is parsed back in tests rather than eyeballed: CRLF endings, folding at 75
+      **octets** without splitting a multi-byte character, backslash/semicolon/comma/newline
+      escaped inside TEXT, and a UID derived from the card id so re-importing *updates* an
+      event instead of duplicating it.
+- [x] **`app.cli checkin`** — a guided pass over every due card in one sitting. Three
+      questions per card, then it resolves and grades. A blank answer skips; a card is never
+      half-saved, because grading six modules against an empty outcome is worse than leaving
+      it open. It refuses to prompt when stdin is not a terminal, so a scheduled run lists
+      what is due instead of hanging forever on a question nobody can answer.
 - [ ] **`app.cli doctor`** — one command that says what is wrong: key missing, store
       unmigrated, model unavailable on the free tier, nothing due.
 - [ ] **Cost preview before spending** — `call_estimate` already exists per program and
-      depth; it is never shown before a run. On a metered free tier that is the number that
+      depth and is never shown before a run. On a metered free tier that is the number that
       decides whether you press go.
-- [ ] **Export** — the corpus is the moat and it currently lives in one SQLite file with no
-      door out. Your data needs to be portable or the claim that it is yours is decorative.
+- [ ] **Export** — the corpus is the moat and lives in one SQLite file with no door out.
+      Data needs to be portable or the claim that it is yours is decorative.
 
 **Exit criterion.** Ten real decisions recorded and at least five resolved, by one person,
-with **the system doing the remembering** — no prompting from me, and no manual `cards
---status due` habit. That number is not arbitrary: it is the point at which `scores` crosses
-`MIN_N_TO_DISPLAY` and calibration stops being machinery and starts being a measurement,
-which in turn unblocks the Phase 2 and Phase 3 criteria above.
+with **the system doing the remembering** — no prompting from me and no manual `cards
+--status due` habit. The number is not arbitrary: five resolved cards per module is where
+`scores` crosses `MIN_N_TO_DISPLAY` and calibration stops being machinery and starts being a
+measurement, which in turn unblocks the Phase 2 and Phase 3 criteria above.

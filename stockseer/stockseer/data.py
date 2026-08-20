@@ -43,6 +43,38 @@ def _clean(df: pd.DataFrame, ticker: str) -> pd.DataFrame:
     return out
 
 
+
+def _repair_splits(df: pd.DataFrame, drop: float = -0.35, jump: float = 0.60,
+                   ticker: str = "") -> pd.DataFrame:
+    """Undo split jumps the data provider failed to adjust.
+
+    NSE applies circuit limits of at most 20% a day, so a single-day move of
+    -90% is not a crash -- it is an unadjusted split or bonus. Yahoo misses
+    these on several ETFs (GOLDBEES 2019-12-19, MON100 2021-06-17), and left
+    alone they poison every derived number: drawdown, volatility, the
+    momentum screen, and the "biggest fall" line the risk check prints.
+
+    Each artifact is repaired by rescaling all earlier bars onto the post-split
+    level, which is what an adjusted series should have looked like.
+    """
+    out = df.copy()
+    for _ in range(6):                      # a series can hold several splits
+        ret = out["Close"].pct_change()
+        hits = ret[(ret <= drop) | (ret >= jump)]
+        if hits.empty:
+            break
+        when = hits.index[0]
+        factor = float(1.0 + hits.iloc[0])
+        if not (0 < factor < 10):
+            break
+        cols = ["Open", "High", "Low", "Close"]
+        out.loc[out.index < when, cols] *= factor
+        out.loc[out.index < when, "Volume"] /= factor
+        log.info("%s: repaired an unadjusted split of %.3fx on %s",
+                 ticker or "series", factor, when.date())
+    return out
+
+
 def load_prices(
     ticker: str,
     start: str = "2012-01-01",
@@ -85,7 +117,7 @@ def load_prices(
         path.parent.mkdir(parents=True, exist_ok=True)
         df.to_csv(path)
 
-    out = _clean(df, ticker)
+    out = _repair_splits(_clean(df, ticker), ticker=ticker)
     # Modelling needs a year of history, but IPO work is the opposite case: a
     # freshly listed stock has a handful of bars by definition, and that is the
     # data. Callers studying listings pass a small `min_rows`.
@@ -106,3 +138,72 @@ def load_benchmark(ticker: str, index: pd.DatetimeIndex, **kwargs) -> pd.DataFra
     """
     bench = load_prices(ticker, **kwargs)
     return bench.reindex(index).ffill()
+
+
+# --------------------------------------------------------------------------- #
+# Live price overlay
+# --------------------------------------------------------------------------- #
+_LIVE_FEED = []          # single-slot cache; a login per symbol is wasteful
+
+
+def _live_feed():
+    """One Angel session per process, not one per symbol."""
+    if not _LIVE_FEED:
+        from .live.feed import get_feed
+
+        _LIVE_FEED.append(get_feed("auto"))
+    return _LIVE_FEED[0]
+
+
+def current_price(ticker: str) -> tuple[float | None, str]:
+    """Today's price from Angel, falling back to the last cached close.
+
+    Returns ``(price, source)``. Never raises: a missing live quote should
+    degrade to stale data with a visible label, not break the caller.
+    """
+    try:
+        feed = _live_feed()
+        if getattr(feed, "delayed_seconds", 0) <= 60:
+            return float(feed.quote(ticker).price), feed.name
+    except Exception as exc:
+        log.debug("%s: no live quote (%s)", ticker, exc)
+    return None, "none"
+
+
+def with_live_price(df: pd.DataFrame, ticker: str) -> pd.DataFrame:
+    """Patch the last row with the live price, or append today's bar.
+
+    **Opt-in on purpose.** A mid-session bar is incomplete -- its high, low and
+    close are still moving -- so feeding it to a backtest would score the model
+    on a bar that does not exist yet. Only tools answering "what is it worth
+    right now" should ask for this.
+    """
+    price, source = current_price(ticker)
+    if price is None or price <= 0:
+        return df
+
+    out = df.copy()
+    today = pd.Timestamp(date.today())
+    last = out.index[-1].normalize()
+
+    if last == today:
+        row = out.iloc[-1].copy()
+        row["Close"] = price
+        row["High"] = max(float(row["High"]), price)
+        row["Low"] = min(float(row["Low"]), price)
+        out.iloc[-1] = row
+    else:
+        prev = float(out["Close"].iloc[-1])
+        out.loc[today] = {
+            "Open": prev, "High": max(prev, price),
+            "Low": min(prev, price), "Close": price,
+            "Volume": float(out["Volume"].iloc[-1]),
+        }
+    out.attrs["live_source"] = source
+    out.attrs["live_price"] = price
+    return out
+
+
+def load_prices_live(ticker: str, **kwargs) -> pd.DataFrame:
+    """History from the cache, today's price from the exchange."""
+    return with_live_price(load_prices(ticker, **kwargs), ticker)
