@@ -42,6 +42,16 @@ jobs:
         with:
           python-version: "3.11"
 
+      - name: Check the push secret is present
+        env:
+          NTFY_TOPIC: ${{ secrets.NTFY_TOPIC }}
+        run: |
+          if [ -z "$NTFY_TOPIC" ]; then
+            echo "::error::NTFY_TOPIC is not set. Alerts will reach nobody."
+            exit 1
+          fi
+          echo "NTFY_TOPIC is set (${#NTFY_TOPIC} characters)"
+
       - name: Is anything listing today?
         id: check
         env:

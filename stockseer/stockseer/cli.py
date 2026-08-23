@@ -596,6 +596,42 @@ def cmd_advisor(a: argparse.Namespace) -> int:
     return 0
 
 
+def _report_push(queued: list) -> None:
+    """Say plainly whether each alert reached the phone.
+
+    A scan that finds an IPO, prints it, and pushes nothing produces a log
+    indistinguishable from success. This makes the difference visible in the
+    one place anyone actually looks.
+    """
+    from .push import describe
+
+    sent = [n for n in queued if getattr(n, "pushed", False)]
+    print(f"\n {describe()}")
+    print(f" queued {len(queued)}, reached phone {len(sent)}")
+    for n in queued:
+        mark = ("sent" if getattr(n, "pushed", False)
+                else n.data.get("push_skipped", "NOT SENT"))
+        print(f"   [{mark}] {n.title}")
+    print()
+
+
+def _push_failed(queued: list) -> bool:
+    """True when something was worth sending and none of it went out."""
+    from .push import configured
+
+    if not queued:
+        return False
+    if not configured():
+        print(" ERROR: alerts were queued but NTFY_TOPIC is not set, so none")
+        print(" of them reached your phone. If this ran in GitHub Actions,")
+        print(" check the repository secret.\n")
+        return True
+    if not any(getattr(n, "pushed", False) for n in queued):
+        print(" ERROR: the ntfy relay rejected every push.\n")
+        return True
+    return False
+
+
 def cmd_ipo(a: argparse.Namespace) -> int:
     from .ipo.calendar import notify_today, print_calendar
     from .ipo.registry import refresh_registry, upcoming_listings
@@ -604,7 +640,15 @@ def cmd_ipo(a: argparse.Namespace) -> int:
         print_calendar(refresh=a.refresh, include_sme=a.include_sme)
         if a.notify:
             pushed = notify_today(refresh=False, include_sme=a.include_sme)
-            print(f" queued {len(pushed)} notification(s) for Jarvis\n")
+            if a.heartbeat:
+                from .ipo.calendar import heartbeat
+                hb = heartbeat(force=a.force_heartbeat,
+                               include_sme=a.include_sme)
+                if hb:
+                    pushed.append(hb)
+            _report_push(pushed)
+            if a.require_push and _push_failed(pushed):
+                return 2
         return 0
 
     if a.action == "refresh":
@@ -939,6 +983,14 @@ def main(argv: list[str] | None = None) -> int:
                             "watch", "autorun"])
     p.add_argument("--refresh", action="store_true", help="re-fetch from NSE")
     p.add_argument("--notify", action="store_true", help="queue alerts for Jarvis")
+    p.add_argument("--require-push", action="store_true",
+                   help="exit non-zero if a queued alert never reached the "
+                        "phone, so CI shows silence as a red job")
+    p.add_argument("--heartbeat", action="store_true",
+                   help="on Mondays, also send a 'still watching' digest so a "
+                        "silent week is distinguishable from a broken job")
+    p.add_argument("--force-heartbeat", action="store_true",
+                   help="send the digest regardless of weekday")
     p.add_argument("--include-sme", action="store_true",
                    help="include SME issues. Off by default: their minimum "
                         "application is about a lakh, so a small account "

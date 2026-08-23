@@ -124,7 +124,12 @@ class NotificationHub:
         try:
             from .push import configured, push_notification
 
-            if configured() and not self.client_recently_polled():
+            if not configured():
+                # Nothing is wrong here on a laptop with Jarvis polling, but on
+                # a cloud runner it means the alert reached nobody. The caller
+                # decides whether that is fatal; the flag makes it visible.
+                notif.data.setdefault("push_skipped", "no NTFY_TOPIC")
+            elif not self.client_recently_polled():
                 if push_notification(notif):
                     # Record it, or Jarvis re-buzzes for this alert the next
                     # time it connects -- possibly days later, for an event

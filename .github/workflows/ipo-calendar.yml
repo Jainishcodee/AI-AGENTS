@@ -38,13 +38,30 @@ jobs:
         with:
           python-version: "3.11"
 
+      # --heartbeat sends a Monday digest even when nothing is due, so a quiet
+      # week is distinguishable from a job that silently stopped running.
+      # Friday's run looked green while alerting nobody, because the secret
+      # was absent and the push silently no-opped. Length only -- never echo
+      # the value; GitHub masks secrets in logs but not derived strings.
+      - name: Check the push secret is present
+        env:
+          NTFY_TOPIC: ${{ secrets.NTFY_TOPIC }}
+        run: |
+          if [ -z "$NTFY_TOPIC" ]; then
+            echo "::error::NTFY_TOPIC is not set. Alerts will reach nobody."
+            exit 1
+          fi
+          echo "NTFY_TOPIC is set (${#NTFY_TOPIC} characters)"
+
       - name: Scan and push
         env:
           TZ: Asia/Kolkata
           NTFY_TOPIC: ${{ secrets.NTFY_TOPIC }}
         # No pip install: the calendar path is pure standard library, which is
         # why the CLI defers its pandas/sklearn imports. The job runs in ~30s.
-        run: python -m stockseer.cli ipo calendar --refresh --notify
+        run: >
+          python -m stockseer.cli ipo calendar
+          --refresh --notify --heartbeat --require-push
 
       - name: Report a failure
         if: failure()

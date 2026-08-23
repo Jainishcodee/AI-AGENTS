@@ -130,3 +130,44 @@ def print_calendar(today: date | None = None, refresh: bool = False,
         print(f"    {CUTOFF_NOTE}")
 
     print(f"\n{bar}\n")
+
+
+def heartbeat(today: date | None = None, weekday: int = 0,
+              force: bool = False, include_sme: bool = False):
+    """Weekly "still watching" digest, so silence is never ambiguous.
+
+    A quiet alert stream has two possible meanings -- nothing was due, or the
+    job died -- and from the phone they look identical. That ambiguity is how
+    Friday passed without anyone noticing whether the pipeline had run.
+
+    Emitted on one weekday only (Monday by default). Stateless on purpose:
+    GitHub runners keep nothing between runs, so "days since the last alert"
+    cannot be tracked there, while "is it Monday" always works.
+    """
+    today = today or date.today()
+    if not force and today.weekday() != weekday:
+        return None
+
+    issues = [i for i in upcoming_issues(refresh=False)
+              if i.ipo_end and (include_sme or not i.is_sme)]
+    issues.sort(key=lambda i: i.ipo_end or "")
+
+    if issues:
+        nxt = issues[0]
+        days = (date.fromisoformat(nxt.ipo_end) - today).days
+        when = ("closes TODAY" if days == 0 else
+                "closes tomorrow" if days == 1 else f"closes in {days} days")
+        lines = [f"Watching {len(issues)} open issue(s).",
+                 f"Next: {nxt.symbol} {when} ({nxt.ipo_end})"]
+        for i in issues[1:4]:
+            lines.append(f"  {i.symbol} -> {i.ipo_end}")
+    else:
+        lines = ["No IPOs open right now.", "Nothing to apply for this week."]
+
+    return hub().alert(
+        kind="ipo_heartbeat", urgency="info",
+        title="IPO watch is running",
+        body="\n".join(lines),
+        dedupe_key=f"heartbeat:{today.isoformat()}",
+        open_issues=len(issues),
+    )
