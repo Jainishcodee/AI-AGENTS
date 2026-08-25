@@ -6,7 +6,7 @@ from collections.abc import AsyncIterator
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, HTTPException, Query, Request
-from fastapi.responses import Response, StreamingResponse
+from fastapi.responses import PlainTextResponse, Response, StreamingResponse
 from pydantic import BaseModel, Field
 
 from ..core.errors import CognitiveOSError, ProgramInvalid
@@ -410,6 +410,51 @@ async def set_module_status(
 async def delete_user_module(request: Request, module_id: str) -> dict[str, str]:
     await _council(request).delete_module(module_id)
     return {"deleted": module_id}
+
+
+@router.get("/catalog/{module_id}/export")
+async def export_module(request: Request, module_id: str) -> PlainTextResponse:
+    """The module as authoring YAML — the entire sharing mechanism (ADR-032).
+
+    Works for built-ins too: exporting the analyst is the sanctioned way to start a fork of
+    it on another machine.
+    """
+    try:
+        program = await _council(request).resolve_program(module_id)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail="no such module") from exc
+    return PlainTextResponse(catalog.export_yaml(program), media_type="text/yaml")
+
+
+@router.get("/catalog/{module_id}/review")
+async def review_module(request: Request, module_id: str) -> list[dict[str, str]]:
+    """Every prose string this module injects into prompts, labelled with where it lands.
+
+    The review step before activating an imported module: its prose becomes system-prompt
+    text, and the `watch_for` lines are rendered into *other* modules' critique prompts.
+    """
+    try:
+        program = await _council(request).resolve_program(module_id)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail="no such module") from exc
+    return [{"where": where, "text": text} for where, text in catalog.prompt_surface(program)]
+
+
+class ForkRequest(BaseModel):
+    new_id: str = Field(min_length=1, pattern=r"^[a-z][a-z0-9_]*$")
+
+
+@router.post("/catalog/{module_id}/fork")
+async def fork_module(request: Request, module_id: str, body: ForkRequest) -> UserModule:
+    """Copy a module — built-in or authored — under a new id, with `based_on` lineage.
+
+    The fork always lands as a draft, whatever the source's status: nobody has read the
+    copy yet.
+    """
+    try:
+        return await _council(request).fork_module(module_id, body.new_id)
+    except ProgramInvalid as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
 
 
 @router.get("/divergence")

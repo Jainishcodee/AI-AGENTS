@@ -359,11 +359,25 @@ path is left inherited (ADR-027).
       What it cannot express is named rather than hidden (ADR-030): recursive structures and
       cross-field semantics stay hand-written, so an authored module is held to a real but
       weaker standard than the six.
+- [x] **Authored tables render as tables.** The web client gives `Table` a dedicated
+      renderer — author-declared columns, rate meters for values in [0,1], tags as chips —
+      pinned into `test_web_contract.py`'s load-bearing set, because falling back to raw
+      JSON would make every user module look second-class next to the built-in six.
+- [x] **Sharing, forking, versioning** (ADR-032). Sharing is a file: `modules --export`
+      writes the authoring YAML, `--load` reads it, and the round trip is pinned for every
+      built-in as well as authored modules. `--fork <src> --as <new>` copies any module with
+      `based_on` lineage, always landing as a draft. `--review <id>` prints every prose
+      string the module would inject into prompts — labelled, with the cross-module
+      channels (`watch_for` renders into the *critics'* prompts) called out loudly — and a
+      model-derived audit fails the suite if a new prose field appears without a decided
+      home. Edits that change a program auto-bump `version`, because deliberations pin
+      `program_versions` and replay compares then-vs-now.
+
+      Deliberately absent: a marketplace server, signing, provenance. The trust boundary is
+      activation — nothing imported ever runs until the operator activates it — and review
+      is the tool that informs that decision, not a gate to cargo-cult.
 - [ ] Module builder *UI* — the CLI takes YAML today, which is the format the six are
       written in, so copy-and-edit already works. A form is presentation over the same model.
-- [ ] Sharing, forking, versioning of modules, presets, and whole councils. Deliberately
-      last: importing a stranger's module means running their prose inside a system prompt,
-      which needs a review step and its own decision.
 - [ ] Domain councils: hiring, medical, legal, product
 
 **Exit criterion — UNMEASURED, deliberately deferred (2026-08-20).** Not "failed" and not

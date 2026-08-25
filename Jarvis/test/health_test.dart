@@ -1,4 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:jarvis/services/health_actions.dart';
 import 'package:jarvis/services/jain_calendar.dart';
 import 'package:jarvis/services/nutrition_engine.dart';
 import 'package:jarvis/services/training_plan.dart';
@@ -527,6 +528,106 @@ void main() {
         expect(a.purpose, isNotEmpty, reason: a.name);
         expect(a.cues, isNotEmpty, reason: a.name);
       }
+    });
+  });
+
+  group('action checklist', () {
+    final now = DateTime(2026, 8, 25);
+
+    Map<String, ({DateTime? started, DateTime? done, String? note})> status(
+            Map<String, (DateTime?, DateTime?)> raw) =>
+        {
+          for (final e in raw.entries)
+            e.key: (started: e.value.$1, done: e.value.$2, note: null)
+        };
+
+    test('with nothing done, the dentist is next', () {
+      final r = HealthActions.resolve(status({}), now: now);
+      expect(HealthActions.next(r)?.action.key, 'dentist');
+    });
+
+    test('once the dentist is done, the blood panel is next', () {
+      final r = HealthActions.resolve(
+          status({'dentist': (DateTime(2026, 8, 22), DateTime(2026, 8, 22))}),
+          now: now);
+      expect(HealthActions.next(r)?.action.key, 'bloods');
+      expect(HealthActions.next(r)?.action.blocking, isTrue);
+    });
+
+    test('a trial that is merely running is NOT the next action', () {
+      // It is already happening; surfacing it as "to do" is noise.
+      final r = HealthActions.resolve(
+          status({
+            'dentist': (DateTime(2026, 8, 22), DateTime(2026, 8, 22)),
+            'bloods': (DateTime(2026, 8, 24), DateTime(2026, 8, 24)),
+            'toothpaste': (DateTime(2026, 8, 22), null),
+          }),
+          now: now);
+      expect(HealthActions.next(r)?.action.key, isNot('toothpaste'));
+      expect(HealthActions.runningTrials(r).length, 1);
+    });
+
+    test('a trial that has run its course DOES become next', () {
+      final r = HealthActions.resolve(
+          status({'toothpaste': (DateTime(2026, 8, 22), null)}),
+          now: DateTime(2026, 10, 30));
+      final t = r.firstWhere((x) => x.action.key == 'toothpaste');
+      expect(t.trialReady, isTrue);
+    });
+
+    test('the 8-week toothpaste trial cannot be judged early', () {
+      final r = HealthActions.resolve(
+          status({'toothpaste': (DateTime(2026, 8, 22), null)}),
+          now: DateTime(2026, 9, 20));
+      final t = r.firstWhere((x) => x.action.key == 'toothpaste');
+      expect(t.isActive, isTrue);
+      expect(t.trialReady, isFalse);
+      expect(t.judgeOn, DateTime(2026, 10, 17));
+      expect(t.trialWeek, 5);
+    });
+
+    test('trial progress runs 0..1 and clamps', () {
+      final started = DateTime(2026, 8, 22);
+      double at(DateTime d) => HealthActions.resolve(
+              status({'toothpaste': (started, null)}), now: d)
+          .firstWhere((x) => x.action.key == 'toothpaste')
+          .trialProgress;
+      expect(at(started), 0);
+      expect(at(DateTime(2026, 9, 19)), closeTo(0.5, 0.05));
+      expect(at(DateTime(2027, 1, 1)), 1.0);
+    });
+
+    test('done items drop out of outstanding', () {
+      final all = HealthActions.resolve(status({}), now: now);
+      final some = HealthActions.resolve(
+          status({'dentist': (DateTime(2026, 8, 22), DateTime(2026, 8, 22))}),
+          now: now);
+      expect(HealthActions.outstanding(some).length,
+          HealthActions.outstanding(all).length - 1);
+    });
+
+    test('every action explains itself and has a unique key', () {
+      final keys = <String>{};
+      for (final a in HealthActions.catalogue) {
+        expect(keys.add(a.key), isTrue, reason: 'duplicate ${a.key}');
+        expect(a.why, isNotEmpty, reason: a.key);
+      }
+    });
+
+    test('every trial declares how long before it can be judged', () {
+      for (final a in HealthActions.catalogue) {
+        if (a.kind == ActionKind.trial) {
+          expect(a.trialWeeks, isNotNull, reason: a.key);
+          expect(a.trialWeeks, greaterThan(0), reason: a.key);
+        }
+      }
+    });
+
+    test('only the two clinical items block', () {
+      final blocking =
+          HealthActions.catalogue.where((a) => a.blocking).map((a) => a.key);
+      expect(blocking, containsAll(['dentist', 'bloods']));
+      expect(blocking.length, 2);
     });
   });
 

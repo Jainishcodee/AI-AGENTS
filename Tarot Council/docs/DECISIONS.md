@@ -1052,3 +1052,54 @@ because an all-day event starts at midnight and an alarm "at" the event is a not
 the middle of the night that is gone by morning. And events are `TRANSP:TRANSPARENT`, because
 a check-in is a nudge, not an appointment; marking it busy would make a month of decisions
 look like a full calendar.
+
+---
+
+## ADR-032 — Sharing is a file; the trust boundary is activation, and review is a tool, not a gate
+
+**Decision.** A module travels as the same YAML it is authored in: `modules --export` writes
+it, `--load` reads it, and there is no server, registry or wire format of their own. Forking
+(`--fork <src> --as <new>`) copies any module — built-in or authored — under a new id with
+`based_on` recorded, always landing as a **draft**. `modules --review <id>` prints every
+prose string the module would inject into prompts, labelled with where each lands. An edit
+that changes a program auto-bumps its `version`.
+
+**Why files.** A marketplace server is a product decision with users in it; this project has
+one user and a claim to defend. Everything the marketplace *mechanically* requires — a module
+leaving one machine and running on another with nothing lost — is a serialisation problem,
+and the authoring YAML already is the serialisation. The load-bearing test is the round trip
+(`load(export(x)) == x`, for every built-in too), because an export that drops a field
+corrupts modules silently on someone else's machine, where the failure cannot be connected
+back to the exporter.
+
+**The security question, answered narrowly.** Importing a stranger's module is prompt
+injection with extra steps: its `instruction`, `mental_model` and `voice` become system-prompt
+text. The two channels a reviewer would miss are the dangerous ones — `bias.watch_for` is
+rendered into *other* modules' critique prompts, and `voice.forbidden` reads as safety
+boilerplate while being arbitrary instruction. So `prompt_surface` lists exactly the prose
+that enters prompts, labels the cross-module lines loudly, and omits structural fields on
+purpose: validators enforce those, so lying in them fails loudly, whereas prose is only ever
+advisory — which is exactly why it is the part to read.
+
+Review is **not** a forced gate. A `--reviewed` flag would be cargo-culted within a week and
+would teach exactly the wrong lesson: that activation is safe once a flag is passed. The real
+boundary is what it always was — nothing imported ever runs until the person running the
+process activates it — and the review tool makes that decision informable. A test derives the
+prose-field audit from the model itself, so a *new* free-text field fails the suite until
+someone decides where it lands.
+
+**Forks are validated fresh, not copied.** A fork of a quarantined module inherits the errors
+that survive renaming (the point of forking a broken module is to fix it) — but a
+self-critique violation legitimately dissolves when the id changes, so a fork can be cleaner
+than its source. A fork of an *active* module still lands as a draft: nobody has read the
+copy yet.
+
+**Version bumps are not optional.** Deliberations pin `program_versions` and replay compares
+"the program then" against "the program now"; two different programs sharing a version number
+would make both records quietly lie. So `catalog.author` refuses to let the number stand
+still when the content changed — the author may bump further, but not not-bump.
+
+**Given up.** No signing, no provenance chain, no diff view on import — worth building the day
+a module actually arrives from someone untrusted, and theatre before that. And no sharing of
+presets or whole councils yet: a preset is four lines of YAML, which is not where the risk or
+the value is.

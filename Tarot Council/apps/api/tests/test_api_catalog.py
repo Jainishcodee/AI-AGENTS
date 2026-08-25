@@ -143,6 +143,43 @@ def test_deleting_a_module_removes_it_from_the_catalog(client):
     assert [e["id"] for e in client.get("/catalog").json() if e["origin"] == "user"] == []
 
 
+def test_export_review_and_fork_work_over_http(client):
+    """The sharing loop at the HTTP layer, where a missing import only fails at request
+    time — `PlainTextResponse` was referenced before it was imported, and the app imported
+    cleanly anyway because annotations are lazy."""
+    import yaml as yaml_lib
+
+    exported = client.get("/catalog/analyst/export")
+    assert exported.status_code == 200, exported.text
+    assert "yaml" in exported.headers["content-type"]
+    parsed = yaml_lib.safe_load(exported.text)
+    assert parsed["id"] == "analyst"
+    assert parsed["stages"], "the exported program lost its stages"
+
+    review = client.get("/catalog/analyst/review")
+    assert review.status_code == 200
+    wheres = [item["where"] for item in review.json()]
+    assert any("OTHER modules'" in where for where in wheres), (
+        "the cross-module injection channel is not called out in the review"
+    )
+
+    forked = client.post("/catalog/analyst/fork", json={"new_id": "my_analyst"})
+    assert forked.status_code == 200, forked.text
+    body_json = forked.json()
+    assert body_json["based_on"] == "analyst"
+    assert body_json["status"] == "draft"
+
+    # The fork is a real catalog citizen: exportable and reviewable in turn.
+    assert client.get("/catalog/my_analyst/export").status_code == 200
+    duplicate = client.post("/catalog/analyst/fork", json={"new_id": "my_analyst"})
+    assert duplicate.status_code == 409
+
+
+def test_export_and_review_of_an_unknown_module_are_404(client):
+    assert client.get("/catalog/nobody/export").status_code == 404
+    assert client.get("/catalog/nobody/review").status_code == 404
+
+
 def test_editing_a_module_keeps_it_in_play(client):
     """Re-saving an active module must not quietly demote it to draft."""
     client.put("/catalog/historian", json=body())

@@ -25,7 +25,8 @@ from dataclasses import dataclass
 from datetime import date
 
 from ..notify import hub
-from .registry import IPO, Subscription, past_issues, subscription, upcoming_issues
+from .registry import (IPO, Subscription, issue_terms, past_issues,
+                       subscription, upcoming_issues)
 
 log = logging.getLogger(__name__)
 
@@ -38,6 +39,7 @@ class CalendarEvent:
     kind: str            # "closes_today"
     urgency: str
     subs: Subscription | None = None
+    terms: object | None = None      # IssueTerms: bid lot, cut-off
 
 
 def _all_known(refresh: bool = False) -> list[IPO]:
@@ -64,21 +66,57 @@ def scan(today: date | None = None, refresh: bool = False,
         if not ipo.ipo_end or date.fromisoformat(ipo.ipo_end) != today:
             continue
         subs = subscription(ipo.symbol) if with_subs else None
-        events.append(CalendarEvent(ipo, "closes_today", "critical", subs))
+        terms = issue_terms(ipo.symbol) if with_subs else None
+        events.append(
+            CalendarEvent(ipo, "closes_today", "critical", subs, terms))
 
     events.sort(key=lambda e: e.ipo.symbol)
     return events
 
 
+# Measured over 176 mainboard listings: issue price to listing open. The mean
+# is +13.5%, but a few huge pops drag it up, so the median is the number a
+# typical allottee actually saw.
+MEDIAN_LISTING_GAIN = 0.073
+
+
 def _message(ev: CalendarEvent) -> tuple[str, str]:
-    """Short by design: name, price, demand, deadline. Nothing else."""
+    """Plain words only. The reader has minutes and a phone screen.
+
+    Leads with the odds rather than the subscription multiple, because "1 in
+    19" is the number you decide on and "18.7x" is the number you would have
+    to convert first.
+    """
     i = ev.ipo
     band = i.price_range or (f"Rs.{i.issue_price}" if i.issue_price else "price TBA")
 
     lines = [i.company, band]
-    if ev.subs:
-        lines.append(ev.subs.summary)
-    lines.append(CUTOFF_NOTE)
+    t = ev.terms
+    if t is not None and getattr(t, "lot_amount", None):
+        lines.append(f"1 lot = {t.lot_shares} shares = about "
+                     f"Rs.{t.lot_amount:,.0f}")
+    lines.append("")
+
+    if ev.subs and ev.subs.retail_x is not None:
+        lines.append(f"Filled {ev.subs.retail_x:.1f}x by retail")
+        lines.append(f"Your chance: {ev.subs.odds_text}")
+        # QIB and NII have their own reserved pools and change nothing for a
+        # retail applicant, so they appear as context, not as a headline.
+        big = []
+        if ev.subs.qib_x is not None:
+            big.append(f"institutions {ev.subs.qib_x:.1f}x")
+        if ev.subs.nii_x is not None:
+            big.append(f"wealthy investors {ev.subs.nii_x:.1f}x")
+        if big:
+            lines.append("Demand elsewhere: " + ", ".join(big))
+    else:
+        lines.append("Subscription figures not published yet.")
+
+    lines.append("")
+    lines.append(f"If allotted, past IPOs listed "
+                 f"{MEDIAN_LISTING_GAIN * 100:+.1f}% (median of 176).")
+    cutoff = getattr(ev.terms, "cutoff", "") if ev.terms else ""
+    lines.append(f"Apply before {cutoff} today." if cutoff else CUTOFF_NOTE)
     return f"LAST DAY: {i.symbol}", "\n".join(lines)
 
 
@@ -125,6 +163,7 @@ def print_calendar(today: date | None = None, refresh: bool = False,
         print(f"    {i.company[:56]}")
         if ev.subs:
             print(f"    {ev.subs.summary}")
+            print(f"    chance of allotment: {ev.subs.odds_text}")
             if ev.subs.updated:
                 print(f"    {ev.subs.updated}")
         print(f"    {CUTOFF_NOTE}")

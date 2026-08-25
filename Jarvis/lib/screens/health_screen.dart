@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
+import '../services/health_actions.dart';
 import '../services/health_db.dart';
 import '../services/jain_calendar.dart';
 import '../services/nutrition_engine.dart';
@@ -44,6 +45,7 @@ class _HealthScreenState extends State<HealthScreen> {
   HealthDay? _log;
   WeightTrend? _trend;
   NutritionTargets? _targets;
+  List<ResolvedAction> _actions = const [];
   bool _loading = true;
 
   /// True until height, birth year and a first weight exist in the database.
@@ -73,6 +75,7 @@ class _HealthScreenState extends State<HealthScreen> {
     final trend = await widget.db.weightTrend();
     final calibrated = await widget.db.calibratedTdee();
     final profile = await widget.db.profile();
+    final actions = HealthActions.resolve(await widget.db.milestoneStatus());
 
     final jd = widget.calendar.day(
       DateTime.now(),
@@ -100,6 +103,7 @@ class _HealthScreenState extends State<HealthScreen> {
       _log = log;
       _trend = trend;
       _targets = targets;
+      _actions = actions;
       _needsSetup = profile == null || kg == null;
       _loading = false;
     });
@@ -221,7 +225,8 @@ class _HealthScreenState extends State<HealthScreen> {
           const SizedBox(height: 12),
           _fastPicker(jd),
           const SizedBox(height: 12),
-          _priorityCard(),
+          ..._trialCards(),
+          _actionsCard(),
         ],
       ),
     );
@@ -1110,50 +1115,256 @@ class _HealthScreenState extends State<HealthScreen> {
 
   // -------------------------------------------------------------- priority
 
-  /// Deliberately last on screen and deliberately unmissable in colour.
+  /// What to do next, and what is currently running.
   ///
-  /// It stays until the appointment happens. Everything else in this module is
-  /// a six-month project; periodontal bone loss is the one thing here that does
-  /// not wait and does not come back.
-  Widget _priorityCard() => _card(
-        border: _red,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+  /// This replaced a hardcoded "go to the dentist" card. That card was correct
+  /// for exactly four days and then became actively wrong — it would have kept
+  /// telling him to book an appointment he had already been to. An action list
+  /// that cannot be ticked off is one he learns to scroll past, and the next
+  /// genuinely urgent thing gets scrolled past with it.
+  Widget _actionsCard() {
+    final outstanding = HealthActions.outstanding(_actions)
+        .where((r) => !r.isActive || r.trialReady)
+        .toList();
+    final next = HealthActions.next(_actions);
+    final doneCount = _actions.where((r) => r.isDone).length;
+
+    if (outstanding.isEmpty) {
+      return _card(
+        border: _teal,
+        child: Row(
           children: [
-            _label('BEFORE ANY OF THIS', _red),
-            const SizedBox(height: 8),
-            const Text(
-              'Dentist — periodontal exam',
-              style: TextStyle(
-                color: Colors.white,
-                fontSize: 15,
-                fontWeight: FontWeight.w700,
-              ),
-            ),
-            const SizedBox(height: 6),
-            Text(
-              'Ask for all four: full-mouth probing depths, radiographs, '
-              'mobility grading, bleeding on probing. Anything less is a sales '
-              'pitch, not an exam.',
-              style: TextStyle(
-                color: Colors.white.withValues(alpha: 0.7),
-                fontSize: 12.5,
-                height: 1.4,
-              ),
-            ),
-            const SizedBox(height: 10),
-            Text(
-              'Then bloods: CBC + differential, B12, ferritin WITH CRP, folate, '
-              'tTG-IgA, HbA1c.',
-              style: TextStyle(
-                color: _teal.withValues(alpha: 0.85),
-                fontSize: 12,
-                height: 1.4,
+            const Icon(Icons.check_circle, color: _teal, size: 20),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                'Nothing outstanding. $doneCount done.',
+                style: const TextStyle(color: Colors.white, fontSize: 14),
               ),
             ),
           ],
         ),
       );
+    }
+
+    final blocking = next?.action.blocking ?? false;
+    return _card(
+      border: blocking ? _red : null,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              _label(blocking ? 'DO THIS FIRST' : 'NEXT UP',
+                  blocking ? _red : _teal),
+              const Spacer(),
+              if (doneCount > 0)
+                Text(
+                  '$doneCount done',
+                  style: TextStyle(
+                    color: _teal.withValues(alpha: 0.7),
+                    fontSize: 10.5,
+                  ),
+                ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          ...outstanding.map((r) => _actionRow(r, isNext: r == next)),
+          if (doneCount > 0) ...[
+            const SizedBox(height: 6),
+            Text(
+              _actions
+                  .where((r) => r.isDone)
+                  .map((r) => 'DONE  ${r.action.title}')
+                  .join('     '),
+              style: TextStyle(
+                color: _teal.withValues(alpha: 0.45),
+                fontSize: 10.5,
+                height: 1.5,
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _actionRow(ResolvedAction r, {required bool isNext}) {
+    final a = r.action;
+    final accent = a.blocking ? _red : (isNext ? _teal : Colors.white70);
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          GestureDetector(
+            onTap: () async {
+              await widget.db.completeMilestone(a.key);
+              await _load();
+            },
+            child: Container(
+              margin: const EdgeInsets.only(top: 2, right: 12),
+              width: 22,
+              height: 22,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                border: Border.all(
+                  color:
+                      isNext ? accent : Colors.white.withValues(alpha: 0.22),
+                  width: 1.5,
+                ),
+              ),
+            ),
+          ),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  r.trialReady ? '${a.title} — judge it now' : a.title,
+                  style: TextStyle(
+                    color: isNext ? Colors.white : Colors.white70,
+                    fontSize: isNext ? 15 : 13.5,
+                    fontWeight: isNext ? FontWeight.w700 : FontWeight.w500,
+                  ),
+                ),
+                const SizedBox(height: 3),
+                Text(
+                  a.why,
+                  style: TextStyle(
+                    color: Colors.white.withValues(alpha: 0.55),
+                    fontSize: 11.5,
+                    height: 1.35,
+                  ),
+                ),
+                if (isNext && a.detail != null) ...[
+                  const SizedBox(height: 8),
+                  Container(
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      color: accent.withValues(alpha: 0.10),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: Text(
+                      a.detail!,
+                      style: TextStyle(
+                        color: accent == _red ? _red : Colors.white70,
+                        fontSize: 11.5,
+                        height: 1.4,
+                      ),
+                    ),
+                  ),
+                ],
+                if (isNext && a.kind == ActionKind.trial && r.notStarted) ...[
+                  const SizedBox(height: 8),
+                  GestureDetector(
+                    onTap: () async {
+                      await widget.db.startMilestone(a.key);
+                      await _load();
+                    },
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 14, vertical: 7),
+                      decoration: BoxDecoration(
+                        color: _teal.withValues(alpha: 0.16),
+                        borderRadius: BorderRadius.circular(20),
+                        border: Border.all(color: _teal.withValues(alpha: 0.6)),
+                      ),
+                      child: const Text(
+                        'Start the clock',
+                        style: TextStyle(
+                          color: _teal,
+                          fontSize: 12,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Running experiments, with the date they can actually be judged.
+  ///
+  /// A trial with no visible clock is one he will call after three weeks and
+  /// conclude nothing from. The eight-week toothpaste swap in particular rests
+  /// on weak evidence — two trials, 66 people — so calling it early would
+  /// produce a confident answer out of noise.
+  List<Widget> _trialCards() {
+    final running = HealthActions.runningTrials(_actions)
+        .where((r) => !r.trialReady)
+        .toList();
+    if (running.isEmpty) return const [];
+
+    return [
+      for (final r in running) ...[
+        _card(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  _label('RUNNING', _amber),
+                  const Spacer(),
+                  Text(
+                    'week ${r.trialWeek} of ${r.action.trialWeeks}',
+                    style: TextStyle(
+                      color: Colors.white.withValues(alpha: 0.45),
+                      fontSize: 10.5,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              Text(
+                r.action.title,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 14.5,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              const SizedBox(height: 8),
+              ClipRRect(
+                borderRadius: BorderRadius.circular(6),
+                child: LinearProgressIndicator(
+                  value: r.trialProgress,
+                  minHeight: 6,
+                  backgroundColor: Colors.white.withValues(alpha: 0.07),
+                  valueColor: const AlwaysStoppedAnimation(_amber),
+                ),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                'Judge it on ${_ddmm(r.judgeOn!)} — not before. '
+                '${r.action.detail ?? ''}',
+                style: TextStyle(
+                  color: Colors.white.withValues(alpha: 0.5),
+                  fontSize: 11.5,
+                  height: 1.4,
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 12),
+      ],
+    ];
+  }
+
+  static String _ddmm(DateTime d) {
+    const m = [
+      'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'
+    ];
+    return '${d.day} ${m[d.month - 1]}';
+  }
 
   // ----------------------------------------------------------------- chrome
 

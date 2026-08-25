@@ -232,6 +232,28 @@ class Subscription:
     updated: str = ""
 
     @property
+    def odds(self) -> float | None:
+        """Rough chance of an allotment, from the retail multiple.
+
+        SEBI requires that an oversubscribed retail book be allotted by
+        computerised lottery, one lot to as many applicants as possible. So the
+        probability is close to 1 / times-subscribed. Undersubscribed means
+        everyone gets shares.
+        """
+        if self.retail_x is None or self.retail_x <= 0:
+            return None
+        return min(1.0, 1.0 / self.retail_x)
+
+    @property
+    def odds_text(self) -> str:
+        o = self.odds
+        if o is None:
+            return "bidding has not started"
+        if o >= 0.99:
+            return "not yet full - everyone who applies should get shares"
+        return f"about 1 in {round(1 / o)}  ({o * 100:.0f}%)"
+
+    @property
     def summary(self) -> str:
         parts = []
         if self.retail_x is not None:
@@ -284,3 +306,65 @@ def subscription(symbol: str) -> Subscription | None:
     return Subscription(symbol=symbol.upper(), retail_x=out["retail"],
                         qib_x=out["qib"], nii_x=out["nii"],
                         updated=str(data.get("updateTime", "")))
+
+# --------------------------------------------------------------------------- #
+# Issue terms (bid lot, cut-off time)
+# --------------------------------------------------------------------------- #
+DETAIL = "/api/ipo-detail?symbol={symbol}"
+
+
+@dataclass
+class IssueTerms:
+    """The mechanics of applying, as published by NSE."""
+
+    symbol: str
+    lot_shares: int | None = None
+    price_high: float | None = None
+    cutoff: str = ""
+    registrar: str = ""
+
+    @property
+    def lot_amount(self) -> float | None:
+        """Rupees locked by one application, bid at the top of the band.
+
+        Cut-off bidders are charged the upper band, so this is what actually
+        leaves the account -- not the lower price the headline quotes.
+        """
+        if not self.lot_shares or not self.price_high:
+            return None
+        return self.lot_shares * self.price_high
+
+
+def issue_terms(symbol: str) -> IssueTerms | None:
+    """Bid lot and cut-off for one open issue. Returns None if unavailable."""
+    try:
+        op = _opener()
+        raw = op.open(BASE + DETAIL.format(symbol=symbol.upper()),
+                      timeout=25).read().decode("utf-8", "replace")
+        rows = json.loads(raw).get("issueInfo", {}).get("dataList", [])
+    except Exception as exc:
+        log.info("%s: issue terms unavailable (%s)", symbol, exc)
+        return None
+
+    terms = IssueTerms(symbol=symbol.upper())
+    for row in rows:
+        title = str(row.get("title") or "").lower()
+        value = str(row.get("value") or "").strip().strip('"')
+        if not value:
+            continue
+        if "bid lot" in title or "minimum order quantity" in title:
+            m = re.search(r"([\d,]+)", value)
+            if m and terms.lot_shares is None:
+                terms.lot_shares = int(m.group(1).replace(",", ""))
+        elif "price range" in title:
+            # "Rs. 94/- to Rs. 99/-" -- the second figure is the cut-off price.
+            nums = re.findall(r"(\d+(?:\.\d+)?)", value.replace(",", ""))
+            if nums:
+                terms.price_high = float(nums[-1])
+        elif "cut-off time" in title:
+            m = re.search(r"upto\s*([\d:.]+\s*[APMapm]{2})", value)
+            terms.cutoff = m.group(1).strip() if m else ""
+        elif "name of the registrar" in title:
+            terms.registrar = value[:48]
+
+    return terms if terms.lot_shares else None

@@ -97,7 +97,7 @@ Phases 1–4 built; Phase 5 authoring built with its exit criterion **unmeasured
 in progress. Reasoning engine, web client, SQLite persistence, projects, the calibration
 loop, replay/backtesting, stage re-run, mid-deliberation interjection, resumable
 deliberations, a spoken briefing, an MCP server, a divergence harness, user-authored modules,
-and calendar-delivered check-ins. 475 tests.
+and calendar-delivered check-ins, with sharing, forking and prompt-surface review of authored modules. 496 tests.
 
 Four exit criteria are unmet and share one cause — nobody has yet used this on real decisions
 over real time, so the corpus is empty. They are tabulated at the top of
@@ -114,7 +114,7 @@ Read in this order:
 | [SPEC-FORMAT.md](docs/SPEC-FORMAT.md) | the meta-spec: the seven questions every module must answer |
 | [ARTIFACTS.md](docs/ARTIFACTS.md) | the artifact registry and every machine-checked invariant |
 | [COUNCIL.md](docs/COUNCIL.md) | presets, critique routing, synthesis contract, Decision Cards, calibration |
-| [DECISIONS.md](docs/DECISIONS.md) | 31 ADRs, including what each one gave up |
+| [DECISIONS.md](docs/DECISIONS.md) | 32 ADRs, including what each one gave up |
 | `docs/agents/*.md` | the six formal reasoning specifications |
 
 ## Quick start
@@ -134,7 +134,7 @@ python -m app.cli --provider mock "Should I quit my internship?"
 # for real
 python -m app.cli --preset strategy --depth quick "Should I quit my internship?"
 
-pytest                                  # 475 tests, ~8s
+pytest                                  # 496 tests, ~7s
 uvicorn app.main:app --reload --port 8787
 ```
 
@@ -301,6 +301,24 @@ already assert, and the test suite proves it by restating `OptionSet`'s real inv
 declaratively. What it cannot express — recursive structures, cross-field semantics — stays
 hand-written, so an authored module is held to a real but weaker standard than the six
 (ADR-030).
+
+**Sharing, forking and reviewing**
+
+```powershell
+python -m app.cli modules --fork analyst --as my_analyst      # copy a built-in, keep lineage
+python -m app.cli modules --export my_analyst --out mine.yaml # a module IS a file
+python -m app.cli modules --review my_analyst                 # what it injects into prompts
+```
+
+Sharing is a file: export writes the same YAML a module is authored in, and the round trip
+is pinned by tests for every built-in. A fork records `based_on` and always lands as a
+draft — nobody has read the copy yet. Before activating a module you did not write, run
+`--review`: it prints every prose string the module injects into prompts, with the two
+channels a reviewer would miss called out loudly (`watch_for` renders into *other* modules'
+critique prompts, and `voice.forbidden` reads as safety text while being arbitrary
+instruction). The trust boundary is activation; review is the tool that informs it, not a
+gate to cargo-cult (ADR-032). Edits that change a program auto-bump its `version`, because
+deliberations pin `program_versions` and replay compares then-vs-now.
 
 A module that breaks a rule is **saved and quarantined**, not rejected: it is listed with its
 full error list and cannot run until it validates and you activate it. Built-ins still fail

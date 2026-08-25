@@ -1118,6 +1118,73 @@ const RENDERERS: Record<string, Renderer> = {
       ]}
     />
   ),
+
+  // The one artifact kind an authored module shapes for itself (ADR-030). Columns are the
+  // author's, discovered from the rows rather than hardcoded — declaration order survives
+  // because the engine builds `cells` from the declared column list.
+  Table: (d, { accent }) => {
+    const rows: Data[] = d.rows ?? [];
+    if (!rows.length) return <Empty>Nothing recorded.</Empty>;
+    const columns: string[] = [];
+    for (const row of rows) {
+      for (const key of Object.keys(row.cells ?? {})) {
+        if (!columns.includes(key)) columns.push(key);
+      }
+    }
+    const anyTags = rows.some((row) => (row.tags ?? []).length > 0);
+    return (
+      <div>
+        {d.title && <Label className="mb-1.5">{d.title}</Label>}
+        <Table head={["", ...columns.map((c) => c.replace(/_/g, " ")), ...(anyTags ? [""] : [])]}>
+          {rows.map((row) => (
+            <Row key={row.id} id={row.id}>
+              <Cell width="34px">
+                <RowId id={row.id} />
+              </Cell>
+              {columns.map((column) => {
+                const value = row.cells?.[column];
+                // A number in [0,1] is a rate or probability everywhere in this system;
+                // the meter shows the figure too, so nothing is lost if it is not.
+                if (typeof value === "number" && value >= 0 && value <= 1) {
+                  return (
+                    <Cell key={column} align="right">
+                      <Meter value={value} colour={accent} width={34} />
+                    </Cell>
+                  );
+                }
+                if (typeof value === "number") {
+                  return (
+                    <Cell key={column} align="right" className="mono text-[12px]">
+                      {value}
+                    </Cell>
+                  );
+                }
+                if (typeof value === "boolean") {
+                  return <Cell key={column}>{value ? <Chip colour={accent}>yes</Chip> : "—"}</Cell>;
+                }
+                return (
+                  <Cell key={column} className="text-[12.5px]">
+                    {value == null || value === "" ? "—" : String(value)}
+                  </Cell>
+                );
+              })}
+              {anyTags && (
+                <Cell>
+                  <span className="flex flex-wrap gap-1">
+                    {(row.tags ?? []).map((tag: string) => (
+                      <Chip key={tag} colour={accent}>
+                        {tag.replace(/_/g, " ")}
+                      </Chip>
+                    ))}
+                  </span>
+                </Cell>
+              )}
+            </Row>
+          ))}
+        </Table>
+      </div>
+    );
+  },
 };
 
 /* ────────────────────────────────────────────────────────────── fallback ── */

@@ -221,6 +221,26 @@ class Council:
     async def delete_module(self, module_id: ModuleId) -> None:
         await self._store.delete_module(module_id)
 
+    async def fork_module(self, source_id: ModuleId, new_id: ModuleId) -> UserModule:
+        """Copy a built-in or authored module under a new id, with lineage recorded."""
+        forked = catalog.fork(source_id, new_id, await self._store.list_modules())
+        await self._store.save_module(forked)
+        return forked
+
+    async def resolve_program(self, module_id: ModuleId) -> AgentProgram:
+        """The program behind an id, built-in or stored — for export and review.
+
+        Deliberately ignores status: exporting or reviewing a quarantined module is
+        legitimate (that is how you show someone the module you need help fixing), and
+        review of a module is most valuable *before* it is ever activated.
+        """
+        if module_id in loader.programs():
+            return loader.programs()[module_id]
+        stored = await self._store.get_module(module_id)
+        if stored is None:
+            raise KeyError(module_id)
+        return stored.program
+
     # --------------------------------------------------------------- replay --
 
     async def replay(self, card_id: str) -> ReplayResult:

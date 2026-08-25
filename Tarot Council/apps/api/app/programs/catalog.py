@@ -38,7 +38,18 @@ def author(
     set, this is an edit, so the original creation time and the author's decision about
     whether the module is in play both survive.
     """
-    module = UserModule(id=module_id, program=loader.with_constitution(program))
+    program = loader.with_constitution(program)
+
+    if existing is not None and program != existing.program:
+        # An edit that changes the program must change the version, because the version is
+        # what makes stored records interpretable: deliberations pin `program_versions`,
+        # and replay compares "the program then" against "the program now". Two different
+        # programs sharing a version number would make both records quietly lie. The author
+        # may bump further themselves; this only refuses to let the number stand still.
+        if program.version <= existing.program.version:
+            program = program.model_copy(update={"version": existing.program.version + 1})
+
+    module = UserModule(id=module_id, program=program)
     if existing is not None:
         module = module.model_copy(
             update={
@@ -172,6 +183,97 @@ def entries(user_modules: list[UserModule] | None = None) -> list[ModuleCatalogE
         for module in sorted(user_modules or [], key=lambda m: m.id)
     )
     return out
+
+
+def fork(
+    source_id: ModuleId,
+    new_id: ModuleId,
+    user_modules: list[UserModule] | None = None,
+) -> UserModule:
+    """Copy a module — built-in or authored — under a new id, keeping lineage.
+
+    Forking a built-in is the expected first authoring move: copy the analyst, change what
+    you disagree with. The fork starts its own version line at 1, records `based_on`, and
+    lands as a draft like anything else authored — a fork of an active module must not be
+    active by inheritance, because nobody has read the copy yet.
+
+    Any stored module can be forked, quarantined ones included: the fork inherits the
+    errors and the point of forking a broken module is usually to fix it.
+    """
+    stored = {m.id: m for m in user_modules or []}
+    if source_id in stored:
+        source_program = stored[source_id].program
+    elif source_id in loader.programs():
+        source_program = loader.programs()[source_id]
+    else:
+        raise _unknown_module(source_id, programs(user_modules, include_retired=True))
+
+    if new_id in loader.programs() or new_id in stored:
+        from ..core.errors import ProgramInvalid
+
+        raise ProgramInvalid(
+            f"cannot fork to '{new_id}': a module with that id already exists"
+        )
+
+    forked = source_program.model_copy(update={"id": new_id, "version": 1})
+    module = UserModule(id=new_id, program=forked, based_on=source_id)
+    return validate(module, peers=list(stored.values()))
+
+
+def export_yaml(program: AgentProgram) -> str:
+    """A module as a file — the entire sharing mechanism (ADR-032).
+
+    The exported document is the same YAML the module was authored in, so sharing needs no
+    server, no registry and no format of its own: `--export` on one machine, `--load` on
+    another. Round-tripping is pinned by a test, because an export that drops a field would
+    corrupt modules silently and at a distance.
+    """
+    import yaml
+
+    return yaml.safe_dump(
+        program.model_dump(mode="json"),
+        sort_keys=False,
+        allow_unicode=True,
+        width=96,
+    )
+
+
+def prompt_surface(program: AgentProgram) -> list[tuple[str, str]]:
+    """Every prose string this module injects into a prompt, labelled with where it lands.
+
+    This is the review step for imported modules (ADR-032). Activating a module means
+    executing its prose inside system prompts, which makes an imported module a prompt
+    injection with extra steps — and the two least obvious channels are the ones a reviewer
+    would skip: `watch_for` is rendered into *other* modules' critique prompts, and
+    `voice.forbidden` reads as safety text while being arbitrary instruction.
+
+    Structural fields (columns, ranges, reads) are deliberately absent: they are enforced by
+    validators, so lying in them fails loudly. Prose is the part that is only ever advisory,
+    which is exactly why it is the part to read.
+    """
+    surface: list[tuple[str, str]] = [
+        ("system prompt · summary", program.summary.strip()),
+        ("system prompt · mental model", program.mental_model.strip()),
+    ]
+    if program.voice.tone:
+        surface.append(("system prompt · register", program.voice.tone.strip()))
+    for line in program.voice.forbidden:
+        surface.append(("system prompt · never-do rule", line))
+    for stage in program.stages:
+        surface.append((f"stage '{stage.id}' · instruction", stage.instruction.strip()))
+        for rule in stage.must_not:
+            surface.append((f"stage '{stage.id}' · must-not", rule))
+    surface.append(("critique prompts · lens", program.critique_lens.strip()))
+    for bias in program.biases:
+        surface.append(
+            (f"OTHER modules' critique prompts · bias '{bias.id}'", bias.description.strip())
+        )
+        surface.append(
+            (f"OTHER modules' critique prompts · '{bias.id}' fires when", bias.watch_for.strip())
+        )
+    for spec in (*program.inputs.required, *program.inputs.optional):
+        surface.append((f"intake · input '{spec.id}'", spec.description.strip()))
+    return [(where, text) for where, text in surface if text]
 
 
 def preset(

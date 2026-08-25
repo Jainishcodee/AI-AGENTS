@@ -6,6 +6,7 @@ import logging
 from datetime import date
 from pathlib import Path
 
+import numpy as np
 import pandas as pd
 
 log = logging.getLogger(__name__)
@@ -44,34 +45,68 @@ def _clean(df: pd.DataFrame, ticker: str) -> pd.DataFrame:
 
 
 
-def _repair_splits(df: pd.DataFrame, drop: float = -0.35, jump: float = 0.60,
+def _repair_splits(df: pd.DataFrame, deviation: float = 0.50,
+                   window: int = 11, split_run: int = 5,
                    ticker: str = "") -> pd.DataFrame:
-    """Undo split jumps the data provider failed to adjust.
+    """Fix unadjusted splits and bad prints in a price series.
 
-    NSE applies circuit limits of at most 20% a day, so a single-day move of
-    -90% is not a crash -- it is an unadjusted split or bonus. Yahoo misses
-    these on several ETFs (GOLDBEES 2019-12-19, MON100 2021-06-17), and left
-    alone they poison every derived number: drawdown, volatility, the
-    momentum screen, and the "biggest fall" line the risk check prints.
+    NSE circuit limits cap a day at 20%, so a bar sitting at 1% of the
+    surrounding level is impossible and therefore corrupt. Corruption comes in
+    two shapes needing opposite treatment:
 
-    Each artifact is repaired by rescaling all earlier bars onto the post-split
-    level, which is what an adjusted series should have looked like.
+    * **Split** -- the level moves and stays moved. Rescale everything before.
+    * **Bad print** -- the level snaps back. Replace those bars.
+
+    Judged against a centred local median rather than the previous bar, so a
+    glitch spanning several consecutive days cannot poison the comparison.
     """
     out = df.copy()
-    for _ in range(6):                      # a series can hold several splits
-        ret = out["Close"].pct_change()
-        hits = ret[(ret <= drop) | (ret >= jump)]
-        if hits.empty:
+    cols = ["Open", "High", "Low", "Close"]
+
+    for _ in range(6):
+        close = out["Close"]
+        ref = close.rolling(window, center=True, min_periods=3).median()
+        ratio = close / ref
+        bad = (ratio < (1 - deviation)) | (ratio > 1 / (1 - deviation))
+        if not bad.any():
             break
-        when = hits.index[0]
-        factor = float(1.0 + hits.iloc[0])
-        if not (0 < factor < 10):
+
+        # Take the first contiguous run of bad bars.
+        idx = np.flatnonzero(bad.to_numpy())
+        first = idx[0]
+        run_end = first
+        while run_end + 1 in idx and run_end + 1 < len(close):
+            run_end += 1
+        run = out.index[first:run_end + 1]
+
+        if first == 0:
             break
-        cols = ["Open", "High", "Low", "Close"]
-        out.loc[out.index < when, cols] *= factor
-        out.loc[out.index < when, "Volume"] /= factor
-        log.info("%s: repaired an unadjusted split of %.3fx on %s",
-                 ticker or "series", factor, when.date())
+
+        prev = float(close.iloc[first - 1])
+        level = float(close.iloc[first])
+        factor = level / prev if prev else 1.0
+
+        # A split holds its new level well past the run; a glitch does not.
+        tail = close.iloc[run_end + 1:run_end + 1 + split_run]
+        persisted = bool(
+            len(tail) >= 2
+            and abs(float(tail.median()) / max(level, 1e-9) - 1.0) < 0.25
+        )
+
+        if persisted and 0 < factor < 10:
+            out.loc[out.index < run[0], cols] *= factor
+            out.loc[out.index < run[0], "Volume"] /= factor
+            log.info("%s: rescaled for a split of %.4gx on %s",
+                     ticker or "series", factor, run[0].date())
+        else:
+            # Replace the whole run with the surrounding level.
+            nxt = (float(close.iloc[run_end + 1])
+                   if run_end + 1 < len(close) else prev)
+            fill = (prev + nxt) / 2.0
+            out.loc[run, cols] = fill
+            log.info("%s: repaired %d bad print(s) from %s (%.4g -> %.4g)",
+                     ticker or "series", len(run), run[0].date(), level, fill)
+
     return out
 
 

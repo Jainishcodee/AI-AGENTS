@@ -84,6 +84,9 @@ def test_every_artifact_kind_renders_or_falls_back_deliberately():
         "HarmLedger",
         "RegretMatrix",
         "InactionHarm",
+        # Authored tables are the marketplace's face; falling back to raw JSON would make
+        # every user module look second-class next to the built-in six.
+        "Table",
     }
     missing = load_bearing - handled
     assert not missing, f"these forced artifacts have no dedicated renderer: {sorted(missing)}"

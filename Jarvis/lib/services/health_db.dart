@@ -208,6 +208,17 @@ class HealthDb {
         name TEXT PRIMARY KEY, started_on TEXT NOT NULL, note TEXT
       )''');
 
+    // The action checklist. Only STATUS lives here — the catalogue of what the
+    // actions are is plan content and lives in health_actions.dart, so a change
+    // to the plan does not need a database migration.
+    await d.execute('''
+      CREATE TABLE IF NOT EXISTS milestone(
+        key TEXT PRIMARY KEY,
+        started_on TEXT,
+        done_on TEXT,
+        note TEXT
+      )''');
+
     // Height and birth year live here rather than as constants in the source.
     //
     // They are only needed to compute BMR, so hardcoded defaults in Dart would
@@ -350,6 +361,56 @@ class HealthDb {
     return DateTime.tryParse(r.first['started_on'] as String);
   }
 
+  // ------------------------------------------------------------- milestones
+
+  /// Raw status rows, keyed by milestone key.
+  Future<Map<String, ({DateTime? started, DateTime? done, String? note})>>
+      milestoneStatus() async {
+    final rows = await db.query('milestone');
+    return {
+      for (final r in rows)
+        r['key'] as String: (
+          started: DateTime.tryParse((r['started_on'] as String?) ?? ''),
+          done: DateTime.tryParse((r['done_on'] as String?) ?? ''),
+          note: r['note'] as String?,
+        )
+    };
+  }
+
+  /// Mark an action started. Idempotent — re-marking does not reset the clock,
+  /// which matters for the timed trials where the start date IS the measurement.
+  Future<void> startMilestone(String key, {DateTime? on}) async {
+    final existing = await db.query('milestone',
+        where: 'key = ?', whereArgs: [key], limit: 1);
+    if (existing.isNotEmpty && existing.first['started_on'] != null) return;
+    await db.insert(
+      'milestone',
+      {'key': key, 'started_on': dayKey(on)},
+      conflictAlgorithm: ConflictAlgorithm.replace,
+    );
+  }
+
+  Future<void> completeMilestone(String key, {DateTime? on, String? note}) async {
+    final existing = await db.query('milestone',
+        where: 'key = ?', whereArgs: [key], limit: 1);
+    final started = existing.isEmpty
+        ? dayKey(on)
+        : (existing.first['started_on'] as String?) ?? dayKey(on);
+    await db.insert(
+      'milestone',
+      {
+        'key': key,
+        'started_on': started,
+        'done_on': dayKey(on),
+        'note': note ?? (existing.isEmpty ? null : existing.first['note']),
+      },
+      conflictAlgorithm: ConflictAlgorithm.replace,
+    );
+  }
+
+  Future<void> clearMilestone(String key) =>
+      db.delete('milestone', where: 'key = ?', whereArgs: [key]);
+
   // ------------------------------------------------------------------ reads
 
   /// Weight readings, newest first.
@@ -478,7 +539,14 @@ class HealthDb {
   /// the user controls.
   Future<void> wipe() async {
     final b = db.batch();
-    for (final t in ['day_log', 'meal_log', 'set_log', 'supplement', 'profile']) {
+    for (final t in [
+      'day_log',
+      'meal_log',
+      'set_log',
+      'supplement',
+      'profile',
+      'milestone',
+    ]) {
       b.rawDelete('DELETE FROM $t');
     }
     await b.commit(noResult: true);

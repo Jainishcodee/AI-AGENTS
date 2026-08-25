@@ -242,6 +242,32 @@ def build_parser() -> argparse.ArgumentParser:
     catalog_cmd.add_argument(
         "--delete", default=None, metavar="ID", help="Delete an authored module."
     )
+    catalog_cmd.add_argument(
+        "--export",
+        default=None,
+        metavar="ID",
+        dest="export_id",
+        help="Write a module (built-in or authored) as authoring YAML.",
+    )
+    catalog_cmd.add_argument(
+        "--out", default=None, metavar="FILE", help="Where --export writes. Default: stdout."
+    )
+    catalog_cmd.add_argument(
+        "--fork",
+        default=None,
+        metavar="SRC",
+        help="Copy a module (built-in or authored) under a new id. Needs --as.",
+    )
+    catalog_cmd.add_argument(
+        "--as", default=None, metavar="NEW_ID", dest="fork_as", help="The fork's id."
+    )
+    catalog_cmd.add_argument(
+        "--review",
+        default=None,
+        metavar="ID",
+        dest="review_id",
+        help="Print every prose string this module would inject into prompts.",
+    )
 
     replay = sub.add_parser(
         "replay",
@@ -475,6 +501,76 @@ async def _cmd_modules(council: Council, args: argparse.Namespace) -> int:
             print(f"{exc}", file=sys.stderr)
             return 1
         print(_wrap(f"'{module.id}' is now {module.status}"))
+        return 0
+
+    if args.export_id:
+        try:
+            program = await council.resolve_program(args.export_id)
+        except KeyError:
+            print(f"no such module: {args.export_id}", file=sys.stderr)
+            return 1
+        document = catalog.export_yaml(program)
+        if args.out:
+            Path(args.out).write_text(document, encoding="utf-8")
+            print(_wrap(f"wrote {args.export_id} to {args.out}"))
+            print(_c(_wrap("Load it elsewhere with: app.cli modules --load " + args.out), DIM))
+        else:
+            print(document)
+        return 0
+
+    if args.fork:
+        if not args.fork_as:
+            print("--fork needs --as <new-id>", file=sys.stderr)
+            return 1
+        try:
+            forked = await council.fork_module(args.fork, args.fork_as)
+        except (CognitiveOSError, KeyError) as exc:
+            print(f"{exc}", file=sys.stderr)
+            return 1
+        print(_c(f"forked {args.fork} {GLYPH['to']} {forked.id}  (v1, based on {forked.based_on})", BOLD))
+        if forked.errors:
+            for problem in forked.errors:
+                print(_wrap(f"{GLYPH['arrow']} {problem}", indent="  "))
+            print(_c(_wrap("Inherited these from the source; fix and reload."), DIM))
+        print(
+            _c(
+                _wrap(
+                    f"Edit it via: app.cli modules --export {forked.id} --out {forked.id}.yaml — "
+                    "then --load, --review, --activate."
+                ),
+                DIM,
+            )
+        )
+        return 0
+
+    if args.review_id:
+        try:
+            program = await council.resolve_program(args.review_id)
+        except KeyError:
+            print(f"no such module: {args.review_id}", file=sys.stderr)
+            return 1
+        surface = catalog.prompt_surface(program)
+        print()
+        print(_c(f"everything '{args.review_id}' injects into prompts", BOLD))
+        print(
+            _c(
+                _wrap(
+                    "Activating a module means executing this prose inside system prompts. "
+                    "For a module you did not write, read all of it — especially the lines "
+                    "marked OTHER modules', which are rendered into the critics' prompts, "
+                    "not this module's own."
+                ),
+                DIM,
+            )
+        )
+        print()
+        for where, text in surface:
+            print(_c(f"[{where}]", BOLD))
+            print(_wrap(text, indent="  "))
+        print()
+        print(_c(_wrap(f"{len(surface)} prose string(s). Structural fields (columns, ranges, "
+                       "reads) are not listed: validators enforce those, so lying in them "
+                       "fails loudly."), DIM))
         return 0
 
     if args.load:
