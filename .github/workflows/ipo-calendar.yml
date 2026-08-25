@@ -46,6 +46,7 @@ jobs:
       - name: Check the push secret is present
         env:
           NTFY_TOPIC: ${{ secrets.NTFY_TOPIC }}
+          NTFY_TOKEN: ${{ secrets.NTFY_TOKEN }}
         run: |
           if [ -z "$NTFY_TOPIC" ]; then
             echo "::error::NTFY_TOPIC is not set. Alerts will reach nobody."
@@ -57,6 +58,7 @@ jobs:
         env:
           TZ: Asia/Kolkata
           NTFY_TOPIC: ${{ secrets.NTFY_TOPIC }}
+          NTFY_TOKEN: ${{ secrets.NTFY_TOKEN }}
         # No pip install: the calendar path is pure standard library, which is
         # why the CLI defers its pandas/sklearn imports. The job runs in ~30s.
         run: >
@@ -67,6 +69,7 @@ jobs:
         if: failure()
         env:
           NTFY_TOPIC: ${{ secrets.NTFY_TOPIC }}
+          NTFY_TOKEN: ${{ secrets.NTFY_TOKEN }}
         # A silent failure is the dangerous one: you would read "no alert" as
         # "no IPO closing today" rather than "the scan broke".
         run: |

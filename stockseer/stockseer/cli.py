@@ -627,7 +627,16 @@ def _push_failed(queued: list) -> bool:
         print(" check the repository secret.\n")
         return True
     if not any(getattr(n, "pushed", False) for n in queued):
-        print(" ERROR: the ntfy relay rejected every push.\n")
+        from .push import LAST_ERROR
+
+        why = LAST_ERROR.get("reason", "no detail from the relay")
+        print(f" ERROR: every push to ntfy failed -- {why}")
+        if "429" in why:
+            print(" A 429 is a rate limit on the source IP. GitHub runners")
+            print(" share IPs across the platform, so this is not about your")
+            print(" topic. An ntfy account token raises the limit.\n")
+        else:
+            print()
         return True
     return False
 
