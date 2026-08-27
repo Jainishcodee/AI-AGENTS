@@ -9,14 +9,23 @@
 #   root, which is why this lives here rather than beside the code it runs.
 #   If stockseer is ever split into its own repo, move this into it and drop
 #   the `working-directory` lines.
+#
+# WHY THIS RUNS THREE TIMES A DAY
+#   NSE rejects a large share of foreign and datacenter traffic, and a GitHub
+#   runner is both. The block is partial rather than absolute, so a run that
+#   fails at 08:00 often succeeds at 12:00 from a different runner IP. Three
+#   attempts before the 5 PM UPI cut-off turns a single point of failure into
+#   three independent chances. This is only safe because the alert store is
+#   cached between runs (below) — without that, a working day would buzz you
+#   three times for the same IPO.
 
 name: IPO calendar
 
 on:
   schedule:
-    # 02:30 UTC = 08:00 IST daily. GitHub's scheduler can lag a few minutes
-    # under load, which is immaterial for a deadline measured in hours.
-    - cron: "30 2 * * *"
+    - cron: "30 2 * * *"    # 08:00 IST — the main run
+    - cron: "30 6 * * *"    # 12:00 IST — retry if NSE blocked the first
+    - cron: "30 9 * * *"    # 15:00 IST — last chance before the 5 PM cut-off
   workflow_dispatch:        # lets you run it by hand from the Actions tab
 
 concurrency:
@@ -38,12 +47,28 @@ jobs:
         with:
           python-version: "3.11"
 
-      # --heartbeat sends a Monday digest even when nothing is due, so a quiet
-      # week is distinguishable from a job that silently stopped running.
-      # Friday's run looked green while alerting nobody, because the secret
-      # was absent and the push silently no-opped. Length only -- never echo
-      # the value; GitHub masks secrets in logs but not derived strings.
-      - name: Check the push secret is present
+      # Two jobs at once, and both are load-bearing.
+      #
+      # `artifacts/` holds notifications.json, which is how an alert is deduped
+      # so the 12:00 and 15:00 retries stay silent after a successful 08:00.
+      # `cache/` holds the last good NSE response, which is what registry.py
+      # falls back to when NSE refuses to answer. Both directories are
+      # gitignored, so without this every run starts blind — the fallback was
+      # unreachable code on CI and the retries would have been spam.
+      - name: Restore alert state and last good NSE data
+        uses: actions/cache@v4
+        with:
+          path: |
+            stockseer/artifacts
+            stockseer/cache
+          key: stockseer-state-${{ github.run_id }}
+          restore-keys: |
+            stockseer-state-
+
+      # Friday's run looked green while alerting nobody, because the secret was
+      # absent and the push silently no-opped. Length only — never echo the
+      # value; GitHub masks secrets in logs but not strings derived from them.
+      - name: Check the push secrets
         env:
           NTFY_TOPIC: ${{ secrets.NTFY_TOPIC }}
           NTFY_TOKEN: ${{ secrets.NTFY_TOKEN }}
@@ -54,16 +79,86 @@ jobs:
           fi
           echo "NTFY_TOPIC is set (${#NTFY_TOPIC} characters)"
 
+          # A missing token is not fatal, but it is the difference between
+          # being metered against your ntfy account and being metered against
+          # a runner IP shared with the whole platform. ntfy allows a burst of
+          # 60 requests refilling one per 5s per IP, and a 429 bans that IP
+          # from publishing for ten minutes — so an anonymous push can fail
+          # for reasons that have nothing to do with you. Warn loudly.
+          if [ -z "$NTFY_TOKEN" ]; then
+            echo "::warning::NTFY_TOKEN is not set. Pushing anonymously, which"
+            echo "::warning::is rate-limited per runner IP and fails randomly."
+          else
+            echo "NTFY_TOKEN is set (${#NTFY_TOKEN} characters)"
+          fi
+
+      # Proves the credential actually works before the scan depends on it.
+      # A revoked or mistyped token fails here with a clear 401 rather than
+      # surfacing later as "every push to ntfy failed".
+      - name: Verify ntfy accepts our credentials
+        env:
+          NTFY_TOPIC: ${{ secrets.NTFY_TOPIC }}
+          NTFY_TOKEN: ${{ secrets.NTFY_TOKEN }}
+        run: |
+          code=$(curl -s -o /tmp/ntfy.out -w "%{http_code}" \
+                 -H "Authorization: Bearer ${NTFY_TOKEN}" \
+                 -H "Title: StockSeer preflight" \
+                 -H "Priority: 1" \
+                 -H "Tags: white_check_mark" \
+                 -d "Preflight check — the daily scan is about to run." \
+                 "https://ntfy.sh/${NTFY_TOPIC}" --max-time 20)
+          echo "ntfy preflight -> HTTP $code"
+          case "$code" in
+            2*) echo "credentials accepted" ;;
+            401|403)
+              echo "::error::ntfy rejected the token (HTTP $code). It is"
+              echo "::error::revoked, mistyped, or lacks publish access."
+              cat /tmp/ntfy.out; exit 1 ;;
+            429)
+              echo "::error::Rate limited (HTTP 429). If NTFY_TOKEN is set,"
+              echo "::error::this should not happen — check the secret name."
+              exit 1 ;;
+            *) echo "::warning::Unexpected HTTP $code from ntfy"; cat /tmp/ntfy.out ;;
+          esac
+
       - name: Scan and push
+        id: scan
         env:
           TZ: Asia/Kolkata
           NTFY_TOPIC: ${{ secrets.NTFY_TOPIC }}
           NTFY_TOKEN: ${{ secrets.NTFY_TOKEN }}
         # No pip install: the calendar path is pure standard library, which is
         # why the CLI defers its pandas/sklearn imports. The job runs in ~30s.
+        #
+        # Exit 3 means NSE was unreachable. The code has already pushed a
+        # "check manually" warning by that point, so the deadline is not missed
+        # silently — the run is still marked failed because it genuinely was.
         run: >
           python -m stockseer.cli ipo calendar
           --refresh --notify --heartbeat --require-push
+
+      # Puts the reason on the run's summary page, so diagnosing a red run does
+      # not mean scrolling raw logs on a phone.
+      - name: Explain the outcome
+        if: always()
+        run: |
+          {
+            echo "## StockSeer IPO calendar"
+            echo ""
+            if [ "${{ steps.scan.outcome }}" = "success" ]; then
+              echo "Scan completed and any alerts were delivered."
+            else
+              echo "**The scan did not complete.** Most likely causes:"
+              echo ""
+              echo "1. NSE refused the request — it blocks much foreign and"
+              echo "   datacenter traffic, and a GitHub runner is both. A"
+              echo "   'check manually' push was sent. The next scheduled run"
+              echo "   gets a different runner IP and usually succeeds."
+              echo "2. ntfy rejected the push — see the preflight step above."
+              echo ""
+              echo "Run locally to compare: \`python -m stockseer.cli ipo calendar --refresh\`"
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Report a failure
         if: failure()

@@ -646,9 +646,33 @@ def cmd_ipo(a: argparse.Namespace) -> int:
     from .ipo.registry import refresh_registry, upcoming_listings
 
     if a.action == "calendar":
-        print_calendar(refresh=a.refresh, include_sme=a.include_sme)
+        from .ipo.registry import NseUnavailable
+
+        try:
+            print_calendar(refresh=a.refresh, include_sme=a.include_sme)
+            pushed = (notify_today(refresh=False, include_sme=a.include_sme)
+                      if a.notify else [])
+        except NseUnavailable as exc:
+            # NSE blocks a lot of foreign and datacenter traffic, so this fires
+            # on a GitHub runner far more often than it ever would at home.
+            # ntfy is not blocked, though -- which is the whole point. A red run
+            # nobody opens reads identically to "no IPO closes today"; a push
+            # reads as "go and look". On a 5 PM deadline only one of those is
+            # safe, so the delivery channel reports the data channel's failure.
+            print(f"\n ERROR: could not reach NSE -- {exc}")
+            print(" This is usually an IP block, not a bug. Pushing a warning"
+                  " so the deadline is not missed silently.\n")
+            if a.notify:
+                from .push import push
+
+                push("Could not check IPO deadlines",
+                     "StockSeer could not reach NSE, so it does not know "
+                     "whether an IPO closes today. Check your broker app "
+                     "before the 5 PM cut-off.",
+                     urgency="act", kind="ipo_closes_today")
+            return 3
+
         if a.notify:
-            pushed = notify_today(refresh=False, include_sme=a.include_sme)
             if a.heartbeat:
                 from .ipo.calendar import heartbeat
                 hb = heartbeat(force=a.force_heartbeat,

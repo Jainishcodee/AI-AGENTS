@@ -77,11 +77,41 @@ def _opener():
     return op
 
 
-def _fetch(path: str) -> list[dict]:
-    op = _opener()
-    with op.open(BASE + path, timeout=30) as resp:
-        data = json.load(resp)
-    return data if isinstance(data, list) else data.get("data", [])
+class NseUnavailable(RuntimeError):
+    """NSE could not be reached. Usually geography, not a bug.
+
+    NSE rejects much of the traffic arriving from foreign and datacenter IP
+    ranges, which is precisely what a GitHub Actions runner is. The same call
+    that answers in two seconds from an Indian broadband line can time out
+    from a US runner, so this failure has to be distinguishable from a genuine
+    code error -- one means "warn the user to check manually", the other means
+    "fix the program".
+    """
+
+
+def _fetch(path: str, attempts: int = 3, backoff: float = 4.0) -> list[dict]:
+    """Fetch one NSE endpoint, retrying before giving up.
+
+    Retrying is worth doing because the throttle is partial rather than an
+    outright ban -- a second attempt with a fresh session cookie often lands.
+    It cannot rescue a hard block, and pretending otherwise would just hide the
+    problem, so exhaustion raises rather than returning empty.
+    """
+    last: Exception | None = None
+    for attempt in range(1, attempts + 1):
+        try:
+            op = _opener()               # fresh session cookie each attempt
+            with op.open(BASE + path, timeout=30) as resp:
+                data = json.load(resp)
+            return data if isinstance(data, list) else data.get("data", [])
+        except Exception as exc:
+            last = exc
+            log.info("NSE %s attempt %d/%d failed: %s",
+                     path, attempt, attempts, exc)
+            if attempt < attempts:
+                time.sleep(backoff)
+                backoff *= 2
+    raise NseUnavailable(f"{path}: {type(last).__name__}: {last}")
 
 
 def _cached(name: str, path: str, refresh: bool = False) -> list[dict]:

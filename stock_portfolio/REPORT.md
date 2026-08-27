@@ -46,7 +46,7 @@ Invested ₹75,881 → value ₹72,691 = **−4.2%**, while **NIFTY 50 is +6.7�
 | **COALINDIA** | −3.2% | **HOLD** | 1 share is immaterial. ~6.5% dividend yield covers the price dip; consensus Buy, avg TP ₹464 (+15%) |
 | **IDEA** | 0 shares | **Don't re-enter as investment** | +31% CY26 rally is news-driven (SBI loan reports, AGR cut to ₹64,046 cr, tariff-hike hopes); consensus target ₹11.86 is ~20% BELOW price; still losing ₹3,754 cr/quarter. Your FY27 intraday on it netted +₹3,884 — trading it is a different (already-working) activity |
 
-**The bigger, computable finding:** stock selection isn't the main leak — **structure is**. Lifetime: intraday +₹50.8k net vs delivery-IPO-chasing −₹76.3k net, and ₹95k of charges on ~₹4.6 crore total turnover. Two structural fixes are worth more than any prediction tool: (1) stop buying hot IPOs post-listing (this account's 4 biggest losers = exactly that pattern, and the RBI study of 2025 documented it market-wide); (2) the brokerage schedule here (~₹44.5k lifetime) belongs to a full-service broker — a discount broker charges ₹0 delivery / ~₹20 per intraday order, which would have saved an estimated ₹30k+.
+**The bigger, computable finding:** stock selection isn't the main leak — **structure is**. Lifetime: intraday +₹50.8k net vs delivery-IPO-chasing −₹76.3k net, and ₹95k of charges on ~₹4.6 crore total turnover. Two structural fixes are worth more than any prediction tool: (1) stop buying hot IPOs post-listing (this account's 4 biggest losers = exactly that pattern, and the RBI study of 2025 documented it market-wide); (2) the brokerage schedule here (~₹44.4k over 3 FYs, blended ~0.048%/side) is full-service pricing — simulating the same 4,850 orders on Zerodha's schedule (₹0 delivery, intraday min(₹20, 0.03%)) gives ≈ ₹21.5k, saving ≈ ₹23k + ~₹4k GST. Caution: flat-₹20-per-order brokers (Groww/Upstox/Angel One at 2026 rates) would have cost MORE than the current broker for this small-order pattern (avg order ~₹20k) — see `order_size_optimizer.py` and `visuals/fig8_order_size.png`.
 
 ## 4. Charges over time (see fig3 + fig4)
 
@@ -69,5 +69,16 @@ Invested ₹75,881 → value ₹72,691 = **−4.2%**, while **NIFTY 50 is +6.7�
 | `visuals/fig5_scrips.png` | Lifetime top 8 winners/losers by stock |
 | `visuals/fig6_style.png` | Intraday vs delivery net result |
 | `visuals/fig7_holdings.png` | Current holdings vs NIFTY |
+
+## Broker-charge verification annex (triple-checked 26 Aug 2026)
+
+Three independent passes agree: (1) secondary sources, (2) official pages fetched directly (zerodha.com/charges, groww.in/pricing, upstox.com/brokerage-charges, angelone.in/pricing, NSE circular NSE/FATAX/73524 for STT, NSE PR 13-Aug-2024 for IPF), (3) this account's own tradebooks. Confirmed rates used in `order_size_optimizer.py`:
+- Zerodha: delivery ₹0; intraday min(₹20, 0.03%); DP ₹15.34/scrip/day all-in
+- Groww & Angel One: both segments min(₹20, 0.1%), minimum ₹5 (Angel One schedule effective 17-Nov-2025); DP ~₹20+GST
+- Upstox: delivery flat ₹20/order; intraday min(₹20, 0.1%); DP ₹20/scrip/day
+- STT (w.e.f. 1-Apr-2026, Finance Act 2026): delivery 0.1% both sides, intraday 0.025% sell — unchanged; (F&O STT was raised: options sale 0.15%, futures sale 0.05%)
+- Investor Protection Fund: NSE ₹35 lakh/investor (from 13-Aug-2024), BSE only ₹16 lakh
+- Jhaveri (jhaveritrade.com) and Marwadi (marwadionline.com) publish NO tariff — all their circulating rates are third-party/negotiable; treat "0.30%/0.03%" as indicative only
+- Zerodha, Groww, Upstox and Angel One are all on the exchanges' Qualified Stock Broker (QSB) list (enhanced compliance obligations)
 
 *Not investment advice; verdicts are evidence summaries as of 26 Aug 2026. Anchor-unlock dates for ARDEE and LALITHAA are computed from SEBI's 30/90-day rule (not independently published). The ₹1,066 cr LALITHAA GST figure could not be reconciled against its ₹56 cr disclosed contingent liabilities — verify in the RHP before relying on it.*
