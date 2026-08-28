@@ -663,13 +663,23 @@ def cmd_ipo(a: argparse.Namespace) -> int:
             print(" This is usually an IP block, not a bug. Pushing a warning"
                   " so the deadline is not missed silently.\n")
             if a.notify:
-                from .push import push
+                from datetime import date
 
-                push("Could not check IPO deadlines",
-                     "StockSeer could not reach NSE, so it does not know "
-                     "whether an IPO closes today. Check your broker app "
-                     "before the 5 PM cut-off.",
-                     urgency="act", kind="ipo_closes_today")
+                from .notify import hub
+
+                # Routed through the hub rather than push() directly so the
+                # dedupe key applies: the scan runs several times before the
+                # 5 PM cut-off, and a day when NSE blocks every attempt should
+                # warn once, not five times. Warning fatigue is how a real
+                # alert gets swiped away unread.
+                hub().alert(
+                    kind="ipo_closes_today", urgency="act",
+                    title="Could not check IPO deadlines",
+                    body="StockSeer could not reach NSE, so it does not know "
+                         "whether an IPO closes today. Check your broker app "
+                         "before the 5 PM cut-off.",
+                    dedupe_key=f"nse_unavailable:{date.today().isoformat()}",
+                )
             return 3
 
         if a.notify:
