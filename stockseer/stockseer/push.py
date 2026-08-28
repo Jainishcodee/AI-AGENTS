@@ -15,11 +15,18 @@ is what lets the whole thing run on a throwaway GitHub Actions box.
 **Treat the topic name as a password.** Without a token, ntfy has no accounts:
 anyone who guesses the topic can read your alerts and post to them.
 
-**A token matters most from CI.** Anonymous publishing is metered per source
-IP, and a GitHub runner shares its IP with every other job on the platform, so
-the budget is frequently already spent. Authenticated requests are metered
-against your account instead, which is why the same push can succeed from home
-and fail from Actions.
+**A token does not raise the rate limit on the free plan.** This was measured
+rather than assumed: ``GET /v1/account`` with a valid token returns
+``role: user`` but ``limits.basis: ip`` and the same 250-messages-per-12-hours
+allowance an anonymous caller gets. Metering only moves from the IP to the
+account on a paid tier. So a token buys identity and topic reservation, not
+headroom.
+
+That matters because a GitHub runner shares its IP with every other job on the
+platform, and ntfy bans an IP from publishing for ten minutes after a 429. The
+token cannot prevent that. The defences that actually work are the retry with
+backoff below, and scheduling several attempts hours apart so a later one draws
+a different runner IP.
 """
 
 from __future__ import annotations

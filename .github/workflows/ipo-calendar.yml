@@ -108,16 +108,27 @@ jobs:
           role=$(python -c "import json;print(json.load(open('/tmp/acct.json')).get('role',''))" 2>/dev/null || echo "")
           echo "ntfy role=$role  rate-limit basis=$basis"
 
-          # `basis: ip` means the runner's shared address is the quota, not you.
-          # ntfy allows a burst of 60 refilling one per 5s per IP, and a 429 bans
-          # that IP from publishing for ten minutes — so an anonymous push can
-          # fail for reasons that have nothing to do with this repository.
-          if [ "$role" = "anonymous" ] || [ "$basis" = "ip" ]; then
-            echo "::warning::Publishing ANONYMOUSLY — metered on the shared"
-            echo "::warning::runner IP, so pushes will fail unpredictably."
-            echo "::warning::Check that the secret is named exactly NTFY_TOKEN."
+          # Only `role: anonymous` is a misconfiguration. `basis: ip` is NOT —
+          # it is simply what ntfy.sh's free plan does. Measured directly: a
+          # valid token returns role=user but still basis=ip with the same
+          # 250-per-12h allowance an anonymous caller gets, because metering
+          # moves to the account only on a paid tier. Warning on basis=ip would
+          # cry wolf on every single run.
+          if [ "$role" = "anonymous" ]; then
+            echo "::warning::Publishing ANONYMOUSLY — the token was not"
+            echo "::warning::honoured. Check the secret is named NTFY_TOKEN."
           else
-            echo "Authenticated — metered against your ntfy account."
+            echo "Authenticated as a registered ntfy user."
+          fi
+
+          # Said plainly rather than warned about, because there is no free
+          # fix. A GitHub runner shares its IP platform-wide, ntfy bans an IP
+          # from publishing for ten minutes after a 429, and a free account
+          # cannot opt out of IP metering. The mitigations are the retry with
+          # backoff in push.py and the five attempts spread across the day.
+          if [ "$basis" = "ip" ]; then
+            echo "Note: metered per IP (free plan). A busy runner IP can still"
+            echo "cause a 429; later scheduled attempts draw a different IP."
           fi
 
       - name: Scan and push
