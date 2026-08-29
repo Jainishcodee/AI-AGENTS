@@ -61,6 +61,20 @@ class IPO:
         return self.security_type.upper() == "SME"
 
     @property
+    def is_mainboard(self) -> bool:
+        """A genuine mainboard equity IPO, not merely "not SME".
+
+        `security_type` carries 28 distinct values across the past-issues feed,
+        not two. Alongside EQ (454) and SME (761) sit BE, N0, DEBT, Z9, IV and
+        a couple of dozen more -- bonds, NCDs, InvITs and other instruments
+        that are not equity IPOs at all. Testing `not is_sme` therefore sweeps
+        all of them into the mainboard bucket: 51 of the newest 450 rows are
+        neither EQ nor SME, and every one was being counted as a mainboard IPO
+        in the listing-gain study. An allow-list is the only safe test.
+        """
+        return self.security_type.upper() == "EQ"
+
+    @property
     def listed(self) -> bool:
         return bool(self.listing_date)
 
@@ -179,7 +193,14 @@ def _to_ipo(row: dict) -> IPO | None:
         issue_price=_parse_price(raw_price),
         listing_date=_parse_date(row.get("listingDate")),
         price_range=price_range,
-        security_type=(row.get("securityType") or "EQ").strip().upper(),
+        # The two feeds name this field differently: past issues send
+        # `securityType`, upcoming issues send `series`. Reading only the
+        # former meant every upcoming issue silently defaulted to EQ, so SME
+        # issues were classified as mainboard and alerted on despite SME being
+        # excluded by default -- ASHUTOSH and SHANTIINOR are both SME and both
+        # were getting through.
+        security_type=(row.get("securityType") or row.get("series")
+                       or "EQ").strip().upper(),
         ipo_start=_parse_date(row.get("ipoStartDate") or row.get("issueStartDate")),
         ipo_end=_parse_date(row.get("ipoEndDate") or row.get("issueEndDate")),
     )
@@ -191,7 +212,7 @@ def past_issues(refresh: bool = False, mainboard_only: bool = False) -> list[IPO
     out = []
     for row in _cached("past_issues", PAST, refresh):
         ipo = _to_ipo(row)
-        if ipo and ipo.issue_price and (not mainboard_only or not ipo.is_sme):
+        if ipo and ipo.issue_price and (not mainboard_only or ipo.is_mainboard):
             out.append(ipo)
     out.sort(key=lambda i: i.listing_date or "", reverse=True)
     return out

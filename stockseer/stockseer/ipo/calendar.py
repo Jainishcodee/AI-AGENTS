@@ -61,7 +61,9 @@ def scan(today: date | None = None, refresh: bool = False,
     events: list[CalendarEvent] = []
 
     for ipo in _all_known(refresh):
-        if ipo.is_sme and not include_sme:
+        # Allow-list rather than "not SME": the security-type field carries 28
+        # values, and bonds, NCDs and InvITs are not IPOs you can apply to.
+        if not include_sme and not ipo.is_mainboard:
             continue
         if not ipo.ipo_end or date.fromisoformat(ipo.ipo_end) != today:
             continue
@@ -74,10 +76,11 @@ def scan(today: date | None = None, refresh: bool = False,
     return events
 
 
-# Measured over 176 mainboard listings: issue price to listing open. The mean
-# is +13.5%, but a few huge pops drag it up, so the median is the number a
-# typical allottee actually saw.
-MEDIAN_LISTING_GAIN = 0.073
+# Kept as a last-resort default only. The live figure comes from
+# study.load_base_rate(), which the study writes after each run -- a literal
+# here went stale the moment new issues listed, and for months the alert quoted
+# +7.3% of 176 while the measured numbers had moved to +9.1% of 150.
+MEDIAN_LISTING_GAIN = 0.0914
 
 
 def _message(ev: CalendarEvent) -> tuple[str, str]:
@@ -112,9 +115,23 @@ def _message(ev: CalendarEvent) -> tuple[str, str]:
     else:
         lines.append("Subscription figures not published yet.")
 
+    # What the application is actually worth, which is the base rate multiplied
+    # by the odds sitting two lines above it. Quoting the base rate alone
+    # overstates a heavily-subscribed issue by more than a hundredfold.
+    from .apply import describe, evaluate
+    from .study import load_base_rate
+
+    rate = load_base_rate()
+    app = evaluate(ev.subs, ev.terms, rate["median"])
+    if app is not None:
+        econ = describe(app)
+        if econ:
+            lines.append("")
+            lines.extend(econ)
+
     lines.append("")
     lines.append(f"If allotted, past IPOs listed "
-                 f"{MEDIAN_LISTING_GAIN * 100:+.1f}% (median of 176).")
+                 f"{rate['median'] * 100:+.1f}% (median of {rate['n']}).")
     cutoff = getattr(ev.terms, "cutoff", "") if ev.terms else ""
     lines.append(f"Apply before {cutoff} today." if cutoff else CUTOFF_NOTE)
     return f"LAST DAY: {i.symbol}", "\n".join(lines)

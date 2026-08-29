@@ -713,6 +713,21 @@ def cmd_ipo(a: argparse.Namespace) -> int:
         run_study(limit=a.limit, refresh=a.refresh)
         return 0
 
+    if a.action == "backfill":
+        # One-time (resumable) walk over past issues to retrieve their final
+        # subscription. NSE answers for issues that closed years ago, which is
+        # what makes the subscription-vs-gain question answerable at all.
+        from .ipo.backfill import backfill
+
+        backfill(limit=a.limit if a.limit != 450 else None, refresh=a.refresh)
+        return 0
+
+    if a.action == "subs":
+        from .ipo.backfill import study_subscription
+
+        study_subscription()
+        return 0
+
     if a.action == "morning":
         from datetime import date, timedelta
 
@@ -1023,7 +1038,7 @@ def main(argv: list[str] | None = None) -> int:
     p = sub.add_parser("ipo", help="IPO calendar, listing studies, and the live watcher")
     p.add_argument("action", nargs="?", default="calendar",
                    choices=["calendar", "upcoming", "refresh", "study", "morning",
-                            "watch", "autorun"])
+                            "watch", "autorun", "backfill", "subs"])
     p.add_argument("--refresh", action="store_true", help="re-fetch from NSE")
     p.add_argument("--notify", action="store_true", help="queue alerts for Jarvis")
     p.add_argument("--require-push", action="store_true",
