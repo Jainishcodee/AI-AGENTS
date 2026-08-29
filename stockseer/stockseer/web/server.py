@@ -260,10 +260,27 @@ def create_app() -> Flask:
         from ..ipo.calendar import scan
         from ..ipo.registry import to_dict
 
+        from ..ipo.apply import evaluate
+        from ..ipo.study import load_base_rate
+
+        rate = load_base_rate()
         events = scan(refresh=request.args.get("refresh") == "1")
-        return jsonify(_clean([{"kind": e.kind, "urgency": e.urgency,
-                                "days_away": e.days_away, "ipo": to_dict(e.ipo)}
-                               for e in events]))
+        out = []
+        for e in events:
+            # `days_away` was dropped from CalendarEvent when the calendar was
+            # narrowed to closing day only, and this endpoint kept reading it --
+            # every call raised AttributeError. The event is always today now,
+            # so the field had nothing left to say.
+            app = evaluate(e.subs, e.terms, rate["median"])
+            out.append({
+                "kind": e.kind, "urgency": e.urgency, "ipo": to_dict(e.ipo),
+                "retail_x": e.subs.retail_x if e.subs else None,
+                "odds": e.subs.odds if e.subs else None,
+                "lot_amount": getattr(e.terms, "lot_amount", None),
+                "ev_per_application": app.ev_per_application if app else None,
+                "ev_total": app.ev_total if app else None,
+            })
+        return jsonify(_clean(out))
 
     @app.post("/api/ipo/scan")
     def ipo_scan():
