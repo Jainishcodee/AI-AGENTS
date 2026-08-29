@@ -7,7 +7,8 @@ when it was worth about six rupees.
 
 import pytest
 
-from stockseer.ipo.apply import Application, describe, evaluate
+from stockseer.ipo.apply import (Application, describe, evaluate,
+                                 expected_gain_for)
 from stockseer.ipo.registry import IPO, IssueTerms, Subscription, _to_ipo
 
 
@@ -27,11 +28,48 @@ def test_ev_collapses_on_a_heavily_subscribed_issue():
     assert app.return_on_capital < 0.001
 
 
-def test_ev_is_far_larger_when_the_issue_is_barely_subscribed():
-    """The counterintuitive half: the dull IPOs are the profitable ones."""
-    hyped = Application(odds=1 / 170.6, lot_amount=15_000.0, expected_gain=0.0914)
-    dull = Application(odds=1 / 3.0, lot_amount=15_000.0, expected_gain=0.0914)
-    assert dull.ev_per_application > 50 * hyped.ev_per_application
+def test_expected_gain_rises_with_subscription():
+    """Measured over 382 listings: rho = +0.49 between subscription and gain.
+
+    The first version of this module applied one global median to every issue.
+    That is wrong at both ends, and the bottom end matters most -- it turned a
+    negative-expectancy issue into an apparent opportunity.
+    """
+    quiet, _ = expected_gain_for(2.0, 0.0914)
+    mid, _ = expected_gain_for(13.0, 0.0914)
+    hot, _ = expected_gain_for(170.6, 0.0914)
+    assert quiet < 0 < mid < hot
+    assert hot > 0.25          # heavily subscribed issues opened ~+38%
+
+
+def test_barely_subscribed_issues_have_negative_expected_value():
+    """"Everyone who applies gets shares" is a warning, not an opportunity.
+
+    Below ~3.5x the median listing gain is negative and only 43% rise, so good
+    odds of an allotment are odds on a loss.
+    """
+    app = evaluate(Subscription(symbol="Q", retail_x=2.1, qib_x=3.2, nii_x=4.2),
+                   IssueTerms(symbol="Q", lot_shares=180, price_high=83.0),
+                   0.0914)
+    assert app.ev_per_application < 0
+    assert any("-Rs." in ln for ln in describe(app))
+
+
+def test_ev_per_rupee_is_roughly_flat_across_hot_issues():
+    """The payoff rises about as fast as the odds fall above ~3.5x.
+
+    This is why "avoid the hyped ones" was wrong: choosing between a 13x and a
+    170x issue barely changes what a rupee expects.
+    """
+    def roc(x):
+        app = evaluate(Subscription(symbol="X", retail_x=x, qib_x=x, nii_x=x),
+                       IssueTerms(symbol="X", lot_shares=100, price_high=150.0),
+                       0.0914)
+        return app.return_on_capital
+
+    hot, mid = roc(170.6), roc(13.0)
+    assert 0 < hot and 0 < mid
+    assert 0.1 < hot / mid < 10       # same order of magnitude, not 50x apart
 
 
 def test_undersubscribed_issue_allots_to_everyone():

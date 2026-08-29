@@ -168,3 +168,59 @@ def study_subscription(refresh: bool = False, buckets: int = 5) -> None:
     print("\n  EV/lakh is what a lakh of blocked capital expects per application,")
     print("  before the ~5 days it stays blocked. Compare it against a deposit.")
     print("=" * 72 + "\n")
+
+    save_gain_curve(sub, gain)
+
+
+# --------------------------------------------------------------------------- #
+# Expected gain as a function of subscription
+# --------------------------------------------------------------------------- #
+GAIN_CURVE_FILE = CACHE_DIR / "listing_gain_curve.json"
+
+# Fallback measured Aug 2026 over 382 mainboard listings. Each entry is
+# (minimum retail subscription, median gain, win rate, n).
+FALLBACK_CURVE = [
+    [0.0, 0.0000, 0.43, 77],
+    [1.3, -0.0082, 0.43, 76],
+    [3.5, 0.0611, 0.67, 76],
+    [9.3, 0.1238, 0.72, 76],
+    [22.9, 0.3824, 0.87, 77],
+]
+
+
+def save_gain_curve(sub, gain, buckets: int = 5) -> None:
+    """Persist expected gain as a function of subscription.
+
+    The alert used to apply one global median to every issue, which is wrong in
+    both directions: it overstates a barely-subscribed issue, whose median gain
+    is actually negative, and understates a heavily-subscribed one by roughly
+    fourfold. Subscription and gain correlate at rho = +0.49 over 382 listings,
+    so conditioning on it is not a refinement -- it changes the sign of the
+    advice at the bottom of the range.
+    """
+    import numpy as np
+
+    edges = np.quantile(sub, np.linspace(0, 1, buckets + 1))
+    curve = []
+    for k in range(buckets):
+        lo, hi = edges[k], edges[k + 1]
+        m = (sub >= lo) & (sub <= hi) if k == buckets - 1 else (sub >= lo) & (sub < hi)
+        if m.sum() < 3:
+            continue
+        g = gain[m]
+        curve.append([float(lo), float(np.median(g)),
+                      float((g > 0).mean()), int(m.sum())])
+    try:
+        GAIN_CURVE_FILE.parent.mkdir(parents=True, exist_ok=True)
+        GAIN_CURVE_FILE.write_text(json.dumps(curve, indent=1), encoding="utf-8")
+        log.info("gain curve saved: %d buckets", len(curve))
+    except OSError as exc:
+        log.warning("could not save gain curve: %s", exc)
+
+
+def load_gain_curve() -> list[list[float]]:
+    try:
+        c = json.loads(GAIN_CURVE_FILE.read_text(encoding="utf-8"))
+        return c if c else FALLBACK_CURVE
+    except (OSError, ValueError):
+        return FALLBACK_CURVE

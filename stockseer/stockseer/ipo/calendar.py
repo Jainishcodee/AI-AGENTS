@@ -130,8 +130,6 @@ def _message(ev: CalendarEvent) -> tuple[str, str]:
             lines.extend(econ)
 
     lines.append("")
-    lines.append(f"If allotted, past IPOs listed "
-                 f"{rate['median'] * 100:+.1f}% (median of {rate['n']}).")
     cutoff = getattr(ev.terms, "cutoff", "") if ev.terms else ""
     lines.append(f"Apply before {cutoff} today." if cutoff else CUTOFF_NOTE)
     return f"LAST DAY: {i.symbol}", "\n".join(lines)

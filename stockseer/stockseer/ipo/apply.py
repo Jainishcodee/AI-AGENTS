@@ -5,11 +5,30 @@ issues opened +14.4% on average, +9.1% at the median, over 150 listings. That
 is the number the alert quoted, and on its own it is misleading, because it
 never touches the probability of getting any shares at all.
 
-Multiply the two and the picture inverts. On a 170x-subscribed issue the odds
-are 1 in 171, so blocking Rs.15,000 for five days returns an expected Rs.6 --
-about 2% a year on committed capital, worse than a savings account. On a
-3x-subscribed issue the same Rs.15,000 expects Rs.365. **The exciting IPOs are
-the bad ones**, and no amount of enthusiasm changes the arithmetic.
+The obvious correction -- multiply by 1/subscription -- is also wrong, and it
+was tried first. It assumes the payoff is the same whatever the demand. It is
+not. Over 382 mainboard listings, subscription and listing gain correlate at
+**rho = +0.49, p < 0.0001**:
+
+    subscription      median gain    win rate    EV per lakh blocked
+    under 1.3x              0.00%         43%                      0
+    1.3x -  3.5x           -0.82%         43%                   -367
+    3.5x -  9.3x           +6.11%         67%                    963
+    9.3x - 22.9x          +12.38%         72%                    837
+    over 22.9x            +38.24%         87%                    876
+
+Two things follow, and both are the opposite of the intuition:
+
+**Heavy subscription is not a penalty.** The gain rises almost exactly as fast
+as the odds fall, so expected value per rupee is roughly flat above 3.5x.
+Choosing between a 10x issue and a 170x issue barely matters.
+
+**The quiet issues are the dangerous ones.** Below about 3.5x the median gain
+is negative and only 43% list up. "Not yet full -- everyone who applies should
+get shares" reads like an opportunity and is the one case with genuinely
+negative expected value.
+
+So the payoff term is looked up by subscription level rather than assumed.
 
 Two mechanics from SEBI's ICDR regulations drive everything here:
 
@@ -62,8 +81,9 @@ class Application:
 
     odds: float | None            # P(allotment) for a single application
     lot_amount: float | None      # rupees blocked per application
-    expected_gain: float          # payoff given allotment, as a fraction
+    expected_gain: float          # payoff given allotment, at THIS subscription
     n_accounts: int = 1
+    win_rate: float = float("nan")   # share of issues at this level that rose
 
     @property
     def ev_per_application(self) -> float | None:
@@ -105,15 +125,43 @@ class Application:
         return self.odds is not None and self.odds < 1.0
 
 
+def expected_gain_for(retail_x: float | None, fallback: float) -> tuple[float, float]:
+    """Median listing gain and win rate for issues at this subscription level.
+
+    Measured over 382 mainboard listings: subscription and listing gain
+    correlate at rho = +0.49 (p < 0.0001). Applying one global median to every
+    issue -- which is what the alert did -- is wrong at both ends. It
+    understates a 170x issue roughly fourfold, and it turns a barely-subscribed
+    issue, whose median gain is actually *negative*, into an apparent
+    opportunity. Conditioning changes the sign of the answer, not just its size.
+    """
+    from .backfill import load_gain_curve
+
+    if retail_x is None:
+        return fallback, float("nan")
+
+    chosen = None
+    for lo, median_gain, win, _n in load_gain_curve():
+        if retail_x >= lo:
+            chosen = (median_gain, win)
+    return chosen if chosen else (fallback, float("nan"))
+
+
 def evaluate(subs, terms, expected_gain: float,
              n_accounts: int | None = None) -> Application | None:
-    """Build the economics from a live subscription and issue terms."""
+    """Build the economics from a live subscription and issue terms.
+
+    `expected_gain` is only a fallback here: the payoff actually used is the
+    one measured for this issue's subscription level.
+    """
     if subs is None:
         return None
+    gain, win = expected_gain_for(subs.retail_x, expected_gain)
     return Application(
         odds=subs.odds,
         lot_amount=getattr(terms, "lot_amount", None) if terms else None,
-        expected_gain=expected_gain,
+        expected_gain=gain,
+        win_rate=win,
         n_accounts=accounts() if n_accounts is None else n_accounts,
     )
 
@@ -130,15 +178,28 @@ def describe(app: Application) -> list[str]:
     if ev is None:
         return out
 
-    out.append(f"Expected value: about Rs.{ev:,.0f} per application")
+    # "-Rs.58", not "Rs.-58". A negative expected value is the single most
+    # important thing this block can say, so it must not read as a typo.
+    money = lambda v: f"{'-' if v < 0 else ''}Rs.{abs(v):,.0f}"   # noqa: E731
+
+    out.append(f"Expected value: about {money(ev)} per application")
     if app.n_accounts > 1 and app.ev_total is not None:
         out.append(f"Across {app.n_accounts} accounts: about "
-                   f"Rs.{app.ev_total:,.0f}")
+                   f"{money(app.ev_total)}")
 
     roc = app.return_on_capital
     if roc is not None and app.capital_blocked:
         out.append(f"That is {roc * 100:.2f}% on the Rs.{app.capital_blocked:,.0f} "
                    f"blocked for about 5 days")
+
+    # State the payoff actually used, because it is conditioned on this issue's
+    # demand rather than being the global average the reader might assume.
+    if app.expected_gain == app.expected_gain:                 # not NaN
+        line = (f"At this subscription level, past issues listed "
+                f"{app.expected_gain * 100:+.1f}%")
+        if app.win_rate == app.win_rate:
+            line += f" and {app.win_rate * 100:.0f}% rose"
+        out.append(line + ".")
 
     if app.is_lottery:
         out.append("Oversubscribed, so allotment is a draw: one lot per PAN is "
