@@ -96,6 +96,11 @@ class NotificationHub:
         self.path = Path(path or STORE)
         self.keep = keep
         self.items: list[Notification] = []
+        # Alerts this session declined to re-send because an earlier copy
+        # was already delivered. Tracked so a caller can distinguish
+        # "nothing was due" from "something was due and I stayed quiet",
+        # which read identically in the logs and hid a real fault for days.
+        self.suppressed: list[str] = []
         # "Never polled", which is not the same as "polled at time zero".
         #
         # _now() is time.monotonic(), and on Linux that counts seconds since
@@ -151,6 +156,7 @@ class NotificationHub:
                 # failure this alerting exists to prevent.
                 if any(n.data.get("dedupe") == dedupe_key and _delivered(n)
                        for n in self.items):
+                    self.suppressed.append(dedupe_key)
                     return None
                 # Drop the undelivered older copy so the store does not grow a
                 # duplicate for every retry of the same event.

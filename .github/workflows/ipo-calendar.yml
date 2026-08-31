@@ -66,6 +66,12 @@ jobs:
       # The combined action skips saving when the job fails, which is exactly
       # the run whose state we most need to keep: the one that recorded "NSE
       # was down and I already warned about it".
+      # The `-v2-` namespace is deliberate. Runs made while the boot-race
+      # bug was live recorded alerts as `handed_to_client` -- delivered to a
+      # Jarvis that was never there -- and dedupe honours that flag, so those
+      # entries permanently suppress the alerts they describe. The state cannot
+      # be repaired in place from inside a job that the same state silences, so
+      # the namespace moves and the poisoned caches age out on their own.
       - name: Restore alert state and last good NSE data
         id: state
         uses: actions/cache/restore@v4
@@ -73,9 +79,9 @@ jobs:
           path: |
             stockseer/artifacts
             stockseer/cache
-          key: stockseer-state-${{ github.run_id }}
+          key: stockseer-state-v2-${{ github.run_id }}
           restore-keys: |
-            stockseer-state-
+            stockseer-state-v2-
 
       # Verifies the credential WITHOUT publishing anything.
       #
@@ -159,7 +165,7 @@ jobs:
           path: |
             stockseer/artifacts
             stockseer/cache
-          key: stockseer-state-${{ github.run_id }}
+          key: stockseer-state-v2-${{ github.run_id }}
 
       - name: Report an unexpected failure
         if: steps.scan.outputs.code != '0' && steps.scan.outputs.code != '3'
