@@ -96,7 +96,21 @@ class NotificationHub:
         self.path = Path(path or STORE)
         self.keep = keep
         self.items: list[Notification] = []
-        self._last_poll = 0.0
+        # "Never polled", which is not the same as "polled at time zero".
+        #
+        # _now() is time.monotonic(), and on Linux that counts seconds since
+        # boot. Initialising to 0.0 therefore claimed a poll had just happened
+        # at boot: on a GitHub runner, where the VM boots and starts the job
+        # 30-60 seconds later, client_recently_polled() returned True inside
+        # its 90-second window and the ntfy push was skipped as redundant --
+        # for a Jarvis that was not running and never would be.
+        #
+        # It presented as "every push to ntfy failed" with no error from the
+        # relay, because no request was ever made. It looked intermittent
+        # because it is a race against how long the runner had been up: a
+        # warm reused runner delivered, a freshly booted one silently did not.
+        # A laptop is never affected -- monotonic() there is hours or days.
+        self._last_poll = float("-inf")
         self._load()
 
     def _load(self) -> None:

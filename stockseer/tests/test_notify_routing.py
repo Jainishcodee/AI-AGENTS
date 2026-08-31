@@ -110,3 +110,64 @@ def test_dedupe_still_applies_across_transports(hub):
                  dedupe_key="k")
     assert a is not None and b is None
     assert hub._sent == ["one"], "the suppressed duplicate must not be pushed"
+
+
+# --------------------------------------------------------------------------- #
+# The freshly-booted-runner bug
+# --------------------------------------------------------------------------- #
+def test_fresh_hub_has_never_been_polled(tmp_path, monkeypatch):
+    """A hub nobody has polled must not claim a client is listening.
+
+    `_now()` is time.monotonic(), which counts seconds since boot on Linux.
+    While `_last_poll` started at 0.0, a process running on a machine that had
+    been up for less than the 90-second window computed
+    `(monotonic() - 0.0) < 90` as True and skipped the ntfy push as redundant.
+
+    That is the normal state of a GitHub Actions runner: the VM boots and the
+    job starts under a minute later. The alert was dropped for a Jarvis that
+    was not running, the failure reported no cause because no request was
+    made, and it looked intermittent because it depended on whether the runner
+    was freshly booted or reused.
+    """
+    import stockseer.notify as N
+
+    for uptime in (0.0, 5.0, 30.0, 60.0, 89.0):
+        monkeypatch.setattr(N, "_now", lambda u=uptime: u)
+        hub = N.NotificationHub(path=tmp_path / f"n{uptime}.json")
+        assert not hub.client_recently_polled(), (
+            f"a never-polled hub claimed a live client at uptime {uptime}s; "
+            "on a runner this silently drops the push"
+        )
+
+
+def test_note_poll_still_registers_a_live_client(tmp_path, monkeypatch):
+    """The fix must not disable genuine Jarvis detection."""
+    import stockseer.notify as N
+
+    monkeypatch.setattr(N, "_now", lambda: 42.0)
+    hub = N.NotificationHub(path=tmp_path / "n.json")
+    assert not hub.client_recently_polled()
+
+    hub.note_poll()
+    assert hub.client_recently_polled(), "a real poll should register"
+
+    monkeypatch.setattr(N, "_now", lambda: 42.0 + 91.0)
+    assert not hub.client_recently_polled(), "the window should still expire"
+
+
+def test_runner_conditions_actually_push(tmp_path, monkeypatch):
+    """End to end: freshly booted machine, no Jarvis -> the relay is called."""
+    import stockseer.notify as N
+    from stockseer import push as P
+
+    monkeypatch.setattr(N, "_now", lambda: 12.0)      # 12s since boot
+    monkeypatch.setenv("NTFY_TOPIC", "test-topic")
+    sent = []
+    monkeypatch.setattr(P, "push_notification", lambda n: sent.append(n) or True)
+
+    hub = N.NotificationHub(path=tmp_path / "n.json")
+    n = hub.alert(kind="ipo_closes_today", urgency="critical",
+                  title="LAST DAY: TEST", body="body", dedupe_key="k")
+
+    assert sent, "the push was skipped on a freshly booted machine"
+    assert n.pushed is True
