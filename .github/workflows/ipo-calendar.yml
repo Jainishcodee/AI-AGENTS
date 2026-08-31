@@ -138,8 +138,6 @@ jobs:
           TZ: Asia/Kolkata
           NTFY_TOPIC: ${{ secrets.NTFY_TOPIC }}
           NTFY_TOKEN: ${{ secrets.NTFY_TOKEN }}
-          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
-          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
         # No pip install: the calendar path is pure standard library, which is
         # why the CLI defers its pandas/sklearn imports. The job runs in ~30s.
         #
@@ -168,8 +166,6 @@ jobs:
         env:
           NTFY_TOPIC: ${{ secrets.NTFY_TOPIC }}
           NTFY_TOKEN: ${{ secrets.NTFY_TOKEN }}
-          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
-          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
         # Exit 3 is excluded deliberately: NSE being blocked is expected on a
         # runner and already produced its own alert. Everything else is a bug
         # worth hearing about, because a silent failure reads exactly like

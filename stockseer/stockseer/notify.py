@@ -73,6 +73,24 @@ class Notification:
         return PATTERNS.get(self.urgency, PATTERNS["info"])
 
 
+def _delivered(n) -> bool:
+    """Did this alert actually reach a human?
+
+    Three ways it counts, and the distinction is what makes a retry possible:
+
+    * ``pushed``            -- the relay accepted it.
+    * ``handed_to_client``  -- Jarvis was polling and will collect it.
+    * ``push_skipped``      -- no transport is configured at all, so there is
+      nothing to retry and re-queueing would only duplicate the local record.
+
+    Anything else is an alert that was written down and never sent, which is
+    exactly the case that must be allowed to try again on the next run.
+    """
+    return bool(getattr(n, "pushed", False)
+                or n.data.get("handed_to_client")
+                or n.data.get("push_skipped"))
+
+
 class NotificationHub:
     def __init__(self, path: Path | str | None = None, keep: int = 400):
         self.path = Path(path or STORE)
@@ -107,8 +125,23 @@ class NotificationHub:
         """
         with _LOCK:
             if dedupe_key:
-                if any(n.data.get("dedupe") == dedupe_key for n in self.items):
+                # Suppress only a copy that actually reached someone.
+                #
+                # The key is recorded before the push is attempted, which was
+                # harmless while every run started with an empty store. Once
+                # the CI job began restoring `artifacts/` from cache, it stopped
+                # being harmless: a push that failed on the first run of the day
+                # left its key on disk, so every later run saw "already sent",
+                # queued nothing, and exited 0. Five scheduled retries became
+                # five no-ops that reported success -- the precise silent
+                # failure this alerting exists to prevent.
+                if any(n.data.get("dedupe") == dedupe_key and _delivered(n)
+                       for n in self.items):
                     return None
+                # Drop the undelivered older copy so the store does not grow a
+                # duplicate for every retry of the same event.
+                self.items = [n for n in self.items
+                              if n.data.get("dedupe") != dedupe_key]
                 notif.data["dedupe"] = dedupe_key
             self.items.append(notif)
             self._save()
@@ -129,7 +162,14 @@ class NotificationHub:
                 # a cloud runner it means the alert reached nobody. The caller
                 # decides whether that is fatal; the flag makes it visible.
                 notif.data.setdefault("push_skipped", "no NTFY_TOPIC")
-            elif not self.client_recently_polled():
+            elif self.client_recently_polled():
+                # Jarvis is live and will collect this from pending(). That is
+                # a real delivery, so it must count for dedupe -- otherwise the
+                # watcher re-queues the same alert every few seconds.
+                notif.data["handed_to_client"] = True
+                with _LOCK:
+                    self._save()
+            else:
                 if push_notification(notif):
                     # Record it, or Jarvis re-buzzes for this alert the next
                     # time it connects -- possibly days later, for an event
