@@ -685,8 +685,18 @@ def cmd_ipo(a: argparse.Namespace) -> int:
         if a.notify:
             if a.heartbeat:
                 from .ipo.calendar import heartbeat
-                hb = heartbeat(force=a.force_heartbeat,
-                               include_sme=a.include_sme)
+
+                # heartbeat() calls upcoming_issues() itself, so it can raise
+                # NseUnavailable exactly like the scan above. It sat outside
+                # the guard, which turned a blocked Monday into an uncaught
+                # traceback -- the one weekday the digest is supposed to prove
+                # the pipeline is alive.
+                try:
+                    hb = heartbeat(force=a.force_heartbeat,
+                                   include_sme=a.include_sme)
+                except NseUnavailable as exc:
+                    log.warning("heartbeat skipped, NSE unreachable: %s", exc)
+                    hb = None
                 if hb:
                     pushed.append(hb)
             _report_push(pushed)

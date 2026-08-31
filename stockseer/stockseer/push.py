@@ -80,7 +80,12 @@ def _env(name: str) -> str:
 
 
 def configured() -> bool:
-    return bool(_env("NTFY_TOPIC"))
+    """True when at least one transport can deliver.
+
+    Either alone is enough. Telegram-only is a legitimate setup on CI, where
+    ntfy's per-IP metering is the whole problem.
+    """
+    return bool(_env("NTFY_TOPIC")) or telegram_configured()
 
 
 def topic() -> str:
@@ -157,6 +162,66 @@ def push(title: str, body: str, urgency: str = "info", kind: str = "",
             delay *= 2
 
     log.warning("ntfy push failed: %s", LAST_ERROR.get("reason"))
+
+    # Last resort: a transport that is not metered by IP.
+    #
+    # ntfy bans a publishing IP for ten minutes after a 429, and a GitHub
+    # runner's address is shared with the whole platform, so the ban is
+    # frequently inherited rather than earned. Retrying cannot outlast it
+    # inside a sane job timeout, and a free ntfy account cannot opt out of IP
+    # metering. Telegram's bot API is free, has no per-IP quota, and answers
+    # datacenter traffic -- so when ntfy refuses, this still gets through.
+    if telegram_configured():
+        if push_telegram(title, body):
+            log.info("delivered via Telegram after ntfy refused")
+            LAST_ERROR["fallback"] = "delivered via Telegram"
+            return True
+        log.warning("Telegram fallback also failed: %s",
+                    LAST_ERROR.get("telegram"))
+    return False
+
+
+# --------------------------------------------------------------------------- #
+# Telegram fallback
+# --------------------------------------------------------------------------- #
+def telegram_configured() -> bool:
+    """Both halves are needed: a bot can send, but only to a known chat."""
+    return bool(_env("TELEGRAM_BOT_TOKEN") and _env("TELEGRAM_CHAT_ID"))
+
+
+def push_telegram(title: str, body: str, timeout: int = 10) -> bool:
+    """Send one message via the Telegram bot API. Never raises."""
+    tok, chat = _env("TELEGRAM_BOT_TOKEN"), _env("TELEGRAM_CHAT_ID")
+    if not (tok and chat):
+        return False
+
+    payload = json.dumps({
+        "chat_id": chat,
+        "text": f"*{title}*\n\n{body}",
+        "parse_mode": "Markdown",
+        # The alert is the message; a link preview would only push it up the
+        # screen on the phone that has to read it in a hurry.
+        "disable_web_page_preview": True,
+    }).encode("utf-8")
+
+    req = urllib.request.Request(
+        f"https://api.telegram.org/bot{tok}/sendMessage",
+        data=payload, method="POST",
+        headers={"Content-Type": "application/json"})
+    try:
+        with urllib.request.urlopen(req, timeout=timeout) as resp:
+            if 200 <= resp.status < 300:
+                return True
+            LAST_ERROR["telegram"] = f"HTTP {resp.status}"
+    except urllib.error.HTTPError as exc:
+        detail = ""
+        try:
+            detail = exc.read().decode("utf-8", "replace")[:160].strip()
+        except Exception:
+            pass
+        LAST_ERROR["telegram"] = f"HTTP {exc.code}" + (f" -- {detail}" if detail else "")
+    except Exception as exc:
+        LAST_ERROR["telegram"] = f"{type(exc).__name__}: {exc}"
     return False
 
 
@@ -168,11 +233,16 @@ def push_notification(notif) -> bool:
 
 def describe() -> str:
     if not configured():
-        return "push: off (set NTFY_TOPIC to enable)"
-    t = topic()
-    masked = f"{t[:4]}…{t[-3:]}" if len(t) > 8 else "…"
-    auth = "token" if token() else "anonymous"
-    return f"push: {server()}/{masked} ({auth})"
+        return "push: off (set NTFY_TOPIC or TELEGRAM_BOT_TOKEN to enable)"
+    parts = []
+    if _env("NTFY_TOPIC"):
+        t = topic()
+        masked = f"{t[:4]}...{t[-3:]}" if len(t) > 8 else "..."
+        parts.append(f"{server()}/{masked} "
+                     f"({'token' if token() else 'anonymous'})")
+    if telegram_configured():
+        parts.append("telegram (fallback)")
+    return "push: " + " + ".join(parts)
 
 
 def self_test() -> dict:
