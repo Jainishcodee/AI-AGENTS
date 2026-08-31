@@ -27,6 +27,9 @@ import numpy as np
 import pandas as pd
 
 from ..data import load_prices
+from .base_rate import (BASE_RATE_FILE, FALLBACK_BASE_RATE,  # noqa: F401
+                        load_base_rate)
+from .base_rate import save_base_rate as _save_base_rate
 from .registry import IPO, past_issues
 
 CACHE_DIR = Path(__file__).resolve().parent.parent.parent / "cache"
@@ -207,48 +210,15 @@ def run_study(limit: int = 120, refresh: bool = False,
 # --------------------------------------------------------------------------- #
 # The base rate the alert quotes
 # --------------------------------------------------------------------------- #
-BASE_RATE_FILE = CACHE_DIR / "listing_base_rate.json"
-
-# Fallback only, for a machine that has never run the study. Measured Aug 2026
-# over 150 mainboard listings after non-equity instruments were excluded.
-FALLBACK_BASE_RATE = {"median": 0.0914, "mean": 0.1435, "win_rate": 0.71,
-                      "n": 150, "computed_at": "2026-08-29"}
+# Defined in base_rate.py, which imports nothing outside the standard library.
+# The alert path reads this figure on a runner that never ran `pip install`, so
+# it must not be reachable only through this module's numpy/pandas imports.
+# Re-exported here so existing callers keep working.
 
 
 def save_base_rate(s: StudySummary) -> None:
-    """Persist the mainboard listing gain so the alert can quote it.
-
-    It used to be a literal in calendar.py, alongside a hardcoded sample size
-    in the message text. Both drifted the moment the registry refreshed, and
-    nothing recomputed them -- the alert was quoting +7.3% of 176 while the
-    real figures had moved to +9.1% of 150.
-    """
-    try:
-        BASE_RATE_FILE.parent.mkdir(parents=True, exist_ok=True)
-        BASE_RATE_FILE.write_text(json.dumps({
-            "median": s.allot_median, "mean": s.allot_mean,
-            "win_rate": s.allot_win_rate, "n": s.n,
-            "computed_at": date.today().isoformat(),
-        }, indent=2), encoding="utf-8")
-        log.info("base rate saved: median %.2f%% of %d", s.allot_median * 100, s.n)
-    except OSError as exc:
-        log.warning("could not save base rate: %s", exc)
-
-
-def load_base_rate(max_age_days: int = 45) -> dict:
-    """The measured listing gain, or the fallback if it was never computed.
-
-    Staleness is reported rather than hidden: a figure from six months of
-    listings ago is still usable, but the caller should be able to say so.
-    """
-    try:
-        d = json.loads(BASE_RATE_FILE.read_text(encoding="utf-8"))
-        age = (date.today() - date.fromisoformat(d["computed_at"])).days
-        d["stale"] = age > max_age_days
-        d["age_days"] = age
-        return d
-    except (OSError, ValueError, KeyError):
-        return {**FALLBACK_BASE_RATE, "stale": True, "age_days": -1}
+    """Persist the mainboard listing gain so the alert can quote it."""
+    _save_base_rate(s.allot_median, s.allot_mean, s.allot_win_rate, s.n)
 
 
 def print_study(summaries: list[StudySummary], rows: list[ListingOutcome]) -> None:

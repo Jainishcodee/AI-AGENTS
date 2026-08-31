@@ -261,7 +261,7 @@ def create_app() -> Flask:
         from ..ipo.registry import to_dict
 
         from ..ipo.apply import evaluate
-        from ..ipo.study import load_base_rate
+        from ..ipo.base_rate import load_base_rate
 
         rate = load_base_rate()
         events = scan(refresh=request.args.get("refresh") == "1")

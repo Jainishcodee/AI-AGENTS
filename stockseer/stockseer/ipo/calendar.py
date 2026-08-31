@@ -77,7 +77,7 @@ def scan(today: date | None = None, refresh: bool = False,
 
 
 # Kept as a last-resort default only. The live figure comes from
-# study.load_base_rate(), which the study writes after each run -- a literal
+# base_rate.load_base_rate(), which the study writes after each run -- a literal
 # here went stale the moment new issues listed, and for months the alert quoted
 # +7.3% of 176 while the measured numbers had moved to +9.1% of 150.
 MEDIAN_LISTING_GAIN = 0.0914
@@ -119,7 +119,7 @@ def _message(ev: CalendarEvent) -> tuple[str, str]:
     # by the odds sitting two lines above it. Quoting the base rate alone
     # overstates a heavily-subscribed issue by more than a hundredfold.
     from .apply import describe, evaluate
-    from .study import load_base_rate
+    from .base_rate import load_base_rate
 
     rate = load_base_rate()
     app = evaluate(ev.subs, ev.terms, rate["median"])

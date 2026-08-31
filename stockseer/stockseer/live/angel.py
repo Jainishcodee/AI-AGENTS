@@ -1,14 +1,19 @@
 """Angel One SmartAPI feed.
 
-**SmartAPI issues one API key per app type, and they are not interchangeable.**
-A Trading API key logs in fine and then returns ``AG8004 Invalid API Key`` on
-every quote and candle call -- an error that says "invalid key" when it means
-"this key is not entitled to this endpoint". Create the apps you need at
-https://smartapi.angelone.in/ and give each key its own variable:
+**One key is enough.** An earlier version of this file claimed SmartAPI issues
+a separate, non-interchangeable key per app type. That was wrong, and it was
+wrong twice over: a single Trading API key was measured serving both
+``ltpData`` (live quotes) and ``getCandleData`` (historical candles)
+successfully. Set ``ANGEL_API_KEY`` and nothing else.
 
-    ANGEL_MARKET_KEY      "Market Feed" app  -> live quotes
-    ANGEL_HISTORICAL_KEY  "Historical Data" app -> candles
-    ANGEL_API_KEY         any app; used for login and as the fallback for both
+``AG8004 Invalid API Key`` is what misled us. It is not an entitlement error --
+it is returned transiently on a perfectly healthy key, typically under rate
+limiting, and once for a key that had simply been pasted a character short.
+Diagnose it by reading the actual response, never by assuming a missing app.
+
+    ANGEL_API_KEY         your app's API key -- used for everything
+    ANGEL_MARKET_KEY      optional override, only if you really do keep
+    ANGEL_HISTORICAL_KEY  separate apps; both default to ANGEL_API_KEY
 
     ANGEL_CLIENT_ID       your client code, e.g. A123456
     ANGEL_PIN             login PIN
@@ -98,6 +103,20 @@ def _load_dotenv() -> None:
     load_dotenv()
 
 
+def _why(resp) -> str:
+    """Render SmartAPI's own explanation of a refusal.
+
+    SmartAPI answers a rejected call with ``status: False`` plus an errorcode
+    and message rather than an exception, so a caller that only checks the
+    boolean throws away the one piece of information worth having.
+    """
+    if not isinstance(resp, dict):
+        return f"unexpected response: {str(resp)[:120]}"
+    code = resp.get("errorcode") or "?"
+    msg = resp.get("message") or "no message"
+    return f"{code} {msg}"
+
+
 class AngelError(RuntimeError):
     pass
 
@@ -115,6 +134,9 @@ class AngelFeed(Feed):
         self._sessions: dict[str, object] = {}
         self._scrips: pd.DataFrame | None = None
         self._entitled: dict[str, bool] = {}
+        # Why each probe failed, kept verbatim. Guessing at the cause is what
+        # produced two rounds of chasing app types that were never the problem.
+        self._probe_error: dict[str, str] = {}
 
     # ------------------------------------------------------------------ #
     # Sessions -- one per distinct API key
@@ -158,13 +180,20 @@ class AngelFeed(Feed):
         acting on are a quarter of an hour stale.
         """
         out: dict[str, bool] = {}
+        delay = pause
         for attempt in range(attempts):
+            self._probe_error.clear()      # keep only the final attempt's cause
             out = self._probe_once()
             if all(out.values()):
                 break
             if attempt < attempts - 1:
-                log.info("entitlement probe %s; retrying", out)
-                time.sleep(pause)
+                # Backs off rather than repeating at a fixed interval, because
+                # the usual cause is rate limiting and three probes two seconds
+                # apart is itself a burst.
+                log.info("probe %s (%s); retrying in %.0fs", out,
+                         self._probe_error or "no detail", delay)
+                time.sleep(delay)
+                delay *= 2
         self._entitled = out
         return out
 
@@ -174,8 +203,11 @@ class AngelFeed(Feed):
         try:
             r = self._session("market").ltpData(exch, tsym, token)
             out["market"] = bool(r and r.get("status"))
+            if not out["market"]:
+                self._probe_error["market"] = _why(r)
         except Exception as exc:
             log.debug("market probe failed: %s", exc)
+            self._probe_error["market"] = f"{type(exc).__name__}: {exc}"
             out["market"] = False
         try:
             end = datetime.now()
@@ -185,8 +217,11 @@ class AngelFeed(Feed):
                 "todate": end.strftime("%Y-%m-%d %H:%M"),
             })
             out["historical"] = bool(r and r.get("status"))
+            if not out["historical"]:
+                self._probe_error["historical"] = _why(r)
         except Exception as exc:
             log.debug("historical probe failed: %s", exc)
+            self._probe_error["historical"] = f"{type(exc).__name__}: {exc}"
             out["historical"] = False
         return out
 
@@ -209,11 +244,19 @@ class AngelFeed(Feed):
         ent = feed.check_entitlements()
         lacking = [c for c in require if not ent.get(c)]
         if lacking:
+            # Report what the API actually said. The previous message named a
+            # cause -- "these keys lack entitlement, go and create the matching
+            # app" -- that the evidence never supported, and acting on it meant
+            # hunting for app types that do not gate anything. A single key was
+            # measured serving both endpoints.
+            why = "; ".join(f"{c}: {feed._probe_error.get(c, 'no detail')}"
+                            for c in lacking)
             raise AngelError(
-                f"login works but these keys lack entitlement: {', '.join(lacking)}. "
-                f"Create the matching app at https://smartapi.angelone.in/ "
-                f"(Market Feed -> ANGEL_MARKET_KEY, Historical Data -> "
-                f"ANGEL_HISTORICAL_KEY) and add its key to .env."
+                f"login succeeded but {', '.join(lacking)} did not respond -- {why}. "
+                f"AG8004 here usually means rate limiting rather than a bad key, "
+                f"so retry before changing anything. Verify the key is complete "
+                f"(a truncated key produces the same error) and confirm it works "
+                f"at https://smartapi.angelone.in/."
             )
         return feed
 
