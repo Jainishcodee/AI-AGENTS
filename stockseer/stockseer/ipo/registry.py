@@ -224,10 +224,19 @@ def upcoming_issues(refresh: bool = False) -> list[IPO]:
     return [i for i in (_to_ipo(r) for r in rows) if i]
 
 
-def listing_today(when: date | None = None, refresh: bool = False) -> list[IPO]:
-    """IPOs listing on a given day -- the ones the watcher should arm for."""
+def listing_today(when: date | None = None, refresh: bool = False,
+                  include_sme: bool = False) -> list[IPO]:
+    """IPOs listing on a given day -- the ones the watcher should arm for.
+
+    Mainboard only by default, matching the calendar. SME listings are thinly
+    traded and often untradeable at the open, and the segment also carries
+    non-equity instruments: 2026-09-01 returned a debenture with an issue price
+    of Rs.100,000 alongside three real IPOs. Arming a price watcher on that
+    produces noise at best.
+    """
     when = when or date.today()
-    return [i for i in past_issues(refresh) if i.listing_day() == when]
+    return [i for i in past_issues(refresh)
+            if i.listing_day() == when and (include_sme or not i.is_sme)]
 
 
 def upcoming_listings(days: int = 14, refresh: bool = False) -> list[IPO]:

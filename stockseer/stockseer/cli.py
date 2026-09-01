@@ -757,15 +757,38 @@ def cmd_ipo(a: argparse.Namespace) -> int:
     if a.action == "autorun":
         # Entry point for Task Scheduler. Cheap and silent on the ~350 days a
         # year when nothing lists, so it can be armed daily and forgotten.
-        from datetime import datetime
+        from datetime import date, datetime
 
         from .ipo.calendar import notify_today
-        from .ipo.registry import listing_today
+        from .ipo.registry import NseUnavailable, listing_today
 
-        pushed = notify_today(refresh=True)
-        print(f" calendar: queued {len(pushed)} alert(s)")
+        # The calendar half is a courtesy here; the listing watch is the job.
+        # Letting a blocked NSE fetch propagate meant one refused request killed
+        # the watcher before it armed, on the single morning of the year it
+        # actually matters. The `calendar` action was hardened for exactly this
+        # and autorun was left exposed.
+        try:
+            pushed = notify_today(refresh=True)
+            print(f" calendar: queued {len(pushed)} alert(s)")
+        except NseUnavailable as exc:
+            print(f" calendar skipped -- NSE unreachable ({exc})")
 
-        today = listing_today()
+        try:
+            today = listing_today()
+        except NseUnavailable as exc:
+            # Without the registry there is no way to know what lists today, and
+            # silence would be indistinguishable from a quiet morning.
+            print(f" ERROR: cannot read the listing registry -- {exc}")
+            from .notify import hub
+
+            hub().alert(
+                kind="ipo_listing_soon", urgency="act",
+                title="Could not check today's listings",
+                body="StockSeer could not reach NSE, so it does not know "
+                     "whether an IPO lists today. Check your broker app.",
+                dedupe_key=f"nse_listing_unavailable:{date.today().isoformat()}",
+            )
+            return 3
         if not today:
             print(" nothing lists today; exiting.")
             return 0
