@@ -11,10 +11,22 @@ name: IPO listing watch
 
 on:
   schedule:
-    # 04:00 UTC = 09:30 IST. Deliberately half an hour before the listing:
-    # GitHub's scheduler can lag several minutes under load, and being early
-    # costs one idle job while being late costs the entry.
-    - cron: "0 4 * * 1-5"
+    # 03:17 UTC = 08:47 IST, about seventy minutes before the 10:00 listing.
+    #
+    # Two deliberate choices, both learned the hard way.
+    #
+    # NOT ON THE HOUR. `0 4` sat in the most congested slot GitHub has: almost
+    # everyone schedules at :00, and the schedule event is explicitly
+    # best-effort. The calendar job was moved to :07 and :37 and began arriving
+    # on time; this one stayed at :00 and kept landing around 14:00 -- hours
+    # after the listing it exists to watch. Same repository, same runner pool,
+    # different minute.
+    #
+    # EARLY ENOUGH TO ABSORB THE LAG. Being early costs idle polling. Being
+    # late costs the opening print, which cannot be recovered afterwards. The
+    # watcher exits by itself at session_end, so starting early does not bill
+    # through to the close.
+    - cron: "17 3 * * 1-5"
   workflow_dispatch:
     inputs:
       capital:
@@ -28,9 +40,17 @@ concurrency:
 jobs:
   watch:
     runs-on: ubuntu-latest
-    # Runs to roughly 12:15 IST. The study found the drift keeps building past
-    # 11:00, so there is no reason to stop at the popular exit time.
-    timeout-minutes: 160
+    # From an 08:47 start this reaches about 10:47 IST, covering the arm, the
+    # opening print and the first quarter-hour of trading -- which is the part
+    # that matters, since the measured edge is the allotment, not buying into a
+    # listing.
+    #
+    # 120 rather than 160 because the allowance is finite and silent when
+    # exhausted. A private repository gets 2,000 free Actions minutes a month;
+    # August 2026 had 12 mainboard listing days, which at 160 minutes would have
+    # been 1,920 minutes from this workflow alone. Running out does not fail a
+    # run, it stops scheduling entirely, with no error anywhere.
+    timeout-minutes: 120
     defaults:
       run:
         working-directory: stockseer
