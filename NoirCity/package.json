@@ -25,7 +25,9 @@
     "db:apply": "node scripts/supabase-apply.mjs",
     "db:check": "node scripts/supabase-check.mjs",
     "test:room": "node scripts/room-e2e.mjs",
-    "test:flicker": "node scripts/flicker-e2e.mjs"
+    "test:flicker": "node scripts/flicker-e2e.mjs",
+    "art:sheet": "node scripts/art-sheet.mjs",
+    "art:split": "node scripts/art-split.mjs"
   },
   "dependencies": {
     "@supabase/ssr": "^0.12.3",

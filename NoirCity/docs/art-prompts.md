@@ -13,6 +13,32 @@ The build greys it, maps it onto the game's duotone, and writes
 `public/art/<kind>/<id>.webp`. Every source ends up in the same look, which is
 what stops a mixed set from looking borrowed.
 
+## Ten at a time
+
+One generation instead of ten. `art:sheet` batches the next ten empty slots
+of a kind into a single contact-sheet prompt and writes down which slot
+belongs in which cell; `art:split` cuts the returned image back apart using
+that record.
+
+```bash
+npm run art:sheet -- scenes        # prints one prompt for 10 cells
+#   ... generate it, save the sheet ...
+npm run art:split -- sheet.png     # cuts it into art-raw/scenes/
+npm run art:build                  # grades them into the game
+```
+
+The grid is chosen to keep each cell at the slot's own aspect ratio and to
+make the whole sheet as square as possible — generators output roughly square
+canvases, so a 5×2 sheet of portraits uses pixels a 1×10 strip would waste.
+
+If the model draws gutters or borders between cells, pass `--gutter 8` or
+`--trim 4` and split again; nothing is lost by re-running it.
+
+**The honest trade:** ten cells share one canvas, so each is roughly a third
+the width it would be alone. For scenes and portraits that is fine after
+grading. For the three case covers — the largest image in the game, and the
+first thing anyone sees — generate those one at a time.
+
 ## The look
 
 Every prompt below is built from four fixed clauses. If you are generating by
@@ -85,7 +111,7 @@ The opening frame of a detective case titled "The Bell Does Not Lie". Alderman C
 *E. Crowe, Enquiries — The Bell Does Not Lie*
 
 ```
-E. Crowe, Enquiries, a office on 47 Cripplegate Lane in West Borough. Two rooms above a tobacconist. A wide interior, 16:9, empty of people - the room as somebody walking in would first see it. Lit by ONE practical light source visible in the frame, doing all the work. Everything beyond its reach falls to true black, not grey - most of the image is empty shadow, and that emptiness is the composition. Deep foreground darkness framing the shot. Locked-off camera at eye level, static and observational, symmetrical centred staging, deep space receding into shadow. Marrowgate 1984 - a city that never stopped looking Victorian. Gaslight beside sodium, wet cobbles, soot-blackened brick, ornate ironwork, heavy furniture, patterned wallpaper, fog off the river. A quiet occult undertone: this is a world where a seance is an ordinary evening's business. Monochrome, fine 35mm grain, high contrast, no text, no watermark, no border, no letterboxing.
+E. Crowe, Enquiries, an office on 47 Cripplegate Lane in West Borough. Two rooms above a tobacconist. A wide interior, 16:9, empty of people - the room as somebody walking in would first see it. Lit by ONE practical light source visible in the frame, doing all the work. Everything beyond its reach falls to true black, not grey - most of the image is empty shadow, and that emptiness is the composition. Deep foreground darkness framing the shot. Locked-off camera at eye level, static and observational, symmetrical centred staging, deep space receding into shadow. Marrowgate 1984 - a city that never stopped looking Victorian. Gaslight beside sodium, wet cobbles, soot-blackened brick, ornate ironwork, heavy furniture, patterned wallpaper, fog off the river. A quiet occult undertone: this is a world where a seance is an ordinary evening's business. Monochrome, fine 35mm grain, high contrast, no text, no watermark, no border, no letterboxing.
 ```
 
 ### `loc_np_the_rosewood_rooms`
@@ -93,7 +119,7 @@ E. Crowe, Enquiries, a office on 47 Cripplegate Lane in West Borough. Two rooms 
 *The Rosewood Rooms — The Quiet Room*
 
 ```
-The Rosewood Rooms, a apartment on 74 Threadneedle Circle in Ravensgate. 74 Threadneedle Circle. A wide interior, 16:9, empty of people - the room as somebody walking in would first see it. Lit by ONE practical light source visible in the frame, doing all the work. Everything beyond its reach falls to true black, not grey - most of the image is empty shadow, and that emptiness is the composition. Deep foreground darkness framing the shot. Locked-off camera at eye level, static and observational, symmetrical centred staging, deep space receding into shadow. Marrowgate 1984 - a city that never stopped looking Victorian. Gaslight beside sodium, wet cobbles, soot-blackened brick, ornate ironwork, heavy furniture, patterned wallpaper, fog off the river. A quiet occult undertone: this is a world where a seance is an ordinary evening's business. Monochrome, fine 35mm grain, high contrast, no text, no watermark, no border, no letterboxing.
+The Rosewood Rooms, an apartment on 74 Threadneedle Circle in Ravensgate. 74 Threadneedle Circle. A wide interior, 16:9, empty of people - the room as somebody walking in would first see it. Lit by ONE practical light source visible in the frame, doing all the work. Everything beyond its reach falls to true black, not grey - most of the image is empty shadow, and that emptiness is the composition. Deep foreground darkness framing the shot. Locked-off camera at eye level, static and observational, symmetrical centred staging, deep space receding into shadow. Marrowgate 1984 - a city that never stopped looking Victorian. Gaslight beside sodium, wet cobbles, soot-blackened brick, ornate ironwork, heavy furniture, patterned wallpaper, fog off the river. A quiet occult undertone: this is a world where a seance is an ordinary evening's business. Monochrome, fine 35mm grain, high contrast, no text, no watermark, no border, no letterboxing.
 ```
 
 ### `loc_np_petrakis_medical_clinic`
@@ -109,7 +135,7 @@ Petrakis Medical Clinic, a clinic on 34 Corvin Gardens in Harrowfield. Petrakis 
 *The Blue Dollar Apartments — The Quiet Room*
 
 ```
-The Blue Dollar Apartments, a apartment on 31 Houndsditch Row in Ravensgate. The Blue Dollar Apartments, where Ottoline Frayne actually lived — two doors from the seance she attended every Thursday. A wide interior, 16:9, empty of people - the room as somebody walking in would first see it. Lit by ONE practical light source visible in the frame, doing all the work. Everything beyond its reach falls to true black, not grey - most of the image is empty shadow, and that emptiness is the composition. Deep foreground darkness framing the shot. Locked-off camera at eye level, static and observational, symmetrical centred staging, deep space receding into shadow. Marrowgate 1984 - a city that never stopped looking Victorian. Gaslight beside sodium, wet cobbles, soot-blackened brick, ornate ironwork, heavy furniture, patterned wallpaper, fog off the river. A quiet occult undertone: this is a world where a seance is an ordinary evening's business. Monochrome, fine 35mm grain, high contrast, no text, no watermark, no border, no letterboxing.
+The Blue Dollar Apartments, an apartment on 31 Houndsditch Row in Ravensgate. The Blue Dollar Apartments, where Ottoline Frayne actually lived — two doors from the seance she attended every Thursday. A wide interior, 16:9, empty of people - the room as somebody walking in would first see it. Lit by ONE practical light source visible in the frame, doing all the work. Everything beyond its reach falls to true black, not grey - most of the image is empty shadow, and that emptiness is the composition. Deep foreground darkness framing the shot. Locked-off camera at eye level, static and observational, symmetrical centred staging, deep space receding into shadow. Marrowgate 1984 - a city that never stopped looking Victorian. Gaslight beside sodium, wet cobbles, soot-blackened brick, ornate ironwork, heavy furniture, patterned wallpaper, fog off the river. A quiet occult undertone: this is a world where a seance is an ordinary evening's business. Monochrome, fine 35mm grain, high contrast, no text, no watermark, no border, no letterboxing.
 ```
 
 ### `loc_np_marlowe_loan_pawn`
@@ -149,7 +175,7 @@ Quist Freight & Storage, a warehouse on 74 Wilshire Wharf in Saltney. Quist Frei
 *The Marrowgate Exchange — Harbor Lights*
 
 ```
-The Marrowgate Exchange, a office on 20 Cannon Street in West Borough. A trading floor that empties at three, and a basement of carbons going back forty years. A wide interior, 16:9, empty of people - the room as somebody walking in would first see it. Lit by ONE practical light source visible in the frame, doing all the work. Everything beyond its reach falls to true black, not grey - most of the image is empty shadow, and that emptiness is the composition. Deep foreground darkness framing the shot. Locked-off camera at eye level, static and observational, symmetrical centred staging, deep space receding into shadow. Marrowgate 1984 - a city that never stopped looking Victorian. Gaslight beside sodium, wet cobbles, soot-blackened brick, ornate ironwork, heavy furniture, patterned wallpaper, fog off the river. A quiet occult undertone: this is a world where a seance is an ordinary evening's business. Monochrome, fine 35mm grain, high contrast, no text, no watermark, no border, no letterboxing.
+The Marrowgate Exchange, an office on 20 Cannon Street in West Borough. A trading floor that empties at three, and a basement of carbons going back forty years. A wide interior, 16:9, empty of people - the room as somebody walking in would first see it. Lit by ONE practical light source visible in the frame, doing all the work. Everything beyond its reach falls to true black, not grey - most of the image is empty shadow, and that emptiness is the composition. Deep foreground darkness framing the shot. Locked-off camera at eye level, static and observational, symmetrical centred staging, deep space receding into shadow. Marrowgate 1984 - a city that never stopped looking Victorian. Gaslight beside sodium, wet cobbles, soot-blackened brick, ornate ironwork, heavy furniture, patterned wallpaper, fog off the river. A quiet occult undertone: this is a world where a seance is an ordinary evening's business. Monochrome, fine 35mm grain, high contrast, no text, no watermark, no border, no letterboxing.
 ```
 
 ### `loc_np_lucky_lion_wharf`
@@ -189,7 +215,7 @@ The Golden Marlin, a club on 77 Marrow Avenue in Vermilion. The strip's oldest r
 *The Ruby Wire Apartments — Harbor Lights*
 
 ```
-The Ruby Wire Apartments, a apartment on 52 Marathon Buildings in East Borough. The Ruby Wire Apartments. A wide interior, 16:9, empty of people - the room as somebody walking in would first see it. Lit by ONE practical light source visible in the frame, doing all the work. Everything beyond its reach falls to true black, not grey - most of the image is empty shadow, and that emptiness is the composition. Deep foreground darkness framing the shot. Locked-off camera at eye level, static and observational, symmetrical centred staging, deep space receding into shadow. Marrowgate 1984 - a city that never stopped looking Victorian. Gaslight beside sodium, wet cobbles, soot-blackened brick, ornate ironwork, heavy furniture, patterned wallpaper, fog off the river. A quiet occult undertone: this is a world where a seance is an ordinary evening's business. Monochrome, fine 35mm grain, high contrast, no text, no watermark, no border, no letterboxing.
+The Ruby Wire Apartments, an apartment on 52 Marathon Buildings in East Borough. The Ruby Wire Apartments. A wide interior, 16:9, empty of people - the room as somebody walking in would first see it. Lit by ONE practical light source visible in the frame, doing all the work. Everything beyond its reach falls to true black, not grey - most of the image is empty shadow, and that emptiness is the composition. Deep foreground darkness framing the shot. Locked-off camera at eye level, static and observational, symmetrical centred staging, deep space receding into shadow. Marrowgate 1984 - a city that never stopped looking Victorian. Gaslight beside sodium, wet cobbles, soot-blackened brick, ornate ironwork, heavy furniture, patterned wallpaper, fog off the river. A quiet occult undertone: this is a world where a seance is an ordinary evening's business. Monochrome, fine 35mm grain, high contrast, no text, no watermark, no border, no letterboxing.
 ```
 
 ### `loc_np_precinct_17`
@@ -221,7 +247,7 @@ The Ferry Steps, a pier on 54 Ashgrove Market in Bridge District. Worn hollow by
 *The Rookery — Harbor Lights*
 
 ```
-The Rookery, a apartment on 78 Poultry Row in East Borough. Nine buildings sharing four staircases and no clear ownership. A wide interior, 16:9, empty of people - the room as somebody walking in would first see it. Lit by ONE practical light source visible in the frame, doing all the work. Everything beyond its reach falls to true black, not grey - most of the image is empty shadow, and that emptiness is the composition. Deep foreground darkness framing the shot. Locked-off camera at eye level, static and observational, symmetrical centred staging, deep space receding into shadow. Marrowgate 1984 - a city that never stopped looking Victorian. Gaslight beside sodium, wet cobbles, soot-blackened brick, ornate ironwork, heavy furniture, patterned wallpaper, fog off the river. A quiet occult undertone: this is a world where a seance is an ordinary evening's business. Monochrome, fine 35mm grain, high contrast, no text, no watermark, no border, no letterboxing.
+The Rookery, an apartment on 78 Poultry Row in East Borough. Nine buildings sharing four staircases and no clear ownership. A wide interior, 16:9, empty of people - the room as somebody walking in would first see it. Lit by ONE practical light source visible in the frame, doing all the work. Everything beyond its reach falls to true black, not grey - most of the image is empty shadow, and that emptiness is the composition. Deep foreground darkness framing the shot. Locked-off camera at eye level, static and observational, symmetrical centred staging, deep space receding into shadow. Marrowgate 1984 - a city that never stopped looking Victorian. Gaslight beside sodium, wet cobbles, soot-blackened brick, ornate ironwork, heavy furniture, patterned wallpaper, fog off the river. A quiet occult undertone: this is a world where a seance is an ordinary evening's business. Monochrome, fine 35mm grain, high contrast, no text, no watermark, no border, no letterboxing.
 ```
 
 ### `loc_np_delgado_assembly_rooms`
@@ -253,7 +279,7 @@ Marrowgate City Hall, a hall on 86 Ossary Parade in Sovereign Borough. Granite s
 *The Grand Crown Apartments — The Bell Does Not Lie*
 
 ```
-The Grand Crown Apartments, a apartment on 86 Calder Parade in Sovereign Borough. The Grand Crown Apartments. A wide interior, 16:9, empty of people - the room as somebody walking in would first see it. Lit by ONE practical light source visible in the frame, doing all the work. Everything beyond its reach falls to true black, not grey - most of the image is empty shadow, and that emptiness is the composition. Deep foreground darkness framing the shot. Locked-off camera at eye level, static and observational, symmetrical centred staging, deep space receding into shadow. Marrowgate 1984 - a city that never stopped looking Victorian. Gaslight beside sodium, wet cobbles, soot-blackened brick, ornate ironwork, heavy furniture, patterned wallpaper, fog off the river. A quiet occult undertone: this is a world where a seance is an ordinary evening's business. Monochrome, fine 35mm grain, high contrast, no text, no watermark, no border, no letterboxing.
+The Grand Crown Apartments, an apartment on 86 Calder Parade in Sovereign Borough. The Grand Crown Apartments. A wide interior, 16:9, empty of people - the room as somebody walking in would first see it. Lit by ONE practical light source visible in the frame, doing all the work. Everything beyond its reach falls to true black, not grey - most of the image is empty shadow, and that emptiness is the composition. Deep foreground darkness framing the shot. Locked-off camera at eye level, static and observational, symmetrical centred staging, deep space receding into shadow. Marrowgate 1984 - a city that never stopped looking Victorian. Gaslight beside sodium, wet cobbles, soot-blackened brick, ornate ironwork, heavy furniture, patterned wallpaper, fog off the river. A quiet occult undertone: this is a world where a seance is an ordinary evening's business. Monochrome, fine 35mm grain, high contrast, no text, no watermark, no border, no letterboxing.
 ```
 
 ### `loc_np_voss_delgado_attorneys`
@@ -261,7 +287,7 @@ The Grand Crown Apartments, a apartment on 86 Calder Parade in Sovereign Borough
 *Voss & Delgado, Attorneys — The Bell Does Not Lie*
 
 ```
-Voss & Delgado, Attorneys, a office on 64 Nettlebed Avenue in Sovereign Borough. Voss & Delgado, Attorneys. A wide interior, 16:9, empty of people - the room as somebody walking in would first see it. Lit by ONE practical light source visible in the frame, doing all the work. Everything beyond its reach falls to true black, not grey - most of the image is empty shadow, and that emptiness is the composition. Deep foreground darkness framing the shot. Locked-off camera at eye level, static and observational, symmetrical centred staging, deep space receding into shadow. Marrowgate 1984 - a city that never stopped looking Victorian. Gaslight beside sodium, wet cobbles, soot-blackened brick, ornate ironwork, heavy furniture, patterned wallpaper, fog off the river. A quiet occult undertone: this is a world where a seance is an ordinary evening's business. Monochrome, fine 35mm grain, high contrast, no text, no watermark, no border, no letterboxing.
+Voss & Delgado, Attorneys, an office on 64 Nettlebed Avenue in Sovereign Borough. Voss & Delgado, Attorneys. A wide interior, 16:9, empty of people - the room as somebody walking in would first see it. Lit by ONE practical light source visible in the frame, doing all the work. Everything beyond its reach falls to true black, not grey - most of the image is empty shadow, and that emptiness is the composition. Deep foreground darkness framing the shot. Locked-off camera at eye level, static and observational, symmetrical centred staging, deep space receding into shadow. Marrowgate 1984 - a city that never stopped looking Victorian. Gaslight beside sodium, wet cobbles, soot-blackened brick, ornate ironwork, heavy furniture, patterned wallpaper, fog off the river. A quiet occult undertone: this is a world where a seance is an ordinary evening's business. Monochrome, fine 35mm grain, high contrast, no text, no watermark, no border, no letterboxing.
 ```
 
 ### `loc_np_chapel_of_the_crimson_sparrow`
