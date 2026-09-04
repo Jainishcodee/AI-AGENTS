@@ -26,7 +26,21 @@ on:
     # late costs the opening print, which cannot be recovered afterwards. The
     # watcher exits by itself at session_end, so starting early does not bill
     # through to the close.
-    - cron: "17 3 * * 1-5"
+    #
+    # FIVE DRAWS, NOT ONE. Moving off the hour was not enough on its own: a run
+    # scheduled for 08:47 IST started at 14:20, five and a half hours late,
+    # long after the listing. The calendar job is not immune to that either --
+    # it survives because it has five chances a day and only needs one to land
+    # early. This had exactly one, so a single bad draw lost the whole morning.
+    #
+    # `cancel-in-progress: false` bounds the cost: GitHub keeps at most one run
+    # going plus one pending, and cancels older pending runs, so extra crons buy
+    # attempts rather than parallel jobs.
+    - cron: "47 1 * * 1-5"    # 07:17 IST
+    - cron: "17 2 * * 1-5"    # 07:47 IST
+    - cron: "47 2 * * 1-5"    # 08:17 IST
+    - cron: "17 3 * * 1-5"    # 08:47 IST
+    - cron: "47 3 * * 1-5"    # 09:17 IST — last useful draw before the open
   workflow_dispatch:
     inputs:
       capital:
@@ -93,7 +107,29 @@ jobs:
 
       - name: Install the market feed
         if: steps.check.outputs.count != '0'
-        run: pip install --quiet pandas numpy smartapi-python pyotp logzero
+        # websocket-client is NOT optional, despite smartapi-python not asking
+        # for it. Version 1.5.5 declares only requests, six and python-dateutil,
+        # then imports `websocket` at runtime -- an undeclared dependency, i.e. a
+        # packaging bug upstream. A developer machine hides it, because almost
+        # anything else pulls websocket-client in; a clean runner does not.
+        #
+        # The cost of the omission was total and silent. Every Angel call raised
+        # ModuleNotFoundError, the feed fell back to Yahoo, and the watcher spent
+        # listing morning acting on FIFTEEN-MINUTE-DELAYED prices. On the one
+        # instrument where the first fifteen minutes are the entire event, that
+        # is not degraded data, it is the wrong data.
+        run: |
+          pip install --quiet pandas numpy smartapi-python pyotp logzero \
+                              websocket-client
+          python - <<'PY'
+          # Fail loudly here rather than degrading to delayed prices later.
+          import importlib, sys
+          missing = [m for m in ("websocket", "pyotp", "SmartApi", "pandas")
+                     if not importlib.util.find_spec(m)]
+          if missing:
+              sys.exit(f"::error::market feed incomplete, missing: {missing}")
+          print("market feed dependencies present")
+          PY
 
       - name: Watch the listing
         if: steps.check.outputs.count != '0'

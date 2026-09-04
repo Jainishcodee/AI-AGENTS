@@ -23,7 +23,7 @@ from __future__ import annotations
 import logging
 import time as _time
 from dataclasses import dataclass, field
-from datetime import date, datetime, time
+from datetime import date, datetime, time, timedelta
 
 from ..notify import hub
 from .registry import IPO, listing_today
@@ -48,6 +48,8 @@ class WatchConfig:
     poll_seconds: int = 10          # live tracking cadence once a position is on
     idle_poll_seconds: int = 20     # before entry
     session_end: time = time(15, 15)
+    listing_time: time = time(10, 0)   # when a mainboard IPO starts trading
+    late_grace_minutes: int = 15       # past this, the open has been and gone
 
 
 @dataclass
@@ -117,14 +119,24 @@ class ListingWatcher:
         return self._regime_cache
 
     # ------------------------------------------------------------ 1. arm
-    def arm(self) -> None:
+    def arm(self, late: bool = False) -> None:
         i = self.ipo
+        # Saying "lists shortly" at 14:20 is worse than saying nothing: it reads
+        # as "you still have time" for an event that finished hours earlier.
+        if late:
+            title = f"{i.symbol} already listed - watch started late"
+            body = (f"{i.company}\nIssue price Rs.{i.issue_price}\n"
+                    f"The open was missed, so there is no entry signal coming. "
+                    f"If you hold an allotment, check the price yourself and "
+                    f"decide on exit.\n\n{BASE_RATE}")
+        else:
+            title = f"{i.symbol} lists shortly"
+            body = (f"{i.company}\nIssue price Rs.{i.issue_price}\n"
+                    f"Watching for the opening print. Keep Jarvis open for live "
+                    f"tracking.\n\n{BASE_RATE}")
         self._hub.alert(
             kind="ipo_listing_soon", urgency="act",
-            title=f"{i.symbol} lists shortly",
-            body=(f"{i.company}\nIssue price Rs.{i.issue_price}\n"
-                  f"Watching for the opening print. Keep Jarvis open for live "
-                  f"tracking.\n\n{BASE_RATE}"),
+            title=title, body=body,
             symbol=i.symbol, dedupe_key=self._key("arm"),
             issue_price=i.issue_price,
             regime=self._regime(),
@@ -335,8 +347,37 @@ def run(symbols: list[str] | None = None, feed=None, config: WatchConfig | None 
     print(f" feed {feed.describe()} | capital Rs.{cfg.capital:,.0f}")
     print(f" target +{cfg.target_pct * 100:.1f}%  stop -{cfg.stop_pct * 100:.1f}%  "
           f"warn {cfg.near_pct * 100:.1f}% early\n")
+
+    # Two conditions that make the whole session worthless, and both used to
+    # pass in silence. A run that begins after the open still announced "lists
+    # shortly" and a run on delayed prices looked identical to a live one.
+    now = datetime.now()
+    deadline = (datetime.combine(now.date(), cfg.listing_time)
+                + timedelta(minutes=cfg.late_grace_minutes))
+    late = now > deadline
+    delayed = getattr(feed, "delayed_seconds", 0) > 60
+
+    if late or delayed:
+        problems = []
+        if late:
+            problems.append(
+                f"This watcher started at {now:%H:%M}, after the "
+                f"{cfg.listing_time:%H:%M} open. The opening print and the "
+                f"first minutes of trading were missed.")
+        if delayed:
+            problems.append(
+                f"Prices come from {feed.describe()}, not a live feed. "
+                f"Do not trade the numbers in these alerts.")
+        hub().alert(
+            kind="ipo_listing_soon", urgency="act",
+            title=f"Listing watch degraded: {', '.join(w.ipo.symbol for w in watchers)}",
+            body="\n\n".join(problems) + "\n\nCheck your broker directly.",
+            dedupe_key=f"watch_degraded:{now.date().isoformat()}",
+        )
+        print(f" WARNING: degraded session -- {' '.join(problems)}\n")
+
     for w in watchers:
-        w.arm()
+        w.arm(late=late)
 
     while True:
         now = datetime.now()
