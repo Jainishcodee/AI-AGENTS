@@ -123,9 +123,15 @@ jobs:
                               websocket-client
           python - <<'PY'
           # Fail loudly here rather than degrading to delayed prices later.
-          import importlib, sys
+          #
+          # `import importlib` alone does not bind importlib.util -- it is a
+          # submodule and needs importing by name, or find_spec raises
+          # AttributeError and this guard fails instead of the thing it guards.
+          import importlib.util
+          import sys
+
           missing = [m for m in ("websocket", "pyotp", "SmartApi", "pandas")
-                     if not importlib.util.find_spec(m)]
+                     if importlib.util.find_spec(m) is None]
           if missing:
               sys.exit(f"::error::market feed incomplete, missing: {missing}")
           print("market feed dependencies present")

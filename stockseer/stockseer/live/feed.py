@@ -137,17 +137,28 @@ def _normalise(raw: pd.DataFrame) -> pd.DataFrame:
     return df[df["Close"].notna() & (df["Close"] > 0)]
 
 
-def get_feed(prefer: str = "auto") -> Feed:
+def get_feed(prefer: str = "auto",
+             require: tuple[str, ...] = ("market",)) -> Feed:
     """Return the best available feed.
 
     ``auto`` uses Angel One when credentials are present and falls back to Yahoo
     otherwise -- loudly, so a delayed feed is never mistaken for a live one.
+
+    Only ``market`` is required by default, and that default matters. This used
+    to demand ``market`` and ``historical`` together, so a rate-limited probe of
+    the candles endpoint -- which live quoting never touches -- discarded a
+    perfectly good real-time session and dropped the listing watcher onto
+    fifteen minute delayed prices. Observed on 2026-09-04: the market probe
+    succeeded, historical returned "Access denied because of exceeding access
+    rate", and the whole feed was thrown away over it.
+
+    Callers that genuinely need candles ask for them explicitly.
     """
     if prefer in ("auto", "angel"):
         try:
             from .angel import AngelFeed
 
-            feed = AngelFeed.from_env()
+            feed = AngelFeed.from_env(require=require)
             log.info("using %s", feed.describe())
             return feed
         except Exception as exc:
