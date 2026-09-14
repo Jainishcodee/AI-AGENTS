@@ -28,11 +28,25 @@ name: IPO calendar
 
 on:
   schedule:
+    # All five draws land before 11:00, an hourly ladder rather than one spread
+    # across the whole day.
+    #
+    # The earlier spacing reached 15:37, which looked like extra safety and was
+    # the opposite. GitHub's schedule event is best effort and a 5h33m delay has
+    # already been measured on the sibling listing job; applied to a 15:37 draw
+    # that delivers at 20:37, an alert about an application window that shut at
+    # five. A late alert on a deadline is worse than none, because it reads as
+    # "there is still time".
+    #
+    # Every slot below keeps at least six hours of margin to the 5 PM UPI
+    # cut-off even under that worst observed delay. Spacing them an hour apart
+    # rather than clustering keeps the draws independent, so one congested
+    # window cannot swallow all five.
+    - cron: "7 1 * * *"     # 06:37 IST
     - cron: "7 2 * * *"     # 07:37 IST
+    - cron: "7 3 * * *"     # 08:37 IST
     - cron: "7 4 * * *"     # 09:37 IST
-    - cron: "7 6 * * *"     # 11:37 IST
-    - cron: "7 8 * * *"     # 13:37 IST
-    - cron: "7 10 * * *"    # 15:37 IST — last chance before the 5 PM cut-off
+    - cron: "7 5 * * *"     # 10:37 IST — latest draw that still clears the deadline
   workflow_dispatch:        # lets you run it by hand from the Actions tab
 
 concurrency:

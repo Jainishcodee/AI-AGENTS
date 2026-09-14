@@ -13,6 +13,7 @@
 import { mkdirSync, writeFileSync, readdirSync, existsSync } from "node:fs";
 import { join } from "node:path";
 import { KIND_ASPECT, CLAUSES, unfilled } from "./lib/slots.mjs";
+import { copyToClipboard } from "./lib/clipboard.mjs";
 
 const SHEETS = join("art-raw", ".sheets");
 const BATCH = 10;
@@ -136,20 +137,27 @@ const promptFile = join(SHEETS, `${name}.txt`);
 writeFileSync(promptFile, `${prompt}\n`);
 
 const left = unfilled(kind).length - picked.length;
+const copied = copyToClipboard(prompt);
 
 console.log(`\n  sheet ${name} - ${cols} x ${rows}, ${picked.length} cells\n`);
 picked.forEach((s, i) => console.log(`   ${String(i + 1).padStart(2)}. ${s.label}`));
 
 console.log(`
-  THE PROMPT IS THIS WHOLE FILE - copy all of it, top to bottom:
+  ${
+    copied
+      ? "The prompt is ON YOUR CLIPBOARD. Just paste it."
+      : `The prompt is in this file - copy all of it:\n     ${promptFile}`
+  }
 
-     ${promptFile}
+  NEXT, BY HAND:
+    1. Paste it into an image generator (Midjourney, Gemini, Flux...).
+    2. Download the image it gives you back.
 
-  Then save the image anywhere and run:
-
-     npm run art:split -- <image>
-     npm run art:build
+  THEN, HERE:
+    npm run art:split -- "path/to/that/image.png"
+    npm run art:build
 `);
+if (copied) console.log(`  (also saved to ${promptFile})\n`);
 
 console.log(
   left > 0
