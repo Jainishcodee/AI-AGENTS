@@ -63,7 +63,7 @@ from ..schemas.council import (
     RevisionDraft,
     Synthesis,
 )
-from ..schemas.common import ModuleId
+from ..schemas.common import ModuleId, Usage
 from ..schemas.events import Event, ev
 from .live import LiveRegistry, LiveRun
 from ..schemas.program import AgentProgram
@@ -701,7 +701,7 @@ class Council:
         # built against a context that no longer exists.
         if checkpoint.context is None:
             await emit(ev("stage_started", phase="intake", label="Reading the question"))
-            checkpoint.context = await self._intake(request, emit)
+            checkpoint.context = await self._intake(request, emit, checkpoint.intake_usage)
             checkpoint.phase = "reason"
             await self._checkpoint(checkpoint, live)
         context = checkpoint.context
@@ -730,6 +730,10 @@ class Council:
             context=context,
             program_versions={m: programs[m].version for m in preset.participants},
         )
+        # Intake is charged here rather than where it happens: it runs before this object
+        # exists, and is skipped entirely on resume, so the checkpoint is the only place that
+        # still remembers it.
+        deliberation.usage.merge(checkpoint.intake_usage)
 
         # ---- stage 1: independent reasoning ---------------------------------
         running = [m for m in preset.running if m in programs]
@@ -940,7 +944,17 @@ class Council:
 
     # ---------------------------------------------------------------- stage 0 --
 
-    async def _intake(self, request: DeliberationRequest, emit: Emit) -> DecisionContext:
+    async def _intake(
+        self, request: DeliberationRequest, emit: Emit, usage: Usage | None = None
+    ) -> DecisionContext:
+        """Normalise the raw question into a `DecisionContext`.
+
+        `usage` is threaded in because this call was previously charged to nobody:
+        every other call in the pipeline adds to `deliberation.usage`, but intake runs
+        before that object exists, so its cost silently vanished. Every reported figure
+        — the CLI total, the checkpoint's 'calls already spent', the Decision Card —
+        was one call light on every deliberation.
+        """
         prompt = renderer.render(
             "intake.jinja", question=request.question, notes=request.context_notes
         )
@@ -956,6 +970,12 @@ class Council:
                     tag="intake",
                 ),
             )
+            if usage is not None:
+                usage.add(
+                    model=response.route,
+                    input_tokens=response.input_tokens,
+                    output_tokens=response.output_tokens,
+                )
             result = IntakeResult.model_validate(extract_json(response.text))
         except (ProviderError, ValidationError, ValueError) as exc:
             # A failed intake must not kill the deliberation: the modules can work

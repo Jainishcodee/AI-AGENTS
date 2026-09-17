@@ -115,6 +115,12 @@ class Settings(BaseSettings):
         validation_alias="COUNCIL_CORS_ORIGINS",
     )
     log_level: str = Field(default="INFO", validation_alias="COUNCIL_LOG_LEVEL")
+    token: str | None = Field(default=None, validation_alias="COUNCIL_TOKEN")
+    """Shared secret for the HTTP API. Unset means the gate is inert (see api/auth.py).
+
+    Opt-in because localhost needs no protection and a control people routinely switch
+    off is worse than an honest absence of one. Set it before exposing the API to a phone
+    or a tunnel — every route reads or writes the decision corpus."""
     store: Literal["memory", "file", "sqlite"] = Field(
         default="sqlite", validation_alias="COUNCIL_STORE"
     )

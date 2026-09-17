@@ -18,6 +18,7 @@ import 'services/fake_call_service.dart';
 import 'services/health_db.dart';
 import 'services/jain_calendar.dart';
 import 'services/jarvis_brain.dart';
+import 'services/council_service.dart';
 import 'services/reminder_service.dart';
 import 'services/stock_alert_service.dart';
 import 'services/training_plan.dart';
@@ -36,6 +37,9 @@ final trainingPlan = TrainingPlan();
 // One instance app-wide: reminders and the daily digest share a notification
 // channel setup, so permission is only ever requested once.
 final reminders = ReminderService();
+
+/// Cognitive OS on the PC: due decisions and the three questions that close one.
+final council = CouncilService(reminders);
 final digest = DigestSettings(reminders);
 final fakeCall = FakeCallService(reminders);
 final stockAlerts = StockAlertService(reminders);
@@ -144,7 +148,7 @@ class _RootShellState extends State<RootShell> {
         index: _tab,
         children: [
           const JarvisHome(),
-          SafeArea(child: TodayScreen(deck: deckDb, digest: digest)),
+          SafeArea(child: TodayScreen(deck: deckDb, digest: digest, council: council)),
           SafeArea(
             child: HealthScreen(
               db: healthDb,

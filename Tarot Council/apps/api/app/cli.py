@@ -90,6 +90,8 @@ COMMANDS = (
     "projects",
     "replay",
     "divergence",
+    "doctor",
+    "export",
     "modules",
     "calendar",
     "checkin",
@@ -138,6 +140,12 @@ def build_parser() -> argparse.ArgumentParser:
         "--preset", default=None, help="full | strategy | people | execution | life | solo:<module>"
     )
     ask.add_argument("--depth", choices=("quick", "standard", "deep"), default=None)
+    ask.add_argument(
+        "--dry-run",
+        action="store_true",
+        dest="dry_run",
+        help="Print what it would cost and stop, without spending anything.",
+    )
     ask.add_argument("--notes", default="", help="Extra context: constraints, actors, values.")
     ask.add_argument(
         "--project",
@@ -222,6 +230,23 @@ def build_parser() -> argparse.ArgumentParser:
 
     sub.add_parser(
         "checkin", help="Walk every due card and record what actually happened."
+    )
+
+    sub.add_parser(
+        "doctor", help="Say what is wrong: key, store, routing, corpus. Costs nothing."
+    )
+
+    export_cmd = sub.add_parser(
+        "export", help="Write the whole corpus to one portable JSON file."
+    )
+    export_cmd.add_argument(
+        "--out",
+        default=None,
+        metavar="FILE",
+        help="Where to write it. Defaults to var/cognitive-os-export-<date>.json",
+    )
+    export_cmd.add_argument(
+        "--no-modules", action="store_true", help="Leave authored modules out."
     )
 
     catalog_cmd = sub.add_parser(
@@ -425,6 +450,8 @@ async def _run(args: argparse.Namespace) -> int:
             "migrate": _cmd_migrate,
             "projects": _cmd_projects,
             "modules": _cmd_modules,
+            "doctor": _cmd_doctor,
+            "export": _cmd_export,
             "calendar": _cmd_calendar,
             "checkin": _cmd_checkin,
             "replay": _cmd_replay,
@@ -798,6 +825,80 @@ def _ask(prompt: str) -> str:
     except (EOFError, KeyboardInterrupt):
         print()
         return ""
+
+
+async def _cmd_doctor(council: Council, args: argparse.Namespace) -> int:
+    """Say what is wrong, before it costs anything to find out.
+
+    Exits non-zero only on `fail`. A warning is information, not a fault — an empty corpus
+    and a missing optional dependency are both normal states, and exiting 1 on those would
+    make the command useless in a script.
+    """
+    from . import diagnostics
+
+    report = await diagnostics.run(get_settings(), council.store)
+
+    if args.json:
+        print(
+            json.dumps(
+                {
+                    "healthy": report.healthy,
+                    "summary": report.summary(),
+                    "checks": [
+                        {"name": c.name, "status": c.status, "detail": c.detail, "fix": c.fix}
+                        for c in report.checks
+                    ],
+                },
+                indent=2,
+            )
+        )
+        return 0 if report.healthy else 1
+
+    mark = {"ok": GLYPH["ok"], "warn": GLYPH["bad"], "fail": GLYPH["gone"]}
+    print()
+    print(_c("checkup", BOLD))
+    for check in report.checks:
+        print(f"  {mark[check.status]} {_c(check.name.ljust(16), BOLD)} {check.detail}")
+        if check.fix and check.status != "ok":
+            print(_c(_wrap(check.fix, indent="      "), DIM))
+    print()
+    print(_c(_wrap(report.summary()), BOLD if report.healthy else DIM))
+    return 0 if report.healthy else 1
+
+
+async def _cmd_export(council: Council, args: argparse.Namespace) -> int:
+    """Write the corpus somewhere you can read without this code."""
+    from datetime import date as _date
+
+    from . import export as export_mod
+
+    target = (
+        Path(args.out)
+        if args.out
+        else Path(get_settings().store_dir) / f"cognitive-os-export-{_date.today()}.json"
+    )
+    bundle = await export_mod.write(
+        council.store, target, modules=not args.no_modules
+    )
+
+    if args.json:
+        print(json.dumps({"path": str(target), "counts": bundle.counts}, indent=2))
+        return 0
+
+    print()
+    print(_c(f"exported to {target}", BOLD))
+    print(_wrap(bundle.describe(), indent="  "))
+    if not bundle.counts["cards"]:
+        print(
+            _c(
+                _wrap(
+                    "The corpus is empty, so this file is a schema rather than a backup. "
+                    "It becomes worth keeping once decisions are recorded and resolved."
+                ),
+                DIM,
+            )
+        )
+    return 0
 
 
 async def _cmd_projects(council: Council, args: argparse.Namespace) -> int:
@@ -1265,6 +1366,17 @@ async def _cmd_ask(council: Council, args: argparse.Namespace) -> int:
         project_id=args.project_id,
     )
 
+    # What this will cost, before it is spent. On a metered free tier the wall-clock
+    # figure is the one that decides whether you press go, and until now it was only
+    # knowable afterwards.
+    estimate = await _estimate_for(council, request)
+    if estimate is not None and not args.json:
+        print(_c(_wrap(estimate.describe()), DIM), file=sys.stderr)
+    if getattr(args, "dry_run", False):
+        if args.json and estimate is not None:
+            print(json.dumps({"calls": estimate.total, "seconds": round(estimate.seconds)}, indent=2))
+        return 0
+
     result: Deliberation | None = None
     card_id: str | None = None
     async for event in council.deliberate(request):
@@ -1550,6 +1662,34 @@ async def _seed_modules(council: Council, settings) -> None:
                 await close()
             except Exception as exc:  # noqa: BLE001
                 log.debug("could not close the seed store: %s", exc)
+
+
+
+async def _estimate_for(council: Council, request: DeliberationRequest):
+    """Cost of this exact request, or `None` if it cannot be worked out.
+
+    Never raises: a bad preset should fail in the orchestrator with its own message, not
+    here in a convenience line printed before the real work starts.
+    """
+    from .council.orchestrator import CRITIQUE_ROUNDS
+    from .engine.planner import deliberation_estimate
+    from .programs import catalog
+
+    try:
+        settings = get_settings()
+        modules = await council.store.list_modules()
+        depth = request.depth or settings.default_depth
+        preset = catalog.preset(request.preset or settings.default_preset, modules)
+        return deliberation_estimate(
+            catalog.programs(modules),
+            preset,
+            depth,
+            rounds=CRITIQUE_ROUNDS.get(depth, 1),
+            rpm=settings.max_rpm,
+        )
+    except Exception as exc:  # noqa: BLE001 - a preview must never block the run
+        log.debug("could not estimate cost: %s", exc)
+        return None
 
 
 async def _catalog_programs(council: Council) -> dict:

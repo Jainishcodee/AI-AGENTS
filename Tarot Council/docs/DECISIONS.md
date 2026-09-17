@@ -1103,3 +1103,83 @@ still when the content changed — the author may bump further, but not not-bump
 a module actually arrives from someone untrusted, and theatre before that. And no sharing of
 presets or whole councils yet: a preset is four lines of YAML, which is not where the risk or
 the value is.
+
+---
+
+## ADR-033 — The API gets a shared secret, opt-in, and nothing more
+
+**Decision.** `COUNCIL_TOKEN` enables an `X-Council-Token` check on every route except
+`/health`. Unset, the gate is inert and localhost keeps working with no configuration.
+
+**Why now.** There were 36 routes and no authentication of any kind. That was defensible
+while the only client was a browser on the same machine, and stopped being defensible the
+moment a phone reached it over a tunnel — every route reads or writes the decision corpus,
+which is the most personal thing this project holds: what you were deciding, what you
+feared, what you were avoiding, and what you were told to do about it.
+
+**Opt-in, not opt-out.** Requiring a token by default would mean the first thing anybody
+does on localhost is turn it off, and a security control people routinely disable is worse
+than an honest absence of one — it teaches the habit of disabling it. Off by default and
+loudly documented at the point of exposure is the honest arrangement for single-user
+software.
+
+**`/health` stays open** on purpose. A phone needs to answer "is the PC awake?" before it
+has any business asking for decisions, and the answer leaks nothing. Keeping it open also
+makes "wrong secret" and "machine asleep" distinguishable at the client, instead of
+collapsing into one generic failure that sends you to the wrong fix.
+
+**Given up.** No users, no OAuth, no JWTs, no rotation. There is one person and one device;
+a shared secret in a header is the entire threat model, and anything more would be
+machinery guarding a single-tenant SQLite file. The comparison is constant-time, which is
+cheap to do and embarrassing to explain having skipped.
+
+---
+
+## ADR-034 — The phone gets the check-in loop, not the council
+
+**Decision.** Jarvis surfaces due decisions and resolves them. It does **not** deliberate.
+`CouncilService` polls `/cards?status=due`, schedules a local alarm from each open card's
+`check_on`, and `CouncilCheckinSheet` asks the same three questions as `app.cli checkin`
+and posts the resolution.
+
+**Why not "ask the council from your phone".** That is the feature people expect and it is
+the wrong one. A `standard` full-council run is ~40 calls paced at 5 requests a minute —
+eight minutes of watching a phone screen, on a device that will sleep halfway through. The
+cost preview built alongside this makes the number concrete rather than a guess. Asking is
+a desk activity, the web client already does it well, and a phone port would be a worse
+copy of a thing that works.
+
+**What the phone is uniquely good at is the half that was never happening at all.**
+Phase 6's funnel analysis found the loop breaking in exactly two places: *you remember this
+exists*, and *you record what happened*. Both were assumed away by every existing surface —
+the CLI nudge only printed if you had already run a command, the web badge only showed if
+you had already opened the app. Both require you to be there already, which is precisely
+the assumption that fails sixty days after a decision. Until a card is resolved the council
+learns nothing: calibration, priors and replay are all downstream of it, and the corpus
+holds zero resolved decisions.
+
+So the integration is narrow on purpose. It does the one thing that closes the loop.
+
+**Local alarms, not push.** Scheduled on the phone from `check_on` the moment a card is
+seen, so they fire with Jarvis closed, the phone locked and the PC switched off. That
+matters more here than anywhere else in the app, because the gap between deciding and
+reviewing is measured in months — the exact conditions under which a server-push path is
+least likely to still be working. Same reasoning as ADR-031 choosing the calendar, and the
+same reasoning that made StockSeer schedule IPO-deadline alerts locally while polling only
+for live prices.
+
+**Scheduled once per card**, remembered in prefs, because the notification plugin will
+happily stack duplicates and a decision you are reminded about four times is one you start
+ignoring. The alarm fires late morning rather than at midnight: a reminder that arrives
+while you are asleep is read at a moment when you cannot act on it, and then dismissed.
+
+**The banner appears only when something is due.** A permanent "Decisions" card sitting
+empty most days would train you to stop seeing it — which is how the check-in step failed
+in the first place. Decision reviews are a handful a year; the surface should be absent
+until it is not.
+
+**Given up.** No offline queue: resolving needs the PC awake, because grading calls six
+modules. A queued resolution that syncs later would be nicer and is not worth the
+correctness risk of a half-saved card — the server already refuses to grade an empty
+outcome for the same reason.
+

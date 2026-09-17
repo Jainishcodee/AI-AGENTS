@@ -188,3 +188,38 @@ def test_editing_a_module_keeps_it_in_play(client):
     edited = client.put("/catalog/historian", json=body(summary="A sharper summary."))
     assert edited.status_code == 200, edited.text
     assert edited.json()["status"] == "active", "an edit silently took the module out of play"
+
+
+# ───────────────────────────────────────────────────────── the token gate ──
+
+
+def _gated_app(token: str | None):
+    from app.api.auth import TokenMiddleware
+
+    settings = Settings(COUNCIL_STORE="memory", COUNCIL_LOG_LEVEL="ERROR")
+    app = FastAPI()
+    app.include_router(router)
+    app.add_middleware(TokenMiddleware, token=token)
+    app.state.council = Council(settings, store=InMemoryStore(), force_provider="mock")
+    return TestClient(app)
+
+
+def test_without_a_configured_token_everything_stays_open():
+    """Opt-in: localhost needs no protection, and a control people switch off is worse
+    than an honest absence of one."""
+    client = _gated_app(None)
+    assert client.get("/cards").status_code == 200
+
+
+def test_with_a_token_the_corpus_is_gated():
+    from app.api.auth import HEADER
+
+    client = _gated_app("s3cret")
+    assert client.get("/cards").status_code == 401
+    assert client.get("/cards", headers={HEADER: "wrong"}).status_code == 401
+    assert client.get("/cards", headers={HEADER: "s3cret"}).status_code == 200
+
+
+def test_health_stays_open_so_a_phone_can_ask_whether_the_pc_is_up():
+    """It leaks nothing, and a client needs it before it has business asking for more."""
+    assert _gated_app("s3cret").get("/health").status_code == 200

@@ -4,9 +4,11 @@ import 'package:url_launcher/url_launcher.dart';
 import '../models/reel_card.dart';
 import '../services/deck_db.dart';
 import '../services/digest_settings.dart';
+import '../services/council_service.dart';
 import '../services/nudge_service.dart';
 import '../widgets/pirate_bits.dart';
 import '../widgets/wanted_poster.dart';
+import 'council_checkin_sheet.dart';
 import 'nudge_sheet.dart';
 
 /// The day's quest log.
@@ -15,9 +17,18 @@ import 'nudge_sheet.dart';
 /// short-term job, held steady until tomorrow — dressed as a bounty board so
 /// the list reads like something worth doing rather than a chore sheet.
 class TodayScreen extends StatefulWidget {
-  const TodayScreen({super.key, required this.deck, this.digest});
+  const TodayScreen({
+    super.key,
+    required this.deck,
+    this.digest,
+    this.council,
+  });
   final DeckDb deck;
   final DigestSettings? digest;
+
+  /// Decisions waiting on a verdict, from Cognitive OS on the PC. Optional: the
+  /// board is fully usable with the council unreachable or not set up at all.
+  final CouncilService? council;
 
   @override
   State<TodayScreen> createState() => _TodayScreenState();
@@ -38,6 +49,28 @@ class _TodayScreenState extends State<TodayScreen> {
   void initState() {
     super.initState();
     _load();
+    _startCouncil();
+  }
+
+  @override
+  void dispose() {
+    widget.council
+      ?..onChanged = null
+      ..stop();
+    super.dispose();
+  }
+
+  /// The council is a nice-to-have on this screen, so every failure here is
+  /// swallowed: the PC being asleep is the normal overnight state, not an error
+  /// worth pushing into the user's quest board.
+  Future<void> _startCouncil() async {
+    final council = widget.council;
+    if (council == null) return;
+    await council.load();
+    council.onChanged = () {
+      if (mounted) setState(() {});
+    };
+    council.start();
   }
 
   Future<void> _load() async {
@@ -55,6 +88,65 @@ class _TodayScreenState extends State<TodayScreen> {
       _habits.addAll(fetched);
       _loading = false;
     });
+  }
+
+  /// One row, and only when something is actually due.
+  ///
+  /// Deliberately not a permanent section: a decision review is a rare event —
+  /// a handful a year — and a card that sits there empty most days trains you to
+  /// stop seeing it, which is exactly how the check-in step failed before.
+  Widget _councilBanner() {
+    final council = widget.council;
+    if (council == null || council.due.isEmpty) return const SizedBox.shrink();
+
+    final n = council.due.length;
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(10),
+        onTap: () async {
+          await CouncilCheckinSheet.show(context, council);
+          if (mounted) setState(() {});
+        },
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+          decoration: BoxDecoration(
+            color: kStraw.withValues(alpha: 0.10),
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(color: kStraw.withValues(alpha: 0.45)),
+          ),
+          child: Row(
+            children: [
+              const Icon(Icons.balance, color: kStraw, size: 20),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      n == 1
+                          ? '1 decision due for review'
+                          : '$n decisions due for review',
+                      style: const TextStyle(
+                        color: kStraw,
+                        fontWeight: FontWeight.w700,
+                        fontSize: 14,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    const Text(
+                      'The council made a prediction. Tell it what happened.',
+                      style: TextStyle(color: Colors.white60, fontSize: 11.5),
+                    ),
+                  ],
+                ),
+              ),
+              const Icon(Icons.chevron_right, color: kStraw),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 
   Future<void> _openNudge(NudgeKind kind) async {
@@ -175,6 +267,7 @@ class _TodayScreenState extends State<TodayScreen> {
             padding: EdgeInsets.symmetric(horizontal: 16),
             child: PosterRule(),
           ),
+          _councilBanner(),
           const SizedBox(height: 12),
           _habitRow(),
           const SizedBox(height: 16),

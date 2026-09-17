@@ -66,6 +66,8 @@ class MemoryStore(Protocol):
 
     async def remember(self, module: ModuleId, memories: list[Memory]) -> None: ...
 
+    async def all_memories(self, module: ModuleId | None = None) -> list[Memory]: ...
+
     async def priors(
         self, module: ModuleId, *, exclude_cards: frozenset[str] = frozenset()
     ) -> list[Prior]: ...
@@ -202,6 +204,18 @@ class InMemoryStore:
 
     async def remember(self, module: ModuleId, memories: list[Memory]) -> None:
         self._memories.setdefault(module, []).extend(memories)
+
+    async def all_memories(self, module: ModuleId | None = None) -> list[Memory]:
+        """Every memory, unranked.
+
+        Distinct from `recall`, which is a *relevance* function: with an empty query it
+        returns only high-salience rows. Exporting through it would have silently dropped
+        everything the ranker judged uninteresting, which is the worst possible thing for
+        a backup to do quietly.
+        """
+        if module is not None:
+            return list(self._memories.get(module, []))
+        return [m for items in self._memories.values() for m in items]
 
     async def priors(
         self, module: ModuleId, *, exclude_cards: frozenset[str] = frozenset()

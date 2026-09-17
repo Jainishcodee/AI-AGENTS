@@ -9,6 +9,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from . import __version__
 from .api import router
+from .api.auth import TokenMiddleware
 from .core.config import get_settings
 from .core.logging import get_logger, setup_logging
 from .council import Council
@@ -46,6 +47,10 @@ app = FastAPI(
     summary="Six thinking engines, one recommendation, the dissent kept intact.",
     lifespan=lifespan,
 )
+
+# Order matters: the token gate runs *outside* CORS so an unauthorised request is
+# rejected before any CORS headers are computed for it.
+app.add_middleware(TokenMiddleware, token=get_settings().token)
 
 app.add_middleware(
     CORSMiddleware,

@@ -97,7 +97,9 @@ Phases 1–4 built; Phase 5 authoring built with its exit criterion **unmeasured
 in progress. Reasoning engine, web client, SQLite persistence, projects, the calibration
 loop, replay/backtesting, stage re-run, mid-deliberation interjection, resumable
 deliberations, a spoken briefing, an MCP server, a divergence harness, user-authored modules,
-and calendar-delivered check-ins, with sharing, forking and prompt-surface review of authored modules. 496 tests.
+and calendar-delivered check-ins, with sharing, forking and prompt-surface review of authored
+modules, a `doctor` checkup, a cost preview before you spend, portable export, and a Jarvis
+check-in surface on the phone. 522 tests.
 
 Four exit criteria are unmet and share one cause — nobody has yet used this on real decisions
 over real time, so the corpus is empty. They are tabulated at the top of
@@ -114,7 +116,7 @@ Read in this order:
 | [SPEC-FORMAT.md](docs/SPEC-FORMAT.md) | the meta-spec: the seven questions every module must answer |
 | [ARTIFACTS.md](docs/ARTIFACTS.md) | the artifact registry and every machine-checked invariant |
 | [COUNCIL.md](docs/COUNCIL.md) | presets, critique routing, synthesis contract, Decision Cards, calibration |
-| [DECISIONS.md](docs/DECISIONS.md) | 32 ADRs, including what each one gave up |
+| [DECISIONS.md](docs/DECISIONS.md) | 34 ADRs, including what each one gave up |
 | `docs/agents/*.md` | the six formal reasoning specifications |
 
 ## Quick start
@@ -134,7 +136,7 @@ python -m app.cli --provider mock "Should I quit my internship?"
 # for real
 python -m app.cli --preset strategy --depth quick "Should I quit my internship?"
 
-pytest                                  # 496 tests, ~7s
+pytest                                  # 522 tests, ~11s
 uvicorn app.main:app --reload --port 8787
 ```
 
@@ -168,6 +170,39 @@ Six tools: `consult`, `list_modules`, `get_deliberation`, `record_outcome`,
 dissent — disagreements, minority opinions, and what no module examined — plus a
 `deliberation_id` for the full transcript, so a calling agent gets something it can act
 on without swallowing 40k tokens.
+
+**4. On your phone (Jarvis)**
+
+The Flutter app surfaces due decisions and resolves them. It deliberately does **not**
+deliberate: a `standard` run is ~40 calls paced at 5 req/min — eight minutes of watching a
+phone — and asking is a desk activity the web client already does well (ADR-034).
+
+What the phone is uniquely good at is the half that was never happening at all. Every card
+carries a `check_on` date written the day the decision was made, and until a card is
+resolved nothing in the system learns anything.
+
+```powershell
+# expose the API to the phone, with a secret (ADR-033)
+$env:COUNCIL_TOKEN="pick-something-long"; uvicorn app.main:app --host 0.0.0.0 --port 8787
+```
+
+Then in Jarvis set the base URL and the same token. It schedules a **local alarm** from each
+open card's check-in date, so the reminder fires with the app closed, the phone locked and
+the PC switched off — the conditions that actually obtain sixty days after a decision. When
+one is due, a row appears on the board; tapping it asks the same three questions as
+`app.cli checkin` and grades every module against your answer.
+
+**Before you spend anything**
+
+```powershell
+python -m app.cli doctor                 # key, store, routing, corpus. Costs nothing.
+python -m app.cli ask --dry-run "..."    # ~40 calls, about 8m 00s at 5 req/min
+python -m app.cli export                 # the whole corpus as portable JSON
+```
+
+`doctor` is entirely offline by design — a diagnostic that spends quota is one nobody runs.
+`export` writes plain JSON rather than a database copy, because handing back `.sqlite3`
+exports the storage, not the data.
 
 **Answering an unknown while it is still thinking**
 

@@ -68,6 +68,10 @@ class Checkpoint(BaseModel):
     rounds_done: int = 0
     injected: list[str] = Field(default_factory=list)
     usage: Usage = Field(default_factory=Usage)
+    intake_usage: Usage = Field(default_factory=Usage)
+    """Tracked apart from `usage` because intake happens *before* the `Deliberation`
+    exists and is skipped entirely on resume. Without it, the intake call was paid on
+    the first attempt and then vanished from every figure the user sees."""
     failure: str | None = None
     """Why it stopped, when it stopped because something broke rather than being killed."""
 

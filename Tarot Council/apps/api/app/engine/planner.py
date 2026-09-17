@@ -112,3 +112,99 @@ def batch_model(batch: StageBatch) -> type:
 
 def call_estimate(program: AgentProgram, depth: Depth) -> int:
     return len(plan(program, depth))
+
+
+@dataclass(slots=True)
+class CostEstimate:
+    """What a deliberation will cost before you spend it.
+
+    Exists because the number that actually decides whether you press go is invisible
+    until after it has been spent: `call_estimate` has always been per-program, and a
+    free tier meters *requests per minute* (ADR-020), so the wall-clock wait matters as
+    much as the count. A `standard` full-council run is ~26 calls, which at 5 RPM is five
+    minutes of staring at a terminal.
+    """
+
+    intake: int
+    reasoning: int
+    critique: int
+    revise: int
+    synthesis: int
+    rounds: int
+    rpm: int
+
+    @property
+    def total(self) -> int:
+        return self.intake + self.reasoning + self.critique + self.revise + self.synthesis
+
+    @property
+    def seconds(self) -> float:
+        """Wall clock at the configured pace. `rpm = 0` means unpaced (mock, or a paid key)."""
+        return 0.0 if self.rpm <= 0 else self.total / self.rpm * 60.0
+
+    def describe(self) -> str:
+        parts = [
+            f"intake {self.intake}",
+            f"reasoning {self.reasoning}",
+        ]
+        if self.rounds:
+            parts.append(f"critique {self.critique}")
+            parts.append(f"revise {self.revise}")
+        parts.append(f"synthesis {self.synthesis}")
+        line = f"~{self.total} calls ({', '.join(parts)})"
+        if self.seconds >= 1:
+            minutes, seconds = divmod(int(self.seconds), 60)
+            clock = f"{minutes}m {seconds:02d}s" if minutes else f"{seconds}s"
+            line += f", about {clock} at {self.rpm} req/min"
+        return line
+
+
+def deliberation_estimate(
+    programs: dict[str, AgentProgram],
+    preset,
+    depth: Depth,
+    *,
+    rounds: int,
+    rpm: int = 0,
+) -> CostEstimate:
+    """Estimate the whole pipeline, not one program.
+
+    Counted against how the orchestrator actually issues calls, which is not obvious from
+    the outside and is the reason this lives next to `plan` rather than being guessed in
+    the CLI:
+
+    - **critique is one call per *critic***, not per critic-target pair — each critic
+      reviews all of its targets in a single request.
+    - **revise is one call per critiqued *module***, for the same reason.
+
+    Assumes nobody abstains, so it is an upper bound on the reasoning phase and an
+    accurate figure for the common case. An abstention makes the real run cheaper, and a
+    quote that came in *under* is the harmless direction to be wrong in.
+    """
+    running = [m for m in preset.running if m in programs]
+    participants = [m for m in preset.participants if m in programs]
+
+    reasoning = sum(call_estimate(programs[m], depth) for m in running)
+
+    # Routing is derived from each program's own `critics` list: M critiques T exactly
+    # when M appears in T.critics. Rebuilt here over the *given* programs so an authored
+    # module is costed like any other.
+    live = set(running)
+    targets_of: dict[str, set[str]] = {m: set() for m in participants}
+    for target in running:
+        for critic in programs[target].critics:
+            if critic in targets_of and critic != target:
+                targets_of[critic].add(target)
+
+    critics = [c for c, targets in targets_of.items() if targets & live]
+    critiqued = {t for targets in targets_of.values() for t in targets}
+
+    return CostEstimate(
+        intake=1,
+        reasoning=reasoning,
+        critique=len(critics) * rounds,
+        revise=len(critiqued) * rounds,
+        synthesis=1,
+        rounds=rounds,
+        rpm=rpm,
+    )

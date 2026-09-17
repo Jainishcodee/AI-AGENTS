@@ -401,7 +401,7 @@ by construction (1.00 stance overlap) and therefore cannot show one module movin
 
 ---
 
-## Phase 6 — The loop closes *(in progress)*
+## Phase 6 — The loop closes *(built; exit criterion needs use, not code)*
 
 **The thesis.** Phases 1–5 built machinery whose value is a function of accumulated real
 use: calibration needs resolved cards, priors need calibration, replay needs a corpus,
@@ -452,13 +452,43 @@ the app. Both require you to be there already, which is precisely the assumption
       half-saved, because grading six modules against an empty outcome is worse than leaving
       it open. It refuses to prompt when stdin is not a terminal, so a scheduled run lists
       what is due instead of hanging forever on a question nobody can answer.
-- [ ] **`app.cli doctor`** — one command that says what is wrong: key missing, store
-      unmigrated, model unavailable on the free tier, nothing due.
-- [ ] **Cost preview before spending** — `call_estimate` already exists per program and
-      depth and is never shown before a run. On a metered free tier that is the number that
-      decides whether you press go.
-- [ ] **Export** — the corpus is the moat and lives in one SQLite file with no door out.
-      Data needs to be portable or the claim that it is yours is decorative.
+- [x] **`app.cli doctor`** — one command that says what is wrong: key missing, store
+      unmigrated, model unavailable on the free tier, nothing due. Costs nothing: every
+      check is offline, because a diagnostic you hesitate to run because it spends quota
+      is a diagnostic nobody runs. It therefore reports that a key is *absent*, never that
+      it is rejected, and says so rather than implying more confidence than it has.
+
+      Exits non-zero only on `fail`. An empty corpus and a missing optional dependency are
+      warnings, not faults — exiting 1 on those would make it useless in a script. Every
+      check is tested *failing* as well as passing, because a check only ever seen to pass
+      is not known to detect anything.
+- [x] **Cost preview before spending** — `deliberation_estimate` prices the whole
+      pipeline, not one program, and `ask` prints it before starting; `--dry-run` prints
+      it and stops. It reports **wall clock as well as calls**, because a free tier meters
+      requests per *minute* (ADR-020): "~40 calls, about 8m 00s at 5 req/min" is the figure
+      that decides whether you press go, and only the second half of it hurts.
+
+      Counted against how the orchestrator actually issues calls rather than guessed:
+      critique is one call per *critic* (targets batched), revise one per critiqued module.
+
+      **Verifying it found a real bug.** The estimate came out one call above reality at
+      every depth — consistently, so not noise. The estimate was right: `_intake` made a
+      call and added its usage to nothing, because intake runs before the `Deliberation`
+      exists. Every reported figure — the CLI total, the checkpoint's "calls already
+      spent", the Decision Card — had been one call light on every deliberation ever run.
+      `Checkpoint.intake_usage` now carries it, which also survives a resume, where intake
+      is skipped and the cost would otherwise vanish entirely.
+- [x] **Export** — `app.cli export` writes the whole corpus to one JSON file that needs
+      none of this code to read. Plain JSON rather than a database copy on purpose: handing
+      back `.sqlite3` exports the *storage*, not the data — it needs this schema, this
+      version and a SQLite client to mean anything.
+
+      One bug avoided worth recording: the obvious implementation gathers memories through
+      `recall`, which is a *relevance* function — with an empty query it returns only
+      high-salience rows. It would have looked right and silently dropped every memory the
+      ranker judged uninteresting, which is the worst thing a backup can do. `all_memories`
+      is now on the store protocol, and the test asserts the export contains a memory the
+      ranker hides.
 
 **Exit criterion.** Ten real decisions recorded and at least five resolved, by one person,
 with **the system doing the remembering** — no prompting from me and no manual `cards
