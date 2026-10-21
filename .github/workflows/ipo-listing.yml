@@ -53,7 +53,12 @@ concurrency:
 
 jobs:
   watch:
-    runs-on: ubuntu-latest
+    # Pinned to 24.04 after ubuntu-latest migrated to Ubuntu 26.04 on
+    # 2026-10-19, whose OpenSSL 3.5 breaks the urllib TLS handshake with
+    # nseindia.com. Every run on the new image fails at the "Is anything
+    # listing today?" step. Pin until the NSE connection is confirmed
+    # working on 26.04, then switch back.
+    runs-on: ubuntu-24.04
     # From an 08:47 start this reaches about 10:47 IST, covering the arm, the
     # opening print and the first quarter-hour of trading -- which is the part
     # that matters, since the measured edge is the allotment, not buying into a

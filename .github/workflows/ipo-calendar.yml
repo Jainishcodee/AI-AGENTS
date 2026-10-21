@@ -55,7 +55,12 @@ concurrency:
 
 jobs:
   scan:
-    runs-on: ubuntu-latest
+    # Pinned to 24.04 after ubuntu-latest migrated to Ubuntu 26.04 on
+    # 2026-10-19, whose OpenSSL 3.5 breaks the urllib TLS handshake with
+    # nseindia.com. The listing workflow failed all five draws on 2026-10-21;
+    # this one survived only because its cache restore provides a fallback.
+    # Pin both until the connection is confirmed working on 26.04.
+    runs-on: ubuntu-24.04
     timeout-minutes: 10
     defaults:
       run:
