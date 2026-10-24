@@ -70,43 +70,54 @@ class _HealthScreenState extends State<HealthScreen> {
   }
 
   Future<void> _load() async {
-    final key = HealthDb.dayKey();
-    final log = await widget.db.getDay(key);
-    final trend = await widget.db.weightTrend();
-    final calibrated = await widget.db.calibratedTdee();
-    final profile = await widget.db.profile();
-    final actions = HealthActions.resolve(await widget.db.milestoneStatus());
+    try {
+      final key = HealthDb.dayKey();
+      final log = await widget.db.getDay(key);
+      final trend = await widget.db.weightTrend();
+      final calibrated = await widget.db.calibratedTdee();
+      final profile = await widget.db.profile();
+      final actions = HealthActions.resolve(await widget.db.milestoneStatus());
 
-    final jd = widget.calendar.day(
-      DateTime.now(),
-      fast: log?.fast ?? FastKind.none,
-      eveningVow: log?.eveningVow,
-    );
-
-    // Targets need a body to compute against. Height and age come from the
-    // database, never from a constant in this file — see HealthDb.profile.
-    // Weight falls back to the last logged reading rather than to a guess.
-    NutritionTargets? targets;
-    final kg = trend.average ?? log?.weightKg;
-    if (profile != null && kg != null) {
-      targets = NutritionEngine.targets(
-        kg: kg,
-        cm: profile.heightCm,
-        age: profile.age,
-        calibratedTdee: calibrated,
+      final jd = widget.calendar.day(
+        DateTime.now(),
+        fast: log?.fast ?? FastKind.none,
+        eveningVow: log?.eveningVow,
       );
-    }
 
-    if (!mounted) return;
-    setState(() {
-      _today = jd;
-      _log = log;
-      _trend = trend;
-      _targets = targets;
-      _actions = actions;
-      _needsSetup = profile == null || kg == null;
-      _loading = false;
-    });
+      // Targets need a body to compute against. Height and age come from the
+      // database, never from a constant in this file — see HealthDb.profile.
+      // Weight falls back to the last logged reading rather than to a guess.
+      NutritionTargets? targets;
+      final kg = trend.average ?? log?.weightKg;
+      if (profile != null && kg != null) {
+        targets = NutritionEngine.targets(
+          kg: kg,
+          cm: profile.heightCm,
+          age: profile.age,
+          calibratedTdee: calibrated,
+        );
+      }
+
+      if (!mounted) return;
+      setState(() {
+        _today = jd;
+        _log = log;
+        _trend = trend;
+        _targets = targets;
+        _actions = actions;
+        _needsSetup = profile == null || kg == null;
+        _loading = false;
+      });
+    } catch (e, st) {
+      debugPrint('Error loading health screen: $e\n$st');
+      if (!mounted) return;
+      setState(() {
+        _today ??= widget.calendar.day(DateTime.now());
+        _actions = HealthActions.resolve({});
+        _needsSetup = true;
+        _loading = false;
+      });
+    }
   }
 
   /// Ask once for the two numbers BMR needs, plus a first weight.

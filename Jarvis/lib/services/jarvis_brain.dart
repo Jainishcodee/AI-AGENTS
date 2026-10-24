@@ -1,5 +1,6 @@
 import '../models/reel_card.dart';
 import 'deck_db.dart';
+import 'todo_db.dart';
 import 'gemini_service.dart';
 import 'notes_service.dart';
 import 'reminder_service.dart';
@@ -13,13 +14,15 @@ class JarvisReply {
 }
 
 class JarvisBrain {
-  JarvisBrain({this.deck, ReminderService? reminders})
-      : reminders = reminders ?? ReminderService();
+  JarvisBrain({this.deck, this.todoDb, ReminderService? reminders})
+      : reminders = reminders ?? ReminderService(),
+        notes = NotesService(todoDb: todoDb);
 
   final GeminiService gemini = GeminiService();
   final WeatherService weather = WeatherService();
-  final NotesService notes = NotesService();
+  final NotesService notes;
   final SpotifyService spotify = SpotifyService();
+  final TodoDb? todoDb;
 
   /// Shared with the daily digest so notification permission is asked once.
   final ReminderService reminders;
@@ -83,7 +86,7 @@ class JarvisBrain {
         final ok = await spotify.playSearch(q);
         return JarvisReply(
           ok
-              ? '${result.text}'
+              ? result.text
               : "I couldn't open Spotify on this phone.",
           statusLine: 'Spotify → $q',
         );

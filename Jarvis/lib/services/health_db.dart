@@ -140,10 +140,21 @@ class HealthDb {
 
   Database? _db;
   Database get db => _db!;
+  bool get isOpen => _db != null && _db!.isOpen;
+
+  Future<Database?> getDatabase() async {
+    if (_db != null && _db!.isOpen) return _db;
+    try {
+      await init();
+    } catch (_) {
+      return null;
+    }
+    return _db;
+  }
 
   /// [database] lets the engine be tested in memory without a device.
   Future<void> init({Database? database}) async {
-    if (_db != null) return;
+    if (_db != null && _db!.isOpen) return;
     if (database != null) {
       _db = database;
       await _createSchema(database);
@@ -237,7 +248,9 @@ class HealthDb {
   // ---------------------------------------------------------------- profile
 
   Future<({double heightCm, int age})?> profile() async {
-    final r = await db.query('profile', where: 'id = 1', limit: 1);
+    final d = await getDatabase();
+    if (d == null) return null;
+    final r = await d.query('profile', where: 'id = 1', limit: 1);
     if (r.isEmpty) return null;
     final h = (r.first['height_cm'] as num?)?.toDouble();
     final by = r.first['birth_year'] as int?;
@@ -245,12 +258,15 @@ class HealthDb {
     return (heightCm: h, age: DateTime.now().year - by);
   }
 
-  Future<void> setProfile({required double heightCm, required int birthYear}) =>
-      db.insert(
-        'profile',
-        {'id': 1, 'height_cm': heightCm, 'birth_year': birthYear},
-        conflictAlgorithm: ConflictAlgorithm.replace,
-      );
+  Future<void> setProfile({required double heightCm, required int birthYear}) async {
+    final d = await getDatabase();
+    if (d == null) return;
+    await d.insert(
+      'profile',
+      {'id': 1, 'height_cm': heightCm, 'birth_year': birthYear},
+      conflictAlgorithm: ConflictAlgorithm.replace,
+    );
+  }
 
   static String dayKey([DateTime? t]) {
     final d = t ?? DateTime.now();
@@ -266,20 +282,24 @@ class HealthDb {
   /// entry, the training screen — and a plain replace would silently wipe
   /// whichever fields that particular caller happened not to know about.
   Future<void> upsertDay(HealthDay day) async {
+    final d = await getDatabase();
+    if (d == null) return;
     final row = day.toRow()..removeWhere((_, v) => v == null);
-    final existing = await db.query('day_log',
+    final existing = await d.query('day_log',
         where: 'day = ?', whereArgs: [day.day], limit: 1);
     if (existing.isEmpty) {
-      await db.insert('day_log', row,
+      await d.insert('day_log', row,
           conflictAlgorithm: ConflictAlgorithm.replace);
     } else {
-      await db.update('day_log', row, where: 'day = ?', whereArgs: [day.day]);
+      await d.update('day_log', row, where: 'day = ?', whereArgs: [day.day]);
     }
   }
 
   Future<HealthDay?> getDay(String day) async {
+    final d = await getDatabase();
+    if (d == null) return null;
     final r =
-        await db.query('day_log', where: 'day = ?', whereArgs: [day], limit: 1);
+        await d.query('day_log', where: 'day = ?', whereArgs: [day], limit: 1);
     return r.isEmpty ? null : HealthDay.fromRow(r.first);
   }
 
@@ -293,7 +313,9 @@ class HealthDb {
     double fibreG = 0,
     bool dvidal = false,
   }) async {
-    await db.insert('meal_log', {
+    final d = await getDatabase();
+    if (d == null) return;
+    await d.insert('meal_log', {
       'day': day,
       'at': at,
       'label': label,
@@ -309,7 +331,9 @@ class HealthDb {
   /// Keeps `day_log` totals consistent with `meal_log` so the Today card can
   /// read one row instead of aggregating on every rebuild.
   Future<void> _rollUpDay(String day) async {
-    final r = await db.rawQuery(
+    final d = await getDatabase();
+    if (d == null) return;
+    final r = await d.rawQuery(
       'SELECT SUM(protein_g) p, SUM(kcal) k FROM meal_log WHERE day = ?',
       [day],
     );
@@ -318,11 +342,16 @@ class HealthDb {
     await upsertDay(HealthDay(day: day, proteinG: p0, kcal: k0));
   }
 
-  Future<List<Map<String, Object?>>> mealsOn(String day) =>
-      db.query('meal_log', where: 'day = ?', whereArgs: [day], orderBy: 'at');
+  Future<List<Map<String, Object?>>> mealsOn(String day) async {
+    final d = await getDatabase();
+    if (d == null) return [];
+    return d.query('meal_log', where: 'day = ?', whereArgs: [day], orderBy: 'at');
+  }
 
   Future<void> logSet(SetLog s) async {
-    await db.insert('set_log', {
+    final d = await getDatabase();
+    if (d == null) return;
+    await d.insert('set_log', {
       'day': s.day,
       'exercise': s.exercise,
       'set_index': s.setIndex,
@@ -337,7 +366,9 @@ class HealthDb {
   /// training screen. Ranked by load first, then reps — which is the order
   /// double progression actually cares about.
   Future<Map<String, Object?>?> bestSet(String exercise) async {
-    final r = await db.query(
+    final d = await getDatabase();
+    if (d == null) return null;
+    final r = await d.query(
       'set_log',
       where: 'exercise = ?',
       whereArgs: [exercise],
@@ -347,15 +378,20 @@ class HealthDb {
     return r.isEmpty ? null : r.first;
   }
 
-  Future<void> startSupplement(String name, {String? note, DateTime? on}) =>
-      db.insert(
-        'supplement',
-        {'name': name, 'started_on': dayKey(on), 'note': note},
-        conflictAlgorithm: ConflictAlgorithm.ignore,
-      );
+  Future<void> startSupplement(String name, {String? note, DateTime? on}) async {
+    final d = await getDatabase();
+    if (d == null) return;
+    await d.insert(
+      'supplement',
+      {'name': name, 'started_on': dayKey(on), 'note': note},
+      conflictAlgorithm: ConflictAlgorithm.ignore,
+    );
+  }
 
   Future<DateTime?> supplementStart(String name) async {
-    final r = await db.query('supplement',
+    final d = await getDatabase();
+    if (d == null) return null;
+    final r = await d.query('supplement',
         where: 'name = ?', whereArgs: [name], limit: 1);
     if (r.isEmpty) return null;
     return DateTime.tryParse(r.first['started_on'] as String);
@@ -366,7 +402,9 @@ class HealthDb {
   /// Raw status rows, keyed by milestone key.
   Future<Map<String, ({DateTime? started, DateTime? done, String? note})>>
       milestoneStatus() async {
-    final rows = await db.query('milestone');
+    final d = await getDatabase();
+    if (d == null) return {};
+    final rows = await d.query('milestone');
     return {
       for (final r in rows)
         r['key'] as String: (
@@ -380,10 +418,12 @@ class HealthDb {
   /// Mark an action started. Idempotent — re-marking does not reset the clock,
   /// which matters for the timed trials where the start date IS the measurement.
   Future<void> startMilestone(String key, {DateTime? on}) async {
-    final existing = await db.query('milestone',
+    final d = await getDatabase();
+    if (d == null) return;
+    final existing = await d.query('milestone',
         where: 'key = ?', whereArgs: [key], limit: 1);
     if (existing.isNotEmpty && existing.first['started_on'] != null) return;
-    await db.insert(
+    await d.insert(
       'milestone',
       {'key': key, 'started_on': dayKey(on)},
       conflictAlgorithm: ConflictAlgorithm.replace,
@@ -391,12 +431,14 @@ class HealthDb {
   }
 
   Future<void> completeMilestone(String key, {DateTime? on, String? note}) async {
-    final existing = await db.query('milestone',
+    final d = await getDatabase();
+    if (d == null) return;
+    final existing = await d.query('milestone',
         where: 'key = ?', whereArgs: [key], limit: 1);
     final started = existing.isEmpty
         ? dayKey(on)
         : (existing.first['started_on'] as String?) ?? dayKey(on);
-    await db.insert(
+    await d.insert(
       'milestone',
       {
         'key': key,
@@ -408,14 +450,19 @@ class HealthDb {
     );
   }
 
-  Future<void> clearMilestone(String key) =>
-      db.delete('milestone', where: 'key = ?', whereArgs: [key]);
+  Future<void> clearMilestone(String key) async {
+    final d = await getDatabase();
+    if (d == null) return;
+    await d.delete('milestone', where: 'key = ?', whereArgs: [key]);
+  }
 
   // ------------------------------------------------------------------ reads
 
   /// Weight readings, newest first.
   Future<List<(String, double)>> weights({int limit = 60}) async {
-    final r = await db.query(
+    final d = await getDatabase();
+    if (d == null) return [];
+    final r = await d.query(
       'day_log',
       columns: ['day', 'weight_kg'],
       where: 'weight_kg IS NOT NULL',
@@ -428,7 +475,9 @@ class HealthDb {
   }
 
   Future<List<(String, double)>> waists({int limit = 26}) async {
-    final r = await db.query(
+    final d = await getDatabase();
+    if (d == null) return [];
+    final r = await d.query(
       'day_log',
       columns: ['day', 'waist_cm'],
       where: 'waist_cm IS NOT NULL',
@@ -493,7 +542,9 @@ class HealthDb {
   ///
   /// `TDEE = mean intake + (7700 × kg change / days)`
   Future<double?> calibratedTdee({int minDays = 14}) async {
-    final rows = await db.query(
+    final d = await getDatabase();
+    if (d == null) return null;
+    final rows = await d.query(
       'day_log',
       columns: ['day', 'kcal', 'weight_kg'],
       where: 'kcal IS NOT NULL AND kcal > 0 AND weight_kg IS NOT NULL',
@@ -518,7 +569,9 @@ class HealthDb {
   /// Ulcer counts over recent weeks, so the toothpaste swap has a denominator.
   /// An 8-week self-test with no baseline count is not a test.
   Future<List<(String, int)>> ulcerCounts({int limit = 16}) async {
-    final r = await db.query(
+    final d = await getDatabase();
+    if (d == null) return [];
+    final r = await d.query(
       'day_log',
       columns: ['day', 'ulcer_count'],
       where: 'ulcer_count IS NOT NULL',
@@ -538,7 +591,9 @@ class HealthDb {
   /// request, and a delete that requires uninstalling the app is not a delete
   /// the user controls.
   Future<void> wipe() async {
-    final b = db.batch();
+    final d = await getDatabase();
+    if (d == null) return;
+    final b = d.batch();
     for (final t in [
       'day_log',
       'meal_log',

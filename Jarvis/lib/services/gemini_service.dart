@@ -23,7 +23,7 @@ class GeminiService {
     final name = dotenv.env['USER_NAME'] ?? 'Sir';
     final now = DateTime.now();
     return '''
-You are Jarvis, $name's personal AI assistant. Current time: ${now.toIso8601String()}.
+You are ANSH, $name's personal AI assistant. Current time: ${now.toIso8601String()}.
 
 VOICE — this matters as much as the answer:
 - Dry, quick, deadpan. Faintly amused by everything, including yourself.
@@ -43,6 +43,7 @@ You MUST respond with a single JSON object on one line, no markdown, no code fen
 Available intents (use ONLY these):
 - {"type":"weather","location":"<city or null>"}            // ask about weather
 - {"type":"note","content":"<the note text>"}                // user wants to save a note
+- {"type":"todo","title":"<task title>","priority":"<urgent|high|medium|low>","notes":"<notes or empty>"} // create a task/todo
 - {"type":"reminder","content":"<what to remind>","when":"<ISO8601 datetime>"}  // schedule reminder
 - {"type":"spotify","query":"<song or artist or playlist>"}  // play music on Spotify
 - {"type":"today_tasks"}                                     // what should I do today
@@ -90,7 +91,7 @@ If the request is small-talk or general chat with no action needed, return actio
   Future<GeminiResult> ask(String userText) async {
     if (!hasKey) {
       return GeminiResult(
-        "I need a Gemini API key first. Open dot env in the Jarvis folder and paste your key.",
+        "I need a Gemini API key first. Open dot env in the ANSH folder and paste your key.",
         null,
       );
     }

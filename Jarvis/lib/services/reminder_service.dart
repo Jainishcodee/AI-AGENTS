@@ -74,8 +74,8 @@ class ReminderService {
 
     const android = AndroidNotificationDetails(
       'jarvis_reminders',
-      'Jarvis Reminders',
-      channelDescription: 'One-shot reminders set via Jarvis',
+      'ANSH Reminders',
+      channelDescription: 'One-shot reminders set via ANSH',
       importance: Importance.max,
       priority: Priority.high,
       playSound: true,
@@ -84,7 +84,7 @@ class ReminderService {
 
     await _plugin.zonedSchedule(
       id,
-      'Jarvis',
+      'ANSH',
       content,
       tzTime,
       const NotificationDetails(android: android),

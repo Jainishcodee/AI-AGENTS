@@ -12,6 +12,7 @@ import 'screens/incoming_call_screen.dart';
 import 'screens/library_screen.dart';
 import 'screens/market_alerts_sheet.dart';
 import 'screens/today_screen.dart';
+import 'screens/todo_screen.dart';
 import 'services/deck_db.dart';
 import 'services/digest_settings.dart';
 import 'services/fake_call_service.dart';
@@ -21,11 +22,13 @@ import 'services/jarvis_brain.dart';
 import 'services/council_service.dart';
 import 'services/reminder_service.dart';
 import 'services/stock_alert_service.dart';
+import 'services/todo_db.dart';
 import 'services/training_plan.dart';
 import 'services/voice_service.dart';
 import 'widgets/mascot.dart';
 
 final deckDb = DeckDb();
+final todoDb = TodoDb();
 
 // Health lives in its own database file, deliberately separate from the reel
 // deck. The deck ships as a tracked asset and is rebuilt by the pipeline; this
@@ -76,6 +79,11 @@ Future<void> main() async {
     // No deck yet — the Today tab shows its empty state rather than crashing.
   }
   try {
+    await todoDb.init();
+  } catch (_) {
+    // Todo and notes degrades to in-memory store if DB cannot be created.
+  }
+  try {
     await healthDb.init();
   } catch (_) {
     // Health tab degrades to its empty state. Failing here must not block
@@ -110,7 +118,7 @@ class JarvisApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Jarvis',
+      title: 'ANSH',
       navigatorKey: navigatorKey,
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
@@ -148,6 +156,7 @@ class _RootShellState extends State<RootShell> {
         index: _tab,
         children: [
           const JarvisHome(),
+          SafeArea(child: TodoScreen(todoDb: todoDb)),
           SafeArea(child: TodayScreen(deck: deckDb, digest: digest, council: council)),
           SafeArea(
             child: HealthScreen(
@@ -171,7 +180,12 @@ class _RootShellState extends State<RootShell> {
           NavigationDestination(
             icon: Icon(Icons.graphic_eq, color: Colors.white54),
             selectedIcon: Icon(Icons.graphic_eq, color: Color(0xFFE74848)),
-            label: 'Jarvis',
+            label: 'ANSH',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.format_list_bulleted_outlined, color: Colors.white54),
+            selectedIcon: Icon(Icons.format_list_bulleted, color: Color(0xFF00E5C9)),
+            label: 'Tasks',
           ),
           NavigationDestination(
             icon: Icon(Icons.check_circle_outline, color: Colors.white54),
@@ -208,7 +222,7 @@ class JarvisHome extends StatefulWidget {
 
 class _JarvisHomeState extends State<JarvisHome> {
   final _voice = VoiceService();
-  final _brain = JarvisBrain(deck: deckDb, reminders: reminders);
+  final _brain = JarvisBrain(deck: deckDb, todoDb: todoDb, reminders: reminders);
 
   MascotState _state = MascotState.idle;
   String _chatLine = "Tap the mic and talk to me.";
@@ -228,7 +242,7 @@ class _JarvisHomeState extends State<JarvisHome> {
     if (!mounted) return;
     setState(() => _booting = false);
     final name = dotenv.env['USER_NAME'] ?? '';
-    final greet = name.isEmpty ? "Jarvis online." : "Welcome back, $name.";
+    final greet = name.isEmpty ? "ANSH online." : "Welcome back, $name.";
     setState(() => _state = MascotState.talking);
     await _voice.speak(greet);
     if (mounted) setState(() => _state = MascotState.idle);
@@ -366,7 +380,7 @@ class _JarvisHomeState extends State<JarvisHome> {
           GestureDetector(
             onLongPress: () => FakeCallSheet.show(context, fakeCall),
             child: const Text(
-              'JARVIS',
+              'ANSH',
               style: TextStyle(
                 fontSize: 18,
                 letterSpacing: 4,
@@ -457,7 +471,7 @@ class _JarvisHomeState extends State<JarvisHome> {
               const SizedBox(height: 12),
             ],
             Text(
-              'JARVIS',
+              'ANSH',
               style: TextStyle(
                 fontSize: 10,
                 letterSpacing: 2,
