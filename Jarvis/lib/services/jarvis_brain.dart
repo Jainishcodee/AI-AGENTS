@@ -3,6 +3,7 @@ import 'deck_db.dart';
 import 'todo_db.dart';
 import 'gemini_service.dart';
 import 'notes_service.dart';
+import 'council_service.dart';
 import 'reminder_service.dart';
 import 'spotify_service.dart';
 import 'weather_service.dart';
@@ -14,9 +15,15 @@ class JarvisReply {
 }
 
 class JarvisBrain {
-  JarvisBrain({this.deck, this.todoDb, ReminderService? reminders})
-      : reminders = reminders ?? ReminderService(),
+  JarvisBrain({
+    this.deck,
+    this.todoDb,
+    ReminderService? reminders,
+    this.council,
+  })  : reminders = reminders ?? ReminderService(),
         notes = NotesService(todoDb: todoDb);
+
+  final CouncilService? council;
 
   final GeminiService gemini = GeminiService();
   final WeatherService weather = WeatherService();
@@ -103,6 +110,15 @@ class JarvisBrain {
       case 'find_saved':
         return _findSaved((action['query'] as String?) ?? '');
 
+      case 'council_deliberate':
+        return _councilDeliberate(
+          (action['question'] as String?) ?? t,
+          preset: action['preset'] as String?,
+        );
+
+      case 'council_due':
+        return _councilDue();
+
       case 'stop':
         return JarvisReply("Okay, stopping.");
 
@@ -115,6 +131,59 @@ class JarvisBrain {
   //
   // These are spoken aloud, so they stay short: a count, then the titles.
   // Detail lives in the Today / Facts / Library tabs.
+
+  Future<JarvisReply> _councilDeliberate(String question, {String? preset}) async {
+    final c = council;
+    if (c == null) {
+      return JarvisReply("Cognitive OS is not connected in this session.");
+    }
+    if (question.trim().isEmpty) {
+      return JarvisReply("What decision would you like the council to evaluate?");
+    }
+
+    try {
+      final res = await c.deliberate(
+        question: question,
+        preset: preset ?? 'full',
+        depth: 'quick',
+      );
+      final rec = res.action;
+      final dissent = res.minorityOpinions.isNotEmpty
+          ? ' Note: ${res.minorityOpinions.first.module.toUpperCase()} dissents: "${res.minorityOpinions.first.position}".'
+          : '';
+      return JarvisReply(
+        'The council recommends: $rec.$dissent Decision card filed with a check-in in ${res.checkInDays} days.',
+        statusLine: 'Council → $rec',
+      );
+    } catch (e) {
+      return JarvisReply(
+        "I couldn't complete the council deliberation: $e",
+        statusLine: 'Council offline',
+      );
+    }
+  }
+
+  Future<JarvisReply> _councilDue() async {
+    final c = council;
+    if (c == null) {
+      return JarvisReply("Cognitive OS is not connected.");
+    }
+    await c.refresh();
+    final n = c.due.length;
+    if (n == 0) {
+      return JarvisReply(
+        "No decisions are due for review right now. All caught up.",
+        statusLine: 'Council · 0 due',
+      );
+    }
+    final first = c.due.first;
+    return JarvisReply(
+      n == 1
+          ? "You have 1 decision due for review: '${first.question}'. Tell the council what actually happened."
+          : "You have $n decisions due for review. The oldest is '${first.question}'.",
+      statusLine: 'Council · $n due',
+    );
+  }
 
   JarvisReply get _noDeck =>
       JarvisReply("I couldn't open your saved reels just now.");

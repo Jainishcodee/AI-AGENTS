@@ -9,6 +9,7 @@ import '../services/nudge_service.dart';
 import '../widgets/pirate_bits.dart';
 import '../widgets/wanted_poster.dart';
 import 'council_checkin_sheet.dart';
+import 'council_screen.dart';
 import 'nudge_sheet.dart';
 
 /// The day's quest log.
@@ -210,6 +211,68 @@ class _TodayScreenState extends State<TodayScreen> {
     });
   }
 
+  Widget _councilSection() {
+    final council = widget.council;
+    if (council == null) return const SizedBox.shrink();
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(10),
+        onTap: () async {
+          await CouncilScreen.show(context, council);
+          if (mounted) setState(() {});
+        },
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+          decoration: BoxDecoration(
+            color: const Color(0xFF160E18),
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(color: Colors.white.withOpacity(0.08)),
+          ),
+          child: Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(6),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFE74848).withOpacity(0.18),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: const Icon(Icons.psychology, color: Color(0xFFE74848), size: 18),
+              ),
+              const SizedBox(width: 10),
+              const Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Cognitive OS · Council',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.w700,
+                        fontSize: 13,
+                      ),
+                    ),
+                    Text(
+                      '6 thinking engines: consult, decide & review',
+                      style: TextStyle(color: Colors.white54, fontSize: 11),
+                    ),
+                  ],
+                ),
+              ),
+              const Text(
+                'Open',
+                style: TextStyle(color: Color(0xFF00E5C9), fontSize: 12, fontWeight: FontWeight.bold),
+              ),
+              const SizedBox(width: 4),
+              const Icon(Icons.chevron_right, color: Color(0xFF00E5C9), size: 16),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   /// The standing habits, pinned under the header where they can be found.
   Widget _habitRow() {
     return Padding(
@@ -268,6 +331,7 @@ class _TodayScreenState extends State<TodayScreen> {
             child: PosterRule(),
           ),
           _councilBanner(),
+          _councilSection(),
           const SizedBox(height: 12),
           _habitRow(),
           const SizedBox(height: 16),

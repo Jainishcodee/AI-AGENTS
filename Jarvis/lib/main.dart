@@ -12,6 +12,7 @@ import 'screens/incoming_call_screen.dart';
 import 'screens/library_screen.dart';
 import 'screens/market_alerts_sheet.dart';
 import 'screens/today_screen.dart';
+import 'screens/council_screen.dart';
 import 'screens/todo_screen.dart';
 import 'services/deck_db.dart';
 import 'services/digest_settings.dart';
@@ -222,7 +223,7 @@ class JarvisHome extends StatefulWidget {
 
 class _JarvisHomeState extends State<JarvisHome> {
   final _voice = VoiceService();
-  final _brain = JarvisBrain(deck: deckDb, todoDb: todoDb, reminders: reminders);
+  final _brain = JarvisBrain(deck: deckDb, todoDb: todoDb, reminders: reminders, council: council);
 
   MascotState _state = MascotState.idle;
   String _chatLine = "Tap the mic and talk to me.";
@@ -391,6 +392,11 @@ class _JarvisHomeState extends State<JarvisHome> {
           ),
           const Spacer(),
           IconButton(
+            tooltip: 'Cognitive OS',
+            onPressed: () => CouncilScreen.show(context, council),
+            icon: const Icon(Icons.psychology, color: Color(0xFF00E5C9)),
+          ),
+          IconButton(
             tooltip: 'Market alerts',
             onPressed: () => MarketAlertsSheet.show(context, stockAlerts),
             icon: const Icon(Icons.candlestick_chart_outlined,
@@ -486,18 +492,38 @@ class _JarvisHomeState extends State<JarvisHome> {
             ),
             if (_lastStatus.isNotEmpty) ...[
               const SizedBox(height: 10),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                decoration: BoxDecoration(
-                  color: const Color(0xFF00E5C9).withOpacity(0.15),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Text(
-                  _lastStatus,
-                  style: const TextStyle(
-                    color: Color(0xFF00E5C9),
-                    fontSize: 11,
-                    fontWeight: FontWeight.w600,
+              InkWell(
+                onTap: _lastStatus.startsWith('Council')
+                    ? () => CouncilScreen.show(context, council)
+                    : null,
+                borderRadius: BorderRadius.circular(8),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF00E5C9).withOpacity(0.15),
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(
+                      color: _lastStatus.startsWith('Council')
+                          ? const Color(0xFF00E5C9).withOpacity(0.4)
+                          : Colors.transparent,
+                    ),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        _lastStatus,
+                        style: const TextStyle(
+                          color: Color(0xFF00E5C9),
+                          fontSize: 11,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      if (_lastStatus.startsWith('Council')) ...[
+                        const SizedBox(width: 4),
+                        const Icon(Icons.open_in_new, size: 12, color: Color(0xFF00E5C9)),
+                      ],
+                    ],
                   ),
                 ),
               ),
